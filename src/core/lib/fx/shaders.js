@@ -1,0 +1,418 @@
+// Every stdlib effect's full GLSL source lives here as a plain string.
+// Keeping them as complete, standalone strings (not fragments assembled
+// at call time) is what makes explode() possible later - it's printing
+// text that already exists, not reconstructing anything.
+//
+// To add a new effect: write its shader below following this pattern,
+// then add one entry to registry.js pointing at it. Nothing else in the
+// engine needs to change.
+
+const HEADER = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+`;
+
+// Shared helper: sample a texture, but return transparent black outside
+// 0..1 instead of clamping/wrapping. Used by any effect that moves the
+// sample coordinate away from vUv (rotate, scale, translate).
+const SAMPLE_CLAMPED = `
+vec4 sampleClamped(sampler2D tex, vec2 uv) {
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    return vec4(0.0);
+  }
+  return texture(tex, uv);
+}
+`;
+
+// Shared helper: RGB <-> HSV, needed only by hueShift.
+const HSV_HELPERS = `
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+`;
+
+export const ROTATE = `${HEADER}${SAMPLE_CLAMPED}
+uniform sampler2D uSrc;
+uniform float uAngle; // radians
+
+void main() {
+  vec2 centered = vUv - 0.5;
+  float s = sin(uAngle);
+  float c = cos(uAngle);
+  vec2 rotated = vec2(
+    centered.x * c - centered.y * s,
+    centered.x * s + centered.y * c
+  );
+  outColor = sampleClamped(uSrc, rotated + 0.5);
+}`;
+
+export const SCALE = `${HEADER}${SAMPLE_CLAMPED}
+uniform sampler2D uSrc;
+uniform vec2 uScale; // x, y scale factors (1.0 = no change)
+
+void main() {
+  vec2 centered = vUv - 0.5;
+  vec2 scaled = centered / uScale;
+  outColor = sampleClamped(uSrc, scaled + 0.5);
+}`;
+
+export const FLIP = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uFlip; // 1.0 = flip that axis, 0.0 = leave it
+
+void main() {
+  vec2 uv = vUv;
+  uv.x = mix(uv.x, 1.0 - uv.x, uFlip.x);
+  uv.y = mix(uv.y, 1.0 - uv.y, uFlip.y);
+  outColor = texture(uSrc, uv);
+}`;
+
+export const TRANSLATE = `${HEADER}${SAMPLE_CLAMPED}
+uniform sampler2D uSrc;
+uniform vec2 uOffset; // in uv units, 0..1
+
+void main() {
+  outColor = sampleClamped(uSrc, vUv - uOffset);
+}`;
+
+export const CHANNEL_MIX = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec3 uMixR; // output.r = dot(input.rgb, uMixR)
+uniform vec3 uMixG;
+uniform vec3 uMixB;
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  vec3 mixed = vec3(dot(c.rgb, uMixR), dot(c.rgb, uMixG), dot(c.rgb, uMixB));
+  outColor = vec4(mixed, c.a);
+}`;
+
+export const BRIGHTNESS = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // additive, -1..1
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  outColor = vec4(c.rgb + uAmount, c.a);
+}`;
+
+export const CONTRAST = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // 1.0 = no change
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  outColor = vec4((c.rgb - 0.5) * uAmount + 0.5, c.a);
+}`;
+
+export const SATURATION = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // 0 = grayscale, 1 = no change, >1 = boosted
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  outColor = vec4(mix(vec3(luma), c.rgb, uAmount), c.a);
+}`;
+
+export const HUE_SHIFT = `${HEADER}${HSV_HELPERS}
+uniform sampler2D uSrc;
+uniform float uShift; // in turns, 0..1 (i.e. degrees / 360)
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  vec3 hsv = rgb2hsv(c.rgb);
+  hsv.x = fract(hsv.x + uShift);
+  outColor = vec4(hsv2rgb(hsv), c.a);
+}`;
+
+// Brightness + contrast + saturation + opacity in one pass, all with a
+// "1 (or 0 for brightness) leaves it unchanged" default - useful when
+// you want to nudge several of these together without chaining four
+// separate effect nodes.
+export const GRADE = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uBrightness; // additive, -1..1, 0 = no change
+uniform float uContrast;   // 1.0 = no change
+uniform float uSaturation; // 0 = grayscale, 1 = no change
+uniform float uOpacity;    // multiplies alpha, 1 = no change
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  vec3 rgb = mix(vec3(luma), c.rgb, uSaturation);
+  rgb = (rgb - 0.5) * uContrast + 0.5;
+  rgb += uBrightness;
+  outColor = vec4(rgb, c.a * uOpacity);
+}`;
+
+// A fixed 5x5 binomial-weighted (1 4 6 4 1) blur kernel - the actual
+// blur "amount" scales the spacing between the 25 samples rather than
+// their count, so this stays a small, fixed number of texture fetches
+// regardless of how strong the blur looks. uTexel is injected
+// automatically for every effect - see effects.js's makeEffectClass().
+export const BLUR = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uAmount; // spacing between samples, in texels - 0 = no blur
+
+void main() {
+  float w[5] = float[5](1.0, 4.0, 6.0, 4.0, 1.0);
+  vec4 sum = vec4(0.0);
+  float totalW = 0.0;
+  for (int y = -2; y <= 2; y++) {
+    for (int x = -2; x <= 2; x++) {
+      vec2 offset = vec2(float(x), float(y)) * uTexel * uAmount;
+      float weight = w[x + 2] * w[y + 2];
+      sum += texture(uSrc, clamp(vUv + offset, 0.0, 1.0)) * weight;
+      totalW += weight;
+    }
+  }
+  outColor = sum / totalW;
+}`;
+
+// A radial ("zoom") blur, streaking every sample toward/away from
+// center - visually distinct from BLUR above (uniform, directionless)
+// the way a real lens's motion/zoom blur reads differently from a
+// simple soft-focus blur.
+export const LENS_BLUR = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // streak strength, 0 = no blur
+
+void main() {
+  vec2 dir = vUv - 0.5;
+  vec4 sum = vec4(0.0);
+  const int SAMPLES = 12;
+  for (int i = 0; i < SAMPLES; i++) {
+    float t = float(i) / float(SAMPLES - 1);
+    vec2 uv = vUv - dir * uAmount * t * 0.15;
+    sum += texture(uSrc, clamp(uv, 0.0, 1.0));
+  }
+  outColor = sum / float(SAMPLES);
+}`;
+
+export const THRESHOLD = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uLevel;    // 0..1, luma cutoff
+uniform float uSoftness; // smoothstep width around uLevel, 0 = hard cut
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  float v = smoothstep(uLevel - uSoftness * 0.5, uLevel + uSoftness * 0.5, luma);
+  outColor = vec4(vec3(v), c.a);
+}`;
+
+// Sobel edge detection on luma - gradient magnitude, not direction, so
+// the result is a plain "how much of an edge is here" grayscale map.
+export const EDGE = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uAmount; // multiplies the result before clamping to 0..1
+
+float edgeLuma(sampler2D tex, vec2 uv) {
+  return dot(texture(tex, uv).rgb, vec3(0.299, 0.587, 0.114));
+}
+
+void main() {
+  float tl = edgeLuma(uSrc, vUv + uTexel * vec2(-1.0, 1.0));
+  float t  = edgeLuma(uSrc, vUv + uTexel * vec2( 0.0, 1.0));
+  float tr = edgeLuma(uSrc, vUv + uTexel * vec2( 1.0, 1.0));
+  float l  = edgeLuma(uSrc, vUv + uTexel * vec2(-1.0, 0.0));
+  float r  = edgeLuma(uSrc, vUv + uTexel * vec2( 1.0, 0.0));
+  float bl = edgeLuma(uSrc, vUv + uTexel * vec2(-1.0,-1.0));
+  float b  = edgeLuma(uSrc, vUv + uTexel * vec2( 0.0,-1.0));
+  float br = edgeLuma(uSrc, vUv + uTexel * vec2( 1.0,-1.0));
+  float gx = -tl - 2.0 * l - bl + tr + 2.0 * r + br;
+  float gy = -tl - 2.0 * t - tr + bl + 2.0 * b + br;
+  float g = clamp(length(vec2(gx, gy)) * uAmount, 0.0, 1.0);
+  vec4 c = texture(uSrc, vUv);
+  outColor = vec4(vec3(g), c.a);
+}`;
+
+// Classic single-pass emboss convolution on luma - a mid-gray field with
+// raised/sunken edges, the traditional "engraved" look.
+export const EMBOSS = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uAmount;
+
+float embossLuma(sampler2D tex, vec2 uv) {
+  return dot(texture(tex, uv).rgb, vec3(0.299, 0.587, 0.114));
+}
+
+void main() {
+  float sum =
+    embossLuma(uSrc, vUv + uTexel * vec2(-1.0, 1.0)) * -2.0 +
+    embossLuma(uSrc, vUv + uTexel * vec2( 0.0, 1.0)) * -1.0 +
+    embossLuma(uSrc, vUv + uTexel * vec2(-1.0, 0.0)) * -1.0 +
+    embossLuma(uSrc, vUv                            ) *  1.0 +
+    embossLuma(uSrc, vUv + uTexel * vec2( 1.0, 0.0)) *  1.0 +
+    embossLuma(uSrc, vUv + uTexel * vec2( 0.0,-1.0)) *  1.0 +
+    embossLuma(uSrc, vUv + uTexel * vec2( 1.0,-1.0)) *  2.0;
+  float g = clamp(sum * uAmount + 0.5, 0.0, 1.0);
+  vec4 c = texture(uSrc, vUv);
+  outColor = vec4(vec3(g), c.a);
+}`;
+
+// Folds one half of the frame onto the other (per axis) and stretches
+// it back out to fill the whole thing - the result only ever shows
+// content from one half, mirrored about center. Distinct from Flip
+// (which flips the WHOLE image, showing everything, just reversed).
+export const MIRROR = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uAxis; // 1.0 = mirror-fold that axis, 0.0 = leave it
+
+void main() {
+  vec2 folded = vec2(
+    (vUv.x < 0.5 ? vUv.x : 1.0 - vUv.x) * 2.0,
+    (vUv.y < 0.5 ? vUv.y : 1.0 - vUv.y) * 2.0
+  );
+  vec2 uv = mix(vUv, folded, uAxis);
+  outColor = texture(uSrc, uv);
+}`;
+
+export const TILE = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uRepeat; // number of repeats per axis
+
+void main() {
+  outColor = texture(uSrc, fract(vUv * uRepeat));
+}`;
+
+// Polar-coordinate wedge mirroring around center - the classic
+// kaleidoscope look.
+export const KALEIDOSCOPE = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uSegments;
+
+void main() {
+  vec2 centered = vUv - 0.5;
+  float radius = length(centered);
+  float angle = atan(centered.y, centered.x);
+  float wedge = 6.28318530718 / max(uSegments, 1.0);
+  angle = mod(angle, wedge);
+  angle = abs(angle - wedge * 0.5);
+  vec2 uv = vec2(cos(angle), sin(angle)) * radius + 0.5;
+  outColor = texture(uSrc, clamp(uv, 0.0, 1.0));
+}`;
+
+// Hydra-style modulation: a second texture's own luma pushes every
+// sample coordinate uniformly (same offset for x and y) - a softer,
+// more "flowing" distortion than DISPLACE below, which pushes x/y
+// independently from the map's separate r/g channels.
+export const MODULATE = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uMap;
+uniform float uAmount;
+
+void main() {
+  float m = dot(texture(uMap, vUv).rgb, vec3(0.299, 0.587, 0.114)) - 0.5;
+  vec2 uv = vUv + vec2(m) * uAmount;
+  outColor = texture(uSrc, clamp(uv, 0.0, 1.0));
+}`;
+
+// A proper 2-channel displacement map: uMap's red/green channels (each
+// remapped from 0..1 to -1..1) push uSrc's sample coordinate on the x/y
+// axes independently.
+export const DISPLACE = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uMap;
+uniform float uAmount;
+
+void main() {
+  vec2 offset = (texture(uMap, vUv).rg - 0.5) * 2.0 * uAmount;
+  outColor = texture(uSrc, clamp(vUv + offset, 0.0, 1.0));
+}`;
+
+export const VIGNETTE = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // 0 = none, 1 = fully dark at the edges
+uniform float uRadius; // 0..1, where the darkening starts
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float d = distance(vUv, vec2(0.5));
+  float falloff = smoothstep(uRadius, 0.71, d); // 0.71 ~= corner distance
+  outColor = vec4(c.rgb * (1.0 - falloff * uAmount), c.a);
+}`;
+
+export const PIXELATE = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uSize; // block size, in texels
+
+void main() {
+  vec2 grid = uTexel * max(uSize, 1.0);
+  vec2 uv = floor(vUv / grid) * grid + grid * 0.5;
+  outColor = texture(uSrc, uv);
+}`;
+
+export const POSTERIZE = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uLevels; // color levels per channel, e.g. 4
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float levels = max(uLevels, 2.0);
+  vec3 rgb = clamp(floor(c.rgb * levels) / (levels - 1.0), 0.0, 1.0);
+  outColor = vec4(rgb, c.a);
+}`;
+
+// Color lookup via a 2D "unrolled" LUT strip - the common format used by
+// most LUT PNGs floating around (e.g. exported from After Effects/many
+// online converters): uSize square blocks laid out left-to-right, each
+// block sizeXsize texels, one block per B slice. R selects the x
+// position within a block, G the y position, B selects (and blends
+// between, for smoothness) which block.
+export const COLOR_LOOKUP = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uLut;
+uniform float uSize;        // number of B-slices (also each block's width/height, in blocks)
+uniform float uBlockTexels; // texels per block (the LUT texture's own width / uSize)
+uniform float uAmount;      // 0 = original, 1 = fully graded
+
+vec3 lutLookup(vec3 color) {
+  float size = max(uSize, 2.0);
+  float sliceF = clamp(color.b, 0.0, 1.0) * (size - 1.0);
+  float slice0 = floor(sliceF);
+  float slice1 = min(slice0 + 1.0, size - 1.0);
+  float t = sliceF - slice0;
+  // Insets r into the block's inner texel-center range (never landing
+  // exactly on r=0/r=1, i.e. never exactly on the seam between this
+  // block and its neighbor) - GL_LINEAR filtering has no idea the
+  // texture is actually several logically-separate blocks side by side,
+  // so sampling exactly at a seam blends this block's edge color with
+  // the ADJACENT block's, a real (not cosmetic) bug at exactly r=0 or
+  // r=1 - ordinary, common input values, not rare corner cases.
+  float rInset = (clamp(color.r, 0.0, 1.0) * (uBlockTexels - 1.0) + 0.5) / uBlockTexels;
+  // 1.0 - g, not g: every CPU->GPU upload in this project goes through
+  // UNPACK_FLIP_Y_WEBGL (see gl-context.js), which puts a source image's
+  // own row 0 (its visual top) at v=1, not v=0 - so sampling at v=g
+  // directly would fetch the row for (1-g) instead of g. G doesn't need
+  // the same block-seam inset r does: it addresses the LUT's full
+  // height directly (no repeating sub-blocks along that axis), and
+  // CLAMP_TO_EDGE means g=0/g=1 just clamp to the true edge texel rather
+  // than bleeding into an unrelated region the way an un-inset r would.
+  float g = 1.0 - clamp(color.g, 0.0, 1.0);
+  vec2 uv0 = vec2((slice0 + rInset) / size, g);
+  vec2 uv1 = vec2((slice1 + rInset) / size, g);
+  return mix(texture(uLut, uv0).rgb, texture(uLut, uv1).rgb, t);
+}
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  vec3 graded = lutLookup(c.rgb);
+  outColor = vec4(mix(c.rgb, graded, uAmount), c.a);
+}`;

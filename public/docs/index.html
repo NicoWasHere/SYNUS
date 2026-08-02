@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SYNUS docs</title>
+<style>
+  :root {
+    --bg: #111;
+    --panel: #1a1a1a;
+    --panel2: #1e1e1e;
+    --border: #333;
+    --border2: #444;
+    --text: #eee;
+    --dim: #999;
+    --dimmer: #777;
+    --accent: #9ece6a;
+    --accent2: #7ec8e3;
+    --warn: #f0a860;
+    --err: #f66;
+    --code-bg: #151515;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.6 'SF Mono', Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent2); }
+  a:visited { color: var(--accent2); }
+  h1, h2, h3, h4 { font-family: inherit; line-height: 1.3; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 {
+    font-size: 17px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    margin-top: 44px;
+  }
+  h3 { font-size: 14.5px; color: #dfe; margin-top: 28px; }
+  h4 { font-size: 13px; color: var(--dim); margin: 18px 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  p { color: #ccc; }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #cde8a0;
+    font-size: 12.5px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  pre code { background: none; border: none; padding: 0; color: #d7e9c2; }
+  .tag { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .com { color: #6a7a6a; font-style: italic; }
+  .num { color: #f78c6c; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--dim); font-weight: normal; border-bottom: 1px solid var(--border2); }
+  td code { white-space: nowrap; }
+
+  .layout { display: flex; min-height: 100vh; }
+  nav {
+    width: 240px;
+    flex: 0 0 240px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 20px 0 60px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  nav .brand { padding: 0 20px 16px; }
+  nav .brand a { color: var(--text); text-decoration: none; font-weight: bold; font-size: 15px; }
+  nav .brand div { color: var(--dimmer); font-size: 11px; margin-top: 2px; }
+  nav ul { list-style: none; margin: 0; padding: 0 0 0 0; }
+  nav li a {
+    display: block;
+    padding: 4px 20px;
+    color: #bbb;
+    text-decoration: none;
+    font-size: 12.5px;
+  }
+  nav li a:hover { color: var(--accent); background: rgba(255,255,255,0.03); }
+  nav .section-title {
+    padding: 14px 20px 4px;
+    color: var(--dimmer);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  main {
+    flex: 1;
+    min-width: 0;
+    max-width: 860px;
+    padding: 40px 48px 120px;
+  }
+  .lede { color: var(--dim); font-size: 13.5px; max-width: 640px; }
+  .badge {
+    display: inline-block;
+    font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border2);
+    color: var(--dim);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .note {
+    border-left: 3px solid var(--accent2);
+    background: rgba(126,200,227,0.06);
+    padding: 8px 14px;
+    margin: 14px 0;
+    font-size: 13px;
+    color: #cde;
+  }
+  .warn {
+    border-left: 3px solid var(--warn);
+    background: rgba(240,168,96,0.08);
+    padding: 8px 14px;
+    margin: 14px 0;
+    font-size: 13px;
+    color: #f0d8b8;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    nav { position: static; width: auto; height: auto; }
+    main { max-width: none; padding: 24px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .kbd {
+    display: inline-block;
+    border: 1px solid var(--border2);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11.5px;
+    background: #222;
+  }
+  footer { color: var(--dimmer); font-size: 11.5px; margin-top: 60px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav>
+    <div class="brand">
+      <a href="#top">SYNUS</a>
+      <div>livecode node environment — docs</div>
+    </div>
+
+    <div class="section-title">Start here</div>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#ui-tour">UI tour</a></li>
+      <li><a href="#node-anatomy">Node anatomy &amp; the bus</a></li>
+      <li><a href="#state">State, useInstances, newPatch</a></li>
+    </ul>
+
+    <div class="section-title">Rendering</div>
+    <ul>
+      <li><a href="#primitives">GLSL / Canvas2D / Html</a></li>
+      <li><a href="#render-preview">render() &amp; preview()</a></li>
+      <li><a href="#effects">Effects (FX)</a></li>
+      <li><a href="#compositing">Composite / Matte</a></li>
+      <li><a href="#feedback">Feedback: Lag / Delay</a></li>
+      <li><a href="#filtering">Texture filtering (NEAREST)</a></li>
+      <li><a href="#generators">Generators: Ramp / Noise / Bloom</a></li>
+    </ul>
+
+    <div class="section-title">Data &amp; control</div>
+    <ul>
+      <li><a href="#pattern">Pattern</a></li>
+      <li><a href="#instancing">Instancing &amp; particles</a></li>
+      <li><a href="#sampletexture">sampleTexture</a></li>
+      <li><a href="#globals">Global values</a></li>
+      <li><a href="#controls">slider / button / input</a></li>
+      <li><a href="#nodefunction">nodeFunction</a></li>
+    </ul>
+
+    <div class="section-title">Sources</div>
+    <ul>
+      <li><a href="#media">Image / Video / Webcam</a></li>
+      <li><a href="#hydra">Hydra</a></li>
+      <li><a href="#three">Three.js</a></li>
+    </ul>
+
+    <div class="section-title">Editor</div>
+    <ul>
+      <li><a href="#shortcuts">$name$ / $explode(name)$</a></li>
+      <li><a href="#reset-button">Per-node reset button</a></li>
+    </ul>
+
+    <div class="section-title">Reference</div>
+    <ul>
+      <li><a href="#gotchas">Gotchas &amp; FAQ</a></li>
+      <li><a href="#global-index">Full global index</a></li>
+    </ul>
+  </nav>
+
+  <main id="top">
+    <h1>SYNUS</h1>
+    <p class="lede">
+      A livecode node environment. You write a graph of small nodes in one JS-like
+      text file; each node reads other nodes' outputs, does some WebGL2/Canvas2D/
+      three.js/Hydra work, and publishes its own output. Ctrl+Enter sends the whole
+      file to the running graph. This page documents everything currently built.
+    </p>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>
+        A project file is a real ES module that exports one thing:
+      </p>
+      <pre><code><span class="tag">export</span> <span class="tag">const</span> nodes = {
+  someNode: {
+    in: { src: <span class="str">'otherNode.output'</span> },
+    code(inputs, state, t) {
+      <span class="com">// ... do something with inputs.src, return an output</span>
+      <span class="tag">return</span> { screen: someTextureLikeValue };
+    },
+  },
+};</code></pre>
+      <p>
+        Every node is just <code>{ id, code, inputs, state, error, lastOutputs }</code>.
+        There's no such thing as a node "type" — a node is whatever lib class its
+        <code>code()</code> happens to call (<code>GLSL</code>, <code>Canvas2D</code>,
+        an effect, a Pattern, nothing at all). Nodes never call each other directly —
+        they publish to a shared <b>bus</b> keyed by <code>"nodeId.portName"</code> and
+        read from it via their <code>in</code> wiring. That's what makes feedback loops
+        possible (a node can read its own last-published value through a <code>Lag</code>
+        or <code>Delay</code>) and keeps every node decoupled from the others' internals.
+      </p>
+      <p>
+        Every tick (driven by <code>requestAnimationFrame</code>), the graph:
+      </p>
+      <ol style="color:#ccc">
+        <li>topologically sorts nodes by their <code>in</code> wiring (cycle-tolerant — a node depending on itself doesn't hang, it just reads last tick's value)</li>
+        <li>for each node, reads its wired inputs off the bus, calls <code>code(inputs, node.state, t)</code></li>
+        <li>publishes whatever it returned onto the bus as <code>"thisNodeId.portName"</code> for each key</li>
+        <li>if it threw, keeps showing that node's LAST successful output and records the error (shown in the error panel) — one broken node doesn't blank out the whole graph</li>
+      </ol>
+      <p>
+        <code>node.state</code> is a plain object that <b>persists across every patch
+        send</b> for as long as that node's key exists in the file — this is what lets a
+        node build an expensive resource once (a shader program, a Canvas2D, a three.js
+        scene) and reuse it every tick, instead of rebuilding it 60 times a second. See
+        <a href="#state">State, useInstances, newPatch</a> for the implications.
+      </p>
+    </section>
+
+    <section id="ui-tour">
+      <h2>UI tour</h2>
+      <table>
+        <tr><th>Control</th><th>What it does</th></tr>
+        <tr><td><span class="kbd">Ctrl+Enter</span> / <span class="kbd">⌘+Enter</span>, or <b>▶ Send</b></td>
+          <td>Sends the current text to the running graph. Nothing you type runs until you do this — a patch-send model, same convention as Strudel/Hydra's own editors. The button flashes green on success, red on a load error; a failed send leaves the last-good graph running untouched.</td></tr>
+        <tr><td><b>Side by side</b> / <b>Perform mode</b> toggle</td>
+          <td>Side by side shows the editor and the render output next to each other. Perform mode makes the render output fill the whole window with the editor floating semi-transparently on top.</td></tr>
+        <tr><td><b>⛶ Fullscreen</b></td>
+          <td>Real OS-level fullscreen (hides the browser chrome too), independent of Perform/Side-by-side.</td></tr>
+        <tr><td>tps / t counters</td>
+          <td>Ticks-per-second (should track your monitor's refresh rate minus whatever your graph actually costs per frame) and the running clock time passed into every node's <code>code(inputs, state, t)</code> as <code>t</code>.</td></tr>
+        <tr><td>Error panel</td>
+          <td>Shows a file-level load error (syntax error, missing <code>export const nodes</code>) and/or any individual node's last thrown error, one line each.</td></tr>
+        <tr><td>Floating preview cards</td>
+          <td>Appear next to a node's own line, only for ticks where that node calls <code>preview(value)</code> — see <a href="#render-preview">render() &amp; preview()</a>.</td></tr>
+        <tr><td>Small <code>↺</code> button per node</td>
+          <td>Left-margin button next to every node's opening line — see <a href="#reset-button">Per-node reset button</a>.</td></tr>
+      </table>
+    </section>
+
+    <section id="node-anatomy">
+      <h2>Node anatomy &amp; the bus</h2>
+      <pre><code>rainbow1: {
+  in: { src: <span class="str">'square1.screen'</span> },   <span class="com">// portName is whatever the upstream node returned</span>
+  code(inputs, state, t) {
+    <span class="com">// inputs.src === whatever square1's code() last returned under "screen"</span>
+    <span class="tag">return</span> { screen: something };  <span class="com">// publishes as "rainbow1.screen"</span>
+  },
+},</code></pre>
+      <p>
+        <code>in</code> keys are just <code>{ localName: 'upstreamNodeId.portName' }</code>.
+        There's nothing special about the name <code>screen</code> or <code>output</code> —
+        it's a plain string key in whatever object your <code>code()</code> returns, and the
+        node wiring to it has to spell that exact key. A very common beginner mistake is
+        writing <code>in: { src: 'foo.output' }</code> when <code>foo</code>'s
+        <code>code()</code> actually <code>return</code>s <code>{ screen: x }</code> — that
+        reads as <code>undefined</code> silently (the bus just has no entry for
+        <code>"foo.output"</code>), not an error.
+      </p>
+      <p>
+        Only <code>render(value)</code> (see below) actually draws to the visible canvas —
+        returning <code>{ screen: x }</code> from some node by itself does nothing visible
+        unless another node reads it and eventually calls <code>render()</code> on it (or on
+        something derived from it).
+      </p>
+    </section>
+
+    <section id="state">
+      <h2>State, useInstances, and newPatch</h2>
+      <p>
+        <code>node.state</code> persists across every successful patch send, for as long
+        as the node's key stays the same. This is deliberate — editing one line in one
+        node shouldn't blow away another node's compiled shader, or reset a running
+        feedback buffer. The mechanism for "build this once, reuse it every tick" is:
+      </p>
+      <pre><code>code(inputs, state, t) {
+  <span class="tag">const</span> use = useInstances(state);
+  <span class="tag">const</span> glsl = use(GLSL);              <span class="com">// constructed once ever, reused every tick after</span>
+  <span class="tag">const</span> rotated = use(Rotate).tick(inputs.src, t * 20);
+  ...
+}</code></pre>
+      <p>
+        <code>useInstances(state)</code> returns a <code>use(Ctor, ...args)</code>
+        function. Each call constructs <code>new Ctor(...args)</code> the very first
+        time it runs for that call, then just hands back the SAME instance every tick
+        after, keyed by call order — so <code>use()</code> calls must be unconditional
+        and in the same order every tick (never inside an <code>if</code>), the same
+        constraint React hooks have. This works for any class: <code>GLSL</code>,
+        <code>Canvas2D</code>, any effect, <code>Pattern</code>, a class you write
+        yourself.
+      </p>
+      <p>
+        For a one-time setup that isn't a single class (three.js's scene/camera/mesh,
+        for instance), the plain idiom is:
+      </p>
+      <pre><code><span class="tag">if</span> (!state.scene) {
+  state.scene = <span class="tag">new</span> THREE.Scene();
+  ...
+}</code></pre>
+      <div class="warn">
+        <b>The gotcha:</b> both of these only ever run their construction ONCE, ever,
+        per node. Editing what's <i>inside</i> a <code>use(Ctor, ...)</code> call's
+        arguments, or inside an <code>if (!state.x)</code> block, and hitting Send again
+        has <b>no visible effect</b> — the code that would apply your edit doesn't run
+        again. This bit three separate things this project ran into directly: changing
+        a three.js node's geometry, changing which <code>Pattern</code> shape a
+        <code>use(Pattern, Pattern.sin(1))</code> call constructs, and any other
+        "build once" idiom in general.
+      </div>
+      <p>There are three ways to deal with this, pick whichever fits:</p>
+      <h4>1. The per-node reset button</h4>
+      <p>
+        Click the small <code>↺</code> next to the node's line (see
+        <a href="#reset-button">Per-node reset button</a>) — clears
+        <code>state</code> to <code>{}</code>, so every <code>if (!state.x)</code>
+        guard fires again on the very next tick. No resend needed.
+      </p>
+      <h4>2. newPatch</h4>
+      <pre><code><span class="tag">if</span> (!state.scene || newPatch) {
+  state.scene = <span class="tag">new</span> THREE.Scene();
+  ...
+}</code></pre>
+      <p>
+        <code>newPatch</code> is a plain global (not a function call) that reads
+        <code>true</code> for exactly one tick — the first tick right after a send
+        succeeds — and <code>false</code> every other tick. Add <code>|| newPatch</code>
+        to a one-time-setup guard and it rebuilds automatically on every Send, no click
+        needed, without forcing <i>every</i> node's state to reset (which would also
+        wipe out running feedback buffers you didn't touch).
+      </p>
+      <h4>3. Pattern.set() (Pattern-specific)</h4>
+      <p>
+        For a <code>Pattern</code> held in persistent state specifically, there's a
+        cheaper fix than either of the above — see <a href="#pattern">Pattern</a>.
+      </p>
+    </section>
+
+    <section id="primitives">
+      <h2>Rendering primitives</h2>
+
+      <h3>GLSL</h3>
+      <pre><code><span class="tag">const</span> glsl = use(GLSL, { width: 512, height: 512, filter: <span class="str">'linear'</span> });
+glsl.tick(fragSrc, { uSrc: inputs.src, uSomeNumber: 1.0 });
+<span class="tag">return</span> { screen: glsl };</code></pre>
+      <p>
+        Pass the fragment shader source (a <code>#version 300 es</code> string) into
+        <code>tick()</code> <b>every frame</b>, not just once — it only actually
+        recompiles when the string changed, so this is cheap, and it's what makes
+        editing the shader text in your node's <code>code()</code> take effect live.
+        Uniform values can be: anything with a <code>.texture</code> property (bound as
+        a <code>sampler2D</code>), a number, a boolean (sent as 0.0/1.0), or a 2/3/4-length
+        array (<code>uniform2fv</code>/<code>3fv</code>/<code>4fv</code>).
+      </p>
+      <p>
+        Every compiled shader gets <code>vUv</code> (0..1 across the frame, v=1 is
+        visual top) as its varying, and can declare <code>uniform vec2 uTexel</code> to
+        get 1 texel of <code>uSrc</code> in uv units (for neighbor-sampling effects like
+        blur) — it's injected automatically for every GLSL-backed effect, ignored if
+        your shader doesn't declare it.
+      </p>
+      <div class="warn">
+        <b>WebGL feedback-loop rule:</b> a shader can never sample the exact same
+        texture it's currently rendering into — <code>GLSL.tick()</code> throws
+        explicitly if you try (rather than silently freezing, which is what raw WebGL
+        does). Route self-referencing feedback through <a href="#feedback">Lag or
+        Delay</a> instead, which always copy into their own separate texture first.
+      </div>
+
+      <h3>Canvas2D</h3>
+      <pre><code><span class="tag">const</span> canvas = use(Canvas2D, width, height, <span class="str">'linear'</span>);  <span class="com">// filter: 'linear' | 'nearest'</span>
+<span class="tag">const</span> { ctx } = canvas;
+ctx.clearRect(0, 0, width, height);
+<span class="com">// normal ctx.* drawing calls</span>
+canvas.upload();  <span class="com">// call once you're done drawing this tick</span>
+<span class="tag">return</span> { screen: canvas };</code></pre>
+      <p>Plain 2D canvas drawing, no GLSL involved — proves a "video-type" node doesn't need one.</p>
+
+      <h3>Html</h3>
+      <pre><code><span class="tag">const</span> html = use(Html, width, height);
+html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt;hello&lt;/div&gt;`</span>);
+<span class="tag">return</span> { screen: html };</code></pre>
+      <p>
+        Rasterizes real HTML/CSS to a texture (via an SVG <code>&lt;foreignObject&gt;</code>),
+        for richer text layout than <code>ctx.font</code> allows. Real limits: no
+        cross-origin images or <code>@font-face</code> fonts inside the HTML (canvas
+        tainting), and the texture updates one tick <i>after</i> the HTML string changes
+        (rasterizing is asynchronous), not the same tick.
+      </p>
+    </section>
+
+    <section id="render-preview">
+      <h2>render() &amp; preview()</h2>
+      <pre><code>render(value);  <span class="com">// puts `value` on the visible canvas THIS tick</span></code></pre>
+      <p>
+        The only thing that actually draws to screen. One shared instance for the whole
+        graph — whichever node calls <code>render()</code> <i>last</i> in cook order
+        wins for that tick. To change what's shown, move (or add/remove) the call, no
+        <code>in</code> rewiring needed.
+      </p>
+      <pre><code>preview(value, options?);</code></pre>
+      <p>
+        Opts this node into a floating preview card next to its own line, for this tick
+        only — a node that never calls <code>preview()</code> gets no card and costs no
+        extra per-tick texture readback. Call it more than once in one node's
+        <code>code()</code> and each call gets its own card (stacked below the first),
+        keyed by call order — same convention <code>particle2d()</code>/
+        <code>ascii2d()</code> use internally.
+      </p>
+      <ul style="color:#ccc">
+        <li>A texture-bearing value shows as an image.</li>
+        <li>A plain number is rounded to 6 decimals for display (so <code>0.1+0.2</code> shows <code>0.3</code>, not <code>0.30000000000000004</code>) — only the display is rounded, not the real value.</li>
+        <li>A bare <code>Pattern</code> auto-plots as a line graph (see <a href="#pattern">Pattern</a>) — default x-range is <code>[0, 1]</code>; override with <code>preview(pattern, { range: [a, b] })</code>.</li>
+        <li>Anything else is shown via <code>JSON.stringify</code>.</li>
+      </ul>
+    </section>
+
+    <section id="effects">
+      <h2>Effects (FX)</h2>
+      <p>
+        Every effect below is a class, constructed via <code>use(EffectName, filter?)</code>
+        and called as <code>.tick(src, ...args)</code> — <code>tick()</code>'s
+        <b>return value</b> is the actual texture, not the wrapper itself:
+      </p>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> out = use(Rotate).tick(inputs.src, t * 20);  <span class="com">// out has .texture, the Rotate wrapper doesn't</span>
+<span class="tag">return</span> { screen: out };                       <span class="com">// NOT { screen: use(Rotate) }</span></code></pre>
+      <p>
+        Every effect's constructor takes an optional <code>filter</code> argument
+        (<code>use(Translate, 'nearest')</code>) — see
+        <a href="#filtering">Texture filtering</a>.
+      </p>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>Rotate.tick(src, degrees)</code></td><td>Rotates around center.</td></tr>
+        <tr><td><code>Scale.tick(src, {x,y})</code> or <code>(src, factor)</code></td><td>1.0 = no change per axis.</td></tr>
+        <tr><td><code>Flip.tick(src, {x,y})</code></td><td>Booleans, mirror that axis.</td></tr>
+        <tr><td><code>Translate.tick(src, {x,y})</code></td><td>Offset in 0..1 uv units.</td></tr>
+        <tr><td><code>ChannelMix.tick(src, {r,g,b})</code></td><td>Each a <code>[r,g,b]</code> mix vector for that output channel.</td></tr>
+        <tr><td><code>Brightness.tick(src, amount)</code></td><td>Additive, -1..1.</td></tr>
+        <tr><td><code>Contrast.tick(src, amount)</code></td><td>1.0 = no change.</td></tr>
+        <tr><td><code>Saturation.tick(src, amount)</code></td><td>0 = grayscale, 1 = no change.</td></tr>
+        <tr><td><code>HueShift.tick(src, degrees)</code></td><td></td></tr>
+        <tr><td><code>Grade.tick(src, {brightness,contrast,saturation,opacity})</code></td><td>Every default leaves that channel unchanged — pass only what you want to adjust.</td></tr>
+        <tr><td><code>Blur.tick(src, amount)</code></td><td>Sample spacing in texels, 0 = none.</td></tr>
+        <tr><td><code>LensBlur.tick(src, amount)</code></td><td>Radial/zoom streak strength.</td></tr>
+        <tr><td><code>Threshold.tick(src, {level,softness})</code></td><td></td></tr>
+        <tr><td><code>Edge.tick(src, amount)</code></td><td>Sobel gradient magnitude.</td></tr>
+        <tr><td><code>Emboss.tick(src, amount)</code></td><td></td></tr>
+        <tr><td><code>Mirror.tick(src, {x,y})</code></td><td>Folds that axis onto itself.</td></tr>
+        <tr><td><code>Tile.tick(src, {x,y})</code> or <code>(src, n)</code></td><td>Repeat count per axis.</td></tr>
+        <tr><td><code>Kaleidoscope.tick(src, segments)</code></td><td>Number of mirrored wedges.</td></tr>
+        <tr><td><code>Modulate.tick(src, mapTexture, amount)</code></td><td>Map's luma pushes uv uniformly.</td></tr>
+        <tr><td><code>Displace.tick(src, mapTexture, amount)</code></td><td>Map's r/g push uv.x/uv.y independently.</td></tr>
+        <tr><td><code>Vignette.tick(src, {amount,radius})</code></td><td></td></tr>
+        <tr><td><code>Pixelate.tick(src, size)</code></td><td>Block size in texels.</td></tr>
+        <tr><td><code>Posterize.tick(src, levels)</code></td><td>Color levels per channel.</td></tr>
+        <tr><td><code>ColorLookup.tick(src, lutTexture, {size,amount})</code></td><td>LUT strip: <code>size</code> square blocks side by side. Load the LUT with <code>img.tick(url, {fit:'stretch'})</code>, not the default <code>'contain'</code>.</td></tr>
+      </table>
+      <p><code>FX</code> also exposes the whole table generically: <code>FX.rotate === Rotate</code>, etc.</p>
+    </section>
+
+    <section id="compositing">
+      <h2>Compositing: Composite / Matte</h2>
+      <pre><code><span class="tag">const</span> out = use(Composite).tick(a, b, mode, opacity);</code></pre>
+      <p>
+        Layers <code>b</code> onto <code>a</code>. <code>mode</code>: Porter-Duff
+        (<code>'over'</code> default, <code>'atop'</code>, <code>'xor'</code>) or a color
+        blend (<code>'multiply'</code>, <code>'screen'</code>, <code>'darken'</code>,
+        <code>'lighten'</code>, <code>'add'</code>, <code>'difference'</code>,
+        <code>'hardLight'</code>, <code>'softLight'</code>, <code>'lightest'</code>,
+        <code>'darkest'</code>). <code>opacity</code> (0..1, default 1) fades <code>b</code>
+        before compositing.
+      </p>
+      <div class="warn">
+        Never wire <code>b</code> to this same node's own output directly — reading a
+        texture while it's the active render target throws. Route the fed-back side
+        through Lag or Delay first.
+      </div>
+      <pre><code><span class="tag">const</span> out = use(Matte).tick(a, b, matteSource);</code></pre>
+      <p>
+        Mixes <code>a</code>/<code>b</code> per-pixel using a third source's own
+        luminance as the mix factor (0 = all a, 1 = all b) — a luma matte/mask.
+      </p>
+    </section>
+
+    <section id="feedback">
+      <h2>Feedback: Lag / Delay</h2>
+      <pre><code><span class="tag">const</span> held = use(Lag, every, filter).tick(value, every);</code></pre>
+      <p>
+        Holds a value and only refreshes it once every <code>every</code> calls — a
+        frequency divider (step-holds between updates, never shows intermediate frames).
+        Safe to hold a texture-bearing value: Lag snapshots it into its own texture at
+        the moment it fires, rather than just keeping a reference (which would just keep
+        showing whatever the upstream node draws <i>this</i> frame, live).
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Delay, ticks, filter).tick(value, ticks);</code></pre>
+      <p>
+        Shows exactly what <code>value</code> was <code>ticks</code> ticks ago — a true
+        sliding delay line, continuously shifting by one frame every tick (unlike Lag,
+        which steps). Costs <code>ticks + 1</code> separate GPU textures internally (a
+        ring buffer).
+      </p>
+      <p>
+        Both exist specifically so a node can safely read its own recent history — the
+        thing that makes feedback loops (trails, video-synth-style zoom/spiral effects)
+        possible without ever violating the "can't sample your own active render target"
+        rule.
+      </p>
+    </section>
+
+    <section id="filtering">
+      <h2>Texture filtering (NEAREST)</h2>
+      <p>
+        Every texture-owning class (<code>GLSL</code>, <code>Canvas2D</code>, every
+        effect, <code>Lag</code>, <code>Delay</code>) takes an optional
+        <code>filter</code> argument: <code>'linear'</code> (default, smooth) or
+        <code>'nearest'</code> (blocky, no interpolation).
+      </p>
+      <div class="note">
+        <b>Why this exists:</b> in a feedback loop, something like
+        <code>Translate</code>/<code>Scale</code>/<code>Rotate</code> resamples its
+        input at a fractional/scaled uv coordinate every single tick. With the default
+        LINEAR filtering, each resample blends neighboring texels a little — harmless
+        once, but it compounds: after enough iterations through the loop the image gets
+        visibly, progressively blurrier. This is <b>not compression</b> — nothing in
+        this pipeline compresses anything — it's cumulative bilinear resampling, the
+        same reason old analog video-feedback effects look the way they do.
+      </div>
+      <p>
+        <code>'nearest'</code> on the texture that gets fed back through the loop
+        (typically the <code>Delay</code>/<code>Lag</code> and whatever effects read it)
+        stops that specific compounding, at the cost of visible pixel-stepping/aliasing
+        instead of smoothness:
+      </p>
+      <pre><code><span class="tag">let</span> out = use(Delay, undefined, <span class="str">'nearest'</span>).tick(inputs.src, ticks);
+out = use(Translate, <span class="str">'nearest'</span>).tick(out, { x: 0.01, y: 0.01 });
+out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0 });</code></pre>
+      <p>The default project's own feedback loop uses exactly this — flip any of those back to omit the argument (or pass <code>'linear'</code>) to compare.</p>
+    </section>
+
+    <section id="generators">
+      <h2>Generators: Ramp / Noise / Bloom</h2>
+      <p>Generators don't take a <code>src</code> — they draw their own content from scratch every tick.</p>
+      <pre><code><span class="tag">const</span> out = use(Ramp, width, height).tick({ angle: 0, from: [0,0,0], to: [1,1,1] });</code></pre>
+      <p>A gradient. <code>angle</code> in degrees (0 = left-to-right), <code>from</code>/<code>to</code> are <code>[r,g,b]</code> in 0..1.</p>
+      <pre><code><span class="tag">const</span> out = use(Noise, width, height).tick({ scale: 4, seed: t, octaves: 4, type: <span class="str">'fbm'</span> });</code></pre>
+      <p>
+        Grayscale. <code>type</code>: <code>'fbm'</code> (smooth/cloudy, multi-octave
+        value noise) or <code>'cellular'</code> (Voronoi/Worley distance field).
+        <code>seed</code> is just an offset into the noise field — pass <code>t</code>
+        for free animation. <code>octaves</code> only matters for <code>'fbm'</code>
+        (capped at 8).
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Bloom).tick(src, { threshold: 0.6, blurAmount: 3, intensity: 1 });</code></pre>
+      <p>Genuinely a 3-pass effect (bright-pass extract → blur → additive combine), so it's a hand-written class rather than a single-shader FX entry.</p>
+    </section>
+
+    <section id="pattern">
+      <h2>Pattern</h2>
+      <p>
+        A Pattern wraps a plain <code>x =&gt; number</code> function — a math-function
+        object you can read, transform, chain, and plot. JavaScript has no operator
+        overloading, so <code>pattern * 2</code> can never return a new Pattern (it just
+        coerces to <code>NaN</code>) — the methods below are the real equivalent.
+      </p>
+      <pre><code><span class="tag">const</span> pat = <span class="tag">new</span> Pattern(x =&gt; x * 2);   <span class="com">// cheap - just a function, build one fresh anytime</span>
+pat.read(3);                        <span class="com">// -&gt; 6</span></code></pre>
+      <h4>Static shape constructors</h4>
+      <p>Each already outputs 0..1. <code>freq</code>/<code>phase</code> scale/shift x before the shape is applied.</p>
+      <table>
+        <tr><th>Call</th><th>Shape</th></tr>
+        <tr><td><code>Pattern.sin(freq, phase)</code></td><td>Sine, remapped to 0..1.</td></tr>
+        <tr><td><code>Pattern.ramp(freq, phase)</code></td><td>Sawtooth, 0 → 1 then jumps back to 0.</td></tr>
+        <tr><td><code>Pattern.square(freq, phase)</code></td><td>1 for the first half of each cycle, 0 for the second (fixed 50% duty cycle).</td></tr>
+        <tr><td><code>Pattern.triangle(freq, phase)</code></td><td>Linear up then linear down.</td></tr>
+        <tr><td><code>Pattern.random(freq, phase)</code></td><td>A new random value (0..1) each integer step of <code>x*freq</code> — a stepped hold, not smooth noise.</td></tr>
+        <tr><td><code>Pattern.pulse(freq, width, phase)</code></td><td>Like square, but with a controllable duty cycle — <code>width</code> (default 0.1) is the fraction of each cycle that reads 1. <code>pulse(freq, 1)</code> ≡ <code>square(freq)</code>.</td></tr>
+      </table>
+      <h4>Reading</h4>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>pat.read(x)</code></td><td>The value at one x.</td></tr>
+        <tr><td><code>pat.get(start, end, step=1)</code></td><td>A whole range at once — end exclusive, like a for-loop. For instancing: <code>pat.get(0, count)</code> hands back exactly <code>count</code> values.</td></tr>
+      </table>
+      <h4>Chaining (each returns a NEW Pattern)</h4>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>pat.map(f)</code></td><td>The general "chop" — wraps this pattern's OUTPUT through <code>f</code>. Every method below is a named shorthand for a specific <code>.map()</code>.</td></tr>
+        <tr><td><code>pat.mul(k)</code></td><td>Output × k.</td></tr>
+        <tr><td><code>pat.add(k)</code></td><td>Output + k.</td></tr>
+        <tr><td><code>pat.clip(lo, hi)</code></td><td><b>Loops</b> (not clamps) x into <code>[lo, hi)</code> before evaluating — scrubbing x past the region wraps back into it, like a loop marker, rather than holding the last value or clamping the output number.</td></tr>
+      </table>
+      <p>Chains: <code>pat.clip(3, 4).mul(2)</code>.</p>
+      <h4>set() — the one mutating method</h4>
+      <pre><code>lfo.set(fn);          <span class="com">// swaps THIS instance's wrapped function in place</span>
+lfo.set(Pattern.ramp(1, t % 100));  <span class="com">// a truly dynamic pattern: call .set() every tick</span></code></pre>
+      <p>
+        Every other method returns a NEW Pattern — <code>.set()</code> mutates the same
+        one instead. That distinction is the fix for the state-persistence gotcha above:
+        reassigning <code>state.lfo = new Pattern(...)</code> on a later patch send loses
+        whatever's cached ON that instance (<code>.plot()</code>'s own canvas) and starts
+        over; <code>state.lfo.set(...)</code> keeps the same instance (and its cache)
+        while still changing what it computes. It's also what makes a genuinely
+        time-varying pattern possible — call <code>.set()</code> every tick with fresh
+        values baked in, since the static factories themselves (<code>Pattern.ramp(freq,
+        phase)</code>) only bake in whatever <code>freq</code>/<code>phase</code> were at
+        the moment they were called:
+      </p>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> lfo = use(Pattern).set(Pattern.sin(0.3));  <span class="com">// re-applied every tick - editing the</span>
+                                          <span class="com">// shape here takes effect on next Send</span></code></pre>
+      <h4>plot() — for preview()</h4>
+      <pre><code>pat.plot({ width: 256, height: 64, range: [0, 1], samples: 128, color: <span class="str">'rgb(140,217,140)'</span> });</code></pre>
+      <p>
+        Draws this pattern as a line graph (a Canvas2D drawing — the wrapped function is
+        arbitrary JS, it can't run on the GPU) and returns the texture. Caches its own
+        canvas on <code>this</code>, so reuse the same Pattern instance (via
+        <code>useInstances</code>) for that cache to actually help. Shows axis labels:
+        top-left <code>1</code>, bottom-left <code>0</code> and the range start,
+        bottom-right the range end — the y-axis is always this fixed 0..1 scale
+        regardless of what the wrapped function actually returns (values outside 0..1
+        plot off the top/bottom edge, unclamped).
+      </p>
+      <p>
+        A bare Pattern passed to <code>preview()</code> auto-plots — see
+        <a href="#render-preview">render() &amp; preview()</a>.
+      </p>
+    </section>
+
+    <section id="instancing">
+      <h2>Instancing &amp; particles</h2>
+      <p>
+        Stamps many positioned/scaled/rotated copies of ONE source texture into a single
+        shared destination — real WebGL2 GPU instancing
+        (<code>drawArraysInstanced</code> + per-instance vertex attributes), so it's
+        always exactly ONE draw call and ONE destination texture, no matter how large
+        <code>count</code> is.
+      </p>
+      <h3>particle2d — the batteries-included entry point</h3>
+      <pre><code><span class="tag">const</span> out = particle2d(source, cols, rows, stamp, {
+  t, min: 0.15, shakeSpeed: 0, shakeAmount: 0.006, channel: <span class="str">'lightness'</span>,
+});</code></pre>
+      <p>
+        Samples <code>source</code> down to a <code>cols × rows</code> grid and stamps
+        one copy of <code>stamp</code> (e.g. <code>dot()</code>/<code>pixel()</code>, see
+        below) per cell, sized by that cell's brightness — no callback needed, and no
+        <code>useInstances()</code>/<code>use()</code> boilerplate: call it directly from
+        <code>code()</code>. It gets its own persistent identity from the same
+        "current node + call order" trick <code>preview()</code> uses, so calling it
+        twice in one node gives two independent systems.
+      </p>
+      <table>
+        <tr><th>Option</th><th>Meaning</th></tr>
+        <tr><td><code>t</code></td><td>Current time — only needed if <code>shakeSpeed &gt; 0</code>. Default 0.</td></tr>
+        <tr><td><code>min</code></td><td>Floor for a cell's size, as a fraction of <code>1/cols</code> — a fully dark cell still draws at this size. Default 0.15. Formula: <code>scale = (1/cols) * (min + v*0.85)</code>.</td></tr>
+        <tr><td><code>shakeSpeed</code></td><td>0 (default) = perfectly static grid. &gt;0 adds per-cell time-based position jitter at that speed.</td></tr>
+        <tr><td><code>shakeAmount</code></td><td>Jitter magnitude, uv units. Default 0.006.</td></tr>
+        <tr><td><code>channel</code></td><td><code>'lightness'</code> (default), <code>'red'</code>, <code>'green'</code>, <code>'blue'</code> — which of sampleTexture's channels drives size/opacity.</td></tr>
+      </table>
+      <h3>dot() / pixel() — stamp shapes</h3>
+      <pre><code>dot(size = 64);    <span class="com">// cached white circle, transparent bg</span>
+pixel(size = 64);  <span class="com">// cached white square, transparent bg</span></code></pre>
+      <p>Both are shared/cached by size across the whole project (read-only content, safe to share) — use as <code>particle2d</code>'s stamp argument.</p>
+      <h3>ascii2d — a text-grid renderer</h3>
+      <pre><code><span class="tag">const</span> out = ascii2d(source, cols, rows, { channel: <span class="str">'lightness'</span>, ramp: <span class="str">' .:-=+*#%@'</span>, color: <span class="str">'white'</span> });</code></pre>
+      <p>
+        Like particle2d, but draws a character per cell instead of a stamped texture,
+        and never shakes (a text grid doesn't read as "alive" the way a wobbling dot
+        does — it just reads as blurry). Picks a character from <code>ramp</code> by
+        value: low value → the start of the ramp (space = nothing drawn), high value →
+        the end (<code>'@'</code> by default). White text on transparent background.
+      </p>
+      <h3>Instance — the raw primitive</h3>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> out = use(Instance).tick(source, count, (i, count) =&gt; ({
+  x, y, scale, rotation, opacity,
+}));</code></pre>
+      <p>
+        What <code>particle2d</code> is built on — use this directly when you need
+        custom per-instance placement (a Pattern-driven layout, say) rather than "a grid
+        sized by brightness."
+      </p>
+      <table>
+        <tr><th>Callback field</th><th>Meaning</th></tr>
+        <tr><td><code>x, y</code></td><td>0..1 center, same uv space as every effect. Default 0.5, 0.5.</td></tr>
+        <tr><td><code>scale</code></td><td>Fraction of the full frame (1.0 = fills it, matches Scale's convention). Number for both axes, or <code>{x,y}</code>/<code>scaleX</code>/<code>scaleY</code> independently. Default 1.</td></tr>
+        <tr><td><code>rotation</code></td><td>Degrees. Default 0.</td></tr>
+        <tr><td><code>opacity</code></td><td>0..1. Default 1.</td></tr>
+      </table>
+      <p>
+        Cleared to fully transparent at the start of every tick and composited with
+        standard alpha-over blending — gaps between instances, and anything beyond
+        <code>count</code>, stay transparent rather than turning black.
+      </p>
+    </section>
+
+    <section id="sampletexture">
+      <h2>sampleTexture</h2>
+      <pre><code><span class="tag">const</span> values = sampleTexture(value, { cols: 8, rows: 8, channel: <span class="str">'lightness'</span> });
+<span class="com">// -&gt; flat array (0..1), row-major, index = row*cols+col, row 0 = visual top</span></code></pre>
+      <p>
+        Reads a texture down to a coarse grid and returns one number per cell.
+        <code>channel</code>: <code>'lightness'</code> (default, standard
+        luminance-weighted average) or a single raw channel:
+        <code>'red'</code>/<code>'green'</code>/<code>'blue'</code>.
+      </p>
+      <p>
+        This is a real GPU→CPU readback (<code>gl.readPixels</code>) — genuinely not
+        free, which is why it downsamples to a coarse grid first (one small GPU render
+        pass lets the GPU's own bilinear filtering do the averaging, then exactly ONE
+        <code>readPixels</code> call reads the whole small buffer) rather than reading
+        every pixel or making <code>cols*rows</code> separate readback calls.
+      </p>
+    </section>
+
+    <section id="globals">
+      <h2>Global values</h2>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>screenSize()</code></td><td><code>{width,height}</code> of the GL canvas's own resolution — always a <b>square</b> (the larger of the real box's width/height). Can be bigger than what you actually see.</td></tr>
+        <tr><td><code>viewportSize()</code></td><td><code>{width,height}</code> of the real, visible (non-square) box. Use this, not screenSize(), when laying out content relative to what the user can actually see (a row of instances across the visible width, say) — the gap between the two is exactly what caused an earlier webcam double-crop bug in this project.</td></tr>
+        <tr><td><code>mouse()</code></td><td><code>{x,y}</code>, 0..1 over the visible viewport, (0,0) top-left.</td></tr>
+        <tr><td><code>keyPulse('a')</code></td><td>1 while that key is held, 0 otherwise. Ignored while focus is in the code editor (so typing doesn't trigger it).</td></tr>
+        <tr><td><code>newPatch</code></td><td>Plain property (not a function call) — true for the one tick right after a send succeeds. See <a href="#state">State, useInstances, newPatch</a>.</td></tr>
+      </table>
+    </section>
+
+    <section id="controls">
+      <h2>slider / button / input</h2>
+      <pre><code>slider(<span class="str">'freq'</span>, { min: 0, max: 1, step: 0.01, default: 0.5 });  <span class="com">// -&gt; current numeric value</span>
+button(<span class="str">'go'</span>, { default: <span class="tag">false</span> });                             <span class="com">// -&gt; current boolean value</span>
+input(<span class="str">'label'</span>, { default: 0, type: <span class="str">'number'</span> });                  <span class="com">// -&gt; current value</span></code></pre>
+      <p>
+        Each call renders a floating widget next to the line it's declared on and
+        returns its current live value — dragging the slider (or clicking the button, or
+        typing into the input) updates what the NEXT call to that same name returns.
+        Values are keyed by name and held OUTSIDE any node's <code>state</code>, so they
+        survive patch sends untouched (editing unrelated code doesn't reset a slider back
+        to its default — only a real page reload does). Type <code>$slider$</code>,
+        <code>$button$</code>, or <code>$input$</code> in the editor for an
+        auto-numbered starter snippet.
+      </p>
+    </section>
+
+    <section id="nodefunction">
+      <h2>nodeFunction</h2>
+      <pre><code>state.rotateThenShrink ??= nodeFunction((use, src, degrees) =&gt; {
+  <span class="tag">let</span> out = use(Rotate).tick(src, degrees);
+  out = use(Scale).tick(out, 0.9);
+  <span class="tag">return</span> out;
+});
+<span class="tag">const</span> out = state.rotateThenShrink(inputs.src, t * 20);</code></pre>
+      <p>
+        Packages a composed pipeline of effects into a single reusable callable. Unlike
+        a node's own <code>code()</code>, which gets <code>use</code> from ITS OWN state,
+        the function this returns carries its OWN independent, persistent state
+        internally — built once, when <code>nodeFunction(...)</code> itself is called —
+        so the effects it constructs stay correctly cached no matter which node ends up
+        calling the returned function, or how many times. Build it once
+        (<code>state.x ??= nodeFunction(...)</code>, or once at module scope to share
+        across every node in the file) and reuse the returned function. Anything that
+        changes tick to tick has to be an argument to the RETURNED function's call, not
+        read from outside — the builder callback only ever runs once.
+      </p>
+    </section>
+
+    <section id="media">
+      <h2>Image / Video / Webcam</h2>
+      <pre><code><span class="tag">const</span> img = use(ImageSource, width, height);
+img.tick(url, { fit: <span class="str">'contain'</span> });  <span class="com">// fit: 'contain' (default) | 'cover' | 'stretch'</span></code></pre>
+      <p>
+        Loads a photo or animated GIF (the browser advances a loaded GIF's frame on its
+        own — redrawing it every tick is all animation needs). <code>source</code> is a
+        plain URL string, or a File/Blob from <code>files.get('name.jpg')</code> (see
+        below). <code>width</code>/<code>height</code> are a CAP, not a target — the
+        working buffer shrinks to the image's real native size if smaller, so there's no
+        wasted redraw/upload cost.
+      </p>
+      <p>
+        <code>fit</code>: <code>'contain'</code> (letterboxed, aspect preserved — right
+        for anything meant to be looked at), <code>'cover'</code> (crops to fill,
+        preserves aspect), <code>'stretch'</code> (fills exactly, distorts aspect — right
+        for texture DATA where every pixel's normalized position matters more than
+        visual distortion, e.g. a color-lookup LUT strip).
+      </p>
+      <pre><code><span class="tag">const</span> video = use(VideoSource, width, height);
+video.tick(url, { fit: <span class="str">'contain'</span> });</code></pre>
+      <p>Plays and loops a video (muted + playsInline, so autoplay works without a user gesture in most browsers).</p>
+      <pre><code><span class="tag">const</span> cam = use(WebcamSource, width, height);
+<span class="tag">const</span> feed = cam.tick();  <span class="com">// asks for camera permission on first call; check cam.error</span></code></pre>
+      <p>Live webcam feed, cropped to fill (<code>'cover'</code>) rather than letterboxed.</p>
+      <h3>Loading local files</h3>
+      <p>
+        Type <code>$load$</code> in the editor to open a native file picker and insert a
+        complete, ready-to-use image or video node wired to the picked file — no
+        <code>public/</code> folder or server upload involved, the browser mediates file
+        access entirely. <code>$downscale$</code> does the same but re-encodes a video
+        client-side first, for footage whose native resolution/bitrate is too heavy to
+        decode smoothly (common with phone/drone footage). Picked files are available as
+        <code>files.get('name.ext')</code> anywhere in the project afterward.
+      </p>
+    </section>
+
+    <section id="hydra">
+      <h2>Hydra</h2>
+      <pre><code><span class="tag">const</span> h = use(HydraSource, width, height);
+h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
+<span class="tag">return</span> { screen: h };</code></pre>
+      <p>
+        Runs Hydra DSL code in its own separate WebGL context (never added to the page),
+        copied into this project's texture pipeline. Only re-evaluates when the code
+        string actually changes, so editing it in your node's <code>code()</code> takes
+        effect live without losing Hydra's own internal state every tick.
+      </p>
+      <div class="warn">
+        Hydra's own "non-global" eval mode doesn't work in the installed version, so this
+        runs with <code>makeGlobal</code> on — <code>osc</code>/<code>shape</code>/
+        <code>noise</code>/<code>out</code>/etc. land on <code>window</code>, same as the
+        real Hydra editor. Harmless for one Hydra node; multiple simultaneous ones fight
+        over the same global names (whichever evaluated most recently "wins").
+      </div>
+    </section>
+
+    <section id="three">
+      <h2>Three.js</h2>
+      <pre><code>three: {
+  in: {},
+  code(inputs, state, t) {
+    <span class="tag">const</span> use = useInstances(state);
+    <span class="tag">const</span> { width, height } = screenSize();
+    <span class="tag">const</span> three = use(ThreeSource, width, height);
+    <span class="tag">if</span> (!state.scene || newPatch) {
+      state.scene = <span class="tag">new</span> THREE.Scene();
+      state.camera = <span class="tag">new</span> THREE.PerspectiveCamera(50, width / height, 0.1, 100);
+      state.camera.position.z = 3;
+      state.scene.add(<span class="tag">new</span> THREE.DirectionalLight(0xffffff, 2).translateZ(5));
+      state.scene.add(<span class="tag">new</span> THREE.AmbientLight(0xffffff, 0.3));
+      state.mesh = <span class="tag">new</span> THREE.Mesh(
+        <span class="tag">new</span> THREE.BoxGeometry(1, 1, 1),
+        <span class="tag">new</span> THREE.MeshStandardMaterial({ color: 0x4488ff })
+      );
+      state.scene.add(state.mesh);
+    }
+    state.mesh.rotation.x = t;
+    state.mesh.rotation.y = t * 0.7;
+    <span class="tag">const</span> out = three.tick(state.scene, state.camera);
+    <span class="tag">return</span> { screen: out };
+  },
+},</code></pre>
+      <p>
+        <code>ThreeSource</code> owns a real three.js <code>WebGLRenderer</code> on its
+        own detached canvas (three.js's internal GL state assumptions would otherwise
+        fight with this project's raw WebGL2 calls if they shared a context) and copies
+        its render into this project's texture pipeline. <code>THREE</code> is the whole
+        library, exposed as a global — build your scene however you like, standard
+        three.js API, no special wrapper needed. Unlike Hydra, three.js doesn't touch
+        <code>window</code>, so there's no global-collision cleanup to do.
+      </p>
+      <p>
+        <code>three.tick(scene, camera)</code> renders one frame and returns
+        <code>{texture, width, height}</code>, same as every other texture-bearing
+        value here — <code>return { screen: out }</code>.
+      </p>
+      <div class="note">
+        <b><code>if (!state.scene || newPatch)</code></b>, not just <code>if
+        (!state.scene)</code> — see <a href="#state">State, useInstances, newPatch</a>.
+        Without <code>|| newPatch</code>, editing the geometry/material/lights inside
+        that block and hitting Send again has no effect, because the block that would
+        apply your edit never runs again once <code>state.scene</code> already exists.
+      </div>
+    </section>
+
+    <section id="shortcuts">
+      <h2>Editor shortcuts</h2>
+      <h3><code>$name$</code> — a node template's bare body</h3>
+      <p>
+        Type <code>someKey: $glsl$</code> (or <code>$canvas$</code>, <code>$node$</code>,
+        <code>$square$</code>, <code>$particle2d$</code>, <code>$three$</code>, ... — any
+        node-template name) and finish the closing <code>$</code>: it expands in place
+        into that template's <code>{ ... }</code> body, using the key you already typed
+        rather than a generated placeholder one.
+      </p>
+      <h3><code>$explode(name)$</code> — full source, generated key</h3>
+      <p>
+        Type <code>$explode(rotate)$</code> and finish the closing <code>)$</code>: for
+        an effect name, this inserts that effect's exact raw GLSL shader source — useful
+        for dropping into a plain GLSL node body and hand-editing from a known-working
+        version. For a node-template name, it inserts a complete standalone
+        <code>newXNode: { ... },</code> entry with a generated key, ready to paste in and
+        rename. <code>$</code> is deliberate: the pattern requires the literal text
+        <code>explode(</code> and <code>)$</code>, so a JS template-literal interpolation
+        like <code>${'{'}uTime{'}'}</code> elsewhere in a node's code has a different
+        shape and can't be mistaken for it.
+      </p>
+      <p>
+        Same idea also covers <code>$load$</code>/<code>$downscale$</code> (file
+        pickers, see <a href="#media">Media</a>) and <code>$slider$</code>/
+        <code>$button$</code>/<code>$input$</code> (control snippets, see
+        <a href="#controls">Controls</a>).
+      </p>
+      <p>
+        <code>explode('name')</code> is also callable directly (e.g. from the browser
+        console) to just print the text instead of inserting it.
+      </p>
+    </section>
+
+    <section id="reset-button">
+      <h2>Per-node reset button</h2>
+      <p>
+        Every node gets a small <code>↺</code> button in the editor's left margin, next
+        to its opening line. Clicking it clears that node's <code>state</code> to
+        <code>{}</code> — every <code>if (!state.x)</code> guard (and every
+        <code>use()</code> call) fires fresh again on the very next tick, no resend
+        needed. This is the manual, no-code-change alternative to
+        <a href="#state">newPatch</a> for the same "one-time-setup" gotcha — reach for
+        the button when you just want to force ONE node fresh right now; reach for
+        <code>newPatch</code> when you want a node to rebuild on every future Send
+        automatically.
+      </p>
+    </section>
+
+    <section id="gotchas">
+      <h2>Gotchas &amp; FAQ</h2>
+
+      <h3>Nothing shows up on screen</h3>
+      <p>
+        Returning <code>{screen: x}</code> from a node doesn't draw anything by itself —
+        check that some node in the chain actually calls <code>render(x)</code>
+        (or something derived from x).
+      </p>
+
+      <h3>My input reads as undefined</h3>
+      <p>
+        Check the exact port name — <code>in: { src: 'foo.output' }</code> only works if
+        <code>foo</code>'s <code>code()</code> literally <code>return</code>s
+        <code>{ output: ... }</code>. There's no special meaning to any particular key
+        name; it has to match exactly.
+      </p>
+
+      <h3>Editing inside a "build once" block does nothing</h3>
+      <p>See <a href="#state">State, useInstances, newPatch</a> — this is the #1 surprise in this project's whole model.</p>
+
+      <h3>"Reading a texture while it's the active render target" error</h3>
+      <p>
+        You wired a node's own output back into itself (directly, or into
+        <code>Composite</code>'s two inputs where one traces back to the node's own
+        result) without routing it through <code>Lag</code> or <code>Delay</code> first.
+        Both always copy into their own separate texture, which is what makes reading
+        "your own recent past" legal on the GPU.
+      </p>
+
+      <h3>A feedback loop keeps getting blurrier</h3>
+      <p>See <a href="#filtering">Texture filtering (NEAREST)</a> — not a bug, cumulative bilinear resampling.</p>
+
+      <h3>A circle/instance has a black background instead of transparent</h3>
+      <p>
+        Shouldn't happen with the built-in effects/instancing (every shader here
+        preserves alpha correctly, and <code>Instance</code>/<code>particle2d</code>
+        clear to fully transparent every tick with proper alpha-over blending) — if you
+        see this with your own custom GLSL, check your fragment shader is actually
+        writing a meaningful alpha channel (<code>outColor = vec4(rgb, a)</code>) rather
+        than always <code>1.0</code>.
+      </p>
+
+      <h3>Multiple useInstances()/use() calls acting weird</h3>
+      <p>
+        <code>use()</code> calls must run unconditionally, in the same order, every
+        single tick — never inside an <code>if</code>. Putting one behind a condition
+        shifts every LATER call in that same tick onto the wrong cached instance.
+      </p>
+    </section>
+
+    <section id="global-index">
+      <h2>Full global index</h2>
+      <p>Everything below is available directly in project code, no import needed.</p>
+      <p style="color:#aac">
+        <code>GLSL</code>, <code>Canvas2D</code>, <code>ScreenOutput</code>,
+        <code>Html</code>, <code>Composite</code>, <code>Matte</code>, <code>Lag</code>,
+        <code>Delay</code>, <code>Bloom</code>, <code>Ramp</code>, <code>Noise</code>,
+        <code>Pattern</code>, <code>ImageSource</code>, <code>VideoSource</code>,
+        <code>WebcamSource</code>, <code>HydraSource</code>, <code>ThreeSource</code>,
+        <code>THREE</code>, <code>files</code>, <code>screenSize</code>,
+        <code>viewportSize</code>, <code>mouse</code>, <code>keyPulse</code>,
+        <code>newPatch</code>, <code>sampleTexture</code>, <code>render</code>,
+        <code>preview</code>, <code>slider</code>, <code>button</code>,
+        <code>input</code>, <code>useInstances</code>, <code>nodeFunction</code>,
+        <code>Instance</code>, <code>particle2d</code>, <code>ascii2d</code>,
+        <code>dot</code>, <code>pixel</code>, <code>explode</code>, <code>FX</code>,
+        <code>Rotate</code>, <code>Scale</code>, <code>Flip</code>,
+        <code>Translate</code>, <code>ChannelMix</code>, <code>Brightness</code>,
+        <code>Contrast</code>, <code>Saturation</code>, <code>HueShift</code>,
+        <code>Grade</code>, <code>Blur</code>, <code>LensBlur</code>,
+        <code>Threshold</code>, <code>Edge</code>, <code>Emboss</code>,
+        <code>Mirror</code>, <code>Tile</code>, <code>Kaleidoscope</code>,
+        <code>Modulate</code>, <code>Displace</code>, <code>Vignette</code>,
+        <code>Pixelate</code>, <code>Posterize</code>, <code>ColorLookup</code>
+      </p>
+    </section>
+
+    <footer>SYNUS docs — generated from the current codebase, not aspirational: everything on this page is wired up and working.</footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,188 @@
+import * as shaders from './shaders.js';
+
+// One entry per effect: which shader it runs, and how to turn the plain
+// JS arguments a project passes (e.g. rotate(src, 20)) into the uniform
+// object GLSL.tick() expects. This table is consumed by effects.js,
+// which generates one class per entry - it's not called directly by
+// project code. To add a new effect: write its shader in shaders.js,
+// then add one entry here. Nothing else needs to change.
+export const EFFECTS = {
+  rotate: {
+    frag: shaders.ROTATE,
+    // rotate(src, degrees)
+    toUniforms: (degrees = 0) => ({ uAngle: (degrees * Math.PI) / 180 }),
+  },
+
+  scale: {
+    frag: shaders.SCALE,
+    // scale(src, { x, y })  -  or scale(src, factor) to scale both axes evenly
+    toUniforms: (arg = {}) => {
+      const { x = 1, y = 1 } = typeof arg === 'number' ? { x: arg, y: arg } : arg;
+      return { uScale: [x, y] };
+    },
+  },
+
+  flip: {
+    frag: shaders.FLIP,
+    // flip(src, { x: true, y: false })
+    toUniforms: ({ x = false, y = false } = {}) => ({ uFlip: [x ? 1 : 0, y ? 1 : 0] }),
+  },
+
+  translate: {
+    frag: shaders.TRANSLATE,
+    // translate(src, { x, y })  -  values in 0..1 uv units
+    toUniforms: ({ x = 0, y = 0 } = {}) => ({ uOffset: [x, y] }),
+  },
+
+  channelMix: {
+    frag: shaders.CHANNEL_MIX,
+    // channelMix(src, { r: [1,0,0], g: [0,1,0], b: [0,0,1] })
+    toUniforms: ({ r = [1, 0, 0], g = [0, 1, 0], b = [0, 0, 1] } = {}) => ({
+      uMixR: r,
+      uMixG: g,
+      uMixB: b,
+    }),
+  },
+
+  brightness: {
+    frag: shaders.BRIGHTNESS,
+    // brightness(src, 0.2)  -  additive, -1..1
+    toUniforms: (amount = 0) => ({ uAmount: amount }),
+  },
+
+  contrast: {
+    frag: shaders.CONTRAST,
+    // contrast(src, 1.4)  -  1.0 = no change
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  saturation: {
+    frag: shaders.SATURATION,
+    // saturation(src, 0)  -  0 = grayscale, 1 = no change
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  hueShift: {
+    frag: shaders.HUE_SHIFT,
+    // hueShift(src, 90)  -  degrees
+    toUniforms: (degrees = 0) => ({ uShift: degrees / 360 }),
+  },
+
+  grade: {
+    frag: shaders.GRADE,
+    // grade(src, { brightness: 0, contrast: 1, saturation: 1, opacity: 1 })
+    // every default leaves that channel unchanged - pass only the ones
+    // you want to adjust.
+    toUniforms: ({ brightness = 0, contrast = 1, saturation = 1, opacity = 1 } = {}) => ({
+      uBrightness: brightness,
+      uContrast: contrast,
+      uSaturation: saturation,
+      uOpacity: opacity,
+    }),
+  },
+
+  blur: {
+    frag: shaders.BLUR,
+    // blur(src, 2)  -  spacing between samples in texels, 0 = no blur
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  lensBlur: {
+    frag: shaders.LENS_BLUR,
+    // lensBlur(src, 0.3)  -  radial/zoom streak strength, 0 = none
+    toUniforms: (amount = 0.3) => ({ uAmount: amount }),
+  },
+
+  threshold: {
+    frag: shaders.THRESHOLD,
+    // threshold(src, { level: 0.5, softness: 0 })
+    toUniforms: ({ level = 0.5, softness = 0 } = {}) => ({ uLevel: level, uSoftness: softness }),
+  },
+
+  edge: {
+    frag: shaders.EDGE,
+    // edge(src, 1)  -  Sobel gradient magnitude, amount scales the result
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  emboss: {
+    frag: shaders.EMBOSS,
+    // emboss(src, 1)
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  mirror: {
+    frag: shaders.MIRROR,
+    // mirror(src, { x: true, y: false })  -  folds that axis onto itself
+    toUniforms: ({ x = true, y = false } = {}) => ({ uAxis: [x ? 1 : 0, y ? 1 : 0] }),
+  },
+
+  tile: {
+    frag: shaders.TILE,
+    // tile(src, { x: 2, y: 2 })  -  or tile(src, n) for both axes evenly
+    toUniforms: (arg = 2) => {
+      const { x = 2, y = 2 } = typeof arg === 'number' ? { x: arg, y: arg } : arg;
+      return { uRepeat: [x, y] };
+    },
+  },
+
+  kaleidoscope: {
+    frag: shaders.KALEIDOSCOPE,
+    // kaleidoscope(src, 6)  -  number of mirrored wedges
+    toUniforms: (segments = 6) => ({ uSegments: segments }),
+  },
+
+  // modulate/displace both take a SECOND texture-bearing value (not just
+  // a number/object) as their first real argument - toUniforms just
+  // passes it straight through keyed as a uniform; GLSL.tick() already
+  // knows to bind anything with a .texture property as a sampler2D, the
+  // same as uSrc itself, so no special-casing was needed here at all.
+  modulate: {
+    frag: shaders.MODULATE,
+    // modulate(src, mapTexture, 0.1)  -  map's luma pushes uv uniformly
+    toUniforms: (map, amount = 0.1) => ({ uMap: map, uAmount: amount }),
+  },
+
+  displace: {
+    frag: shaders.DISPLACE,
+    // displace(src, mapTexture, 0.1)  -  map's r/g push uv.x/uv.y independently
+    toUniforms: (map, amount = 0.1) => ({ uMap: map, uAmount: amount }),
+  },
+
+  vignette: {
+    frag: shaders.VIGNETTE,
+    // vignette(src, { amount: 0.5, radius: 0.3 })
+    toUniforms: ({ amount = 0.5, radius = 0.3 } = {}) => ({ uAmount: amount, uRadius: radius }),
+  },
+
+  pixelate: {
+    frag: shaders.PIXELATE,
+    // pixelate(src, 8)  -  block size in texels
+    toUniforms: (size = 8) => ({ uSize: size }),
+  },
+
+  posterize: {
+    frag: shaders.POSTERIZE,
+    // posterize(src, 4)  -  color levels per channel
+    toUniforms: (levels = 4) => ({ uLevels: levels }),
+  },
+
+  colorLookup: {
+    frag: shaders.COLOR_LOOKUP,
+    // colorLookup(src, lutTexture, { size: 8, amount: 1 })  -  lutTexture
+    // is a "strip" LUT image: `size` square blocks side by side, each
+    // size x size texels, one block per blue slice (the common format
+    // most LUT PNGs online already use). `size` must match how many
+    // blocks the actual image has.
+    //
+    // IMPORTANT: load lutTexture via `img.tick(url, { fit: 'stretch' })`
+    // (see lib/media.js), not the default 'contain' - a LUT strip is
+    // always wide and non-square, and letterboxing it would pad it with
+    // black bars instead of filling the whole texture, breaking the
+    // exact 0..1 addressing this shader relies on.
+    toUniforms: (lut, { size = 8, amount = 1 } = {}) => {
+      const lutW = (lut && (lut.width || (lut.canvas && lut.canvas.width))) || size * 32;
+      return { uLut: lut, uSize: size, uBlockTexels: lutW / size, uAmount: amount };
+    },
+  },
+};

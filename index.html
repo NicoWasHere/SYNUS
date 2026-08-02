@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SYNUS</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: monospace; }
+      #app { display: flex; height: 100vh; }
+      #editor-pane { flex: 1 1 55%; display: flex; flex-direction: column; border-right: 1px solid #333; min-width: 0; }
+      #editor-mount { flex: 1; overflow: hidden; background: #1a1a1a; }
+      #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
+                border-top: 1px solid #333; min-height: 1.2em; }
+      /* The canvas (see main.js's resizeCanvas()) is a square sized to
+         the LARGER of this box's width/height and displayed at that same
+         size, so it fills the box edge to edge on the longer axis and
+         overflows (cropped by overflow: hidden here) on the shorter one -
+         no letterboxing, and content scaled up far enough can actually
+         reach the true screen boundary rather than stopping short at an
+         artificially shrunk canvas. */
+      #render-pane { flex: 1 1 45%; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+      #render-pane canvas { image-rendering: pixelated; flex-shrink: 0; }
+
+      /* Perform mode: the render output becomes the fullscreen backdrop
+         and the editor floats on top of it as a semi-transparent panel -
+         the button toggles a class rather than restructuring the DOM, so
+         nothing about the editor or graph has to know which mode it's in. */
+      #mode-toggle {
+        position: fixed;
+        top: 46px;
+        right: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+      }
+      #mode-toggle:hover { background: #2c2c2c; }
+
+      /* Patch-send model: editing never runs anything by itself - only
+         Ctrl+Enter (or clicking this) actually sends the current text to
+         the running graph. The flash classes are added briefly after a
+         send resolves (see main.js's flashSendResult()) to give the same
+         kind of immediate ok/fail feedback Strudel/Hydra give their own
+         "evaluate" keystroke, since nothing else about the UI changes on
+         a successful send if the visual output looks the same as before. */
+      #send-btn {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+      }
+      #send-btn:hover { background: #2c2c2c; }
+      #send-btn.flash-ok { background: #1f5c2e; border-color: #2fae52; }
+      #send-btn.flash-error { background: #5c1f1f; border-color: #ae2f2f; }
+      #tps-counter {
+        position: fixed;
+        top: 80px;
+        right: 10px;
+        z-index: 100;
+        color: #888;
+        font-family: inherit;
+        font-size: 11px;
+        text-align: right;
+      }
+      #t-counter {
+        position: fixed;
+        top: 96px;
+        right: 10px;
+        z-index: 100;
+        color: #888;
+        font-family: inherit;
+        font-size: 11px;
+        text-align: right;
+      }
+
+      /* Real OS-level fullscreen (Fullscreen API - hides the browser's
+         own chrome entirely) - separate from Perform mode above, which
+         is just a layout choice within the browser window. The two
+         compose: Perform mode + fullscreen is the actual "clean VJ
+         output" combination. */
+      #fullscreen-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+      }
+      #fullscreen-btn:hover { background: #2c2c2c; }
+
+      #app.perform-mode #render-pane {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        border-right: none;
+      }
+      /* No panel box in Perform mode - the editor pane itself is fully
+         transparent, so the render canvas shows straight through
+         everywhere except where per-line backdrops sit behind the text
+         (see .line-backdrop-layer below). Always the full screen width -
+         no dynamic sizing to fight with the previews, which anchor to
+         this same pane's right edge (see .node-preview below). */
+      #app.perform-mode #editor-pane {
+        position: fixed;
+        top: 50px;
+        left: 0;
+        right: 0;
+        bottom: 20px;
+        z-index: 1;
+        background: none;
+        border-right: none;
+      }
+      #app.perform-mode #editor-mount { background: transparent; }
+      #app.perform-mode #errors { background: transparent; border-top-color: transparent; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+
+      /* the code editor: a plain textarea (real cursor/click/selection,
+         native browser behavior - nothing to get out of sync) with a
+         Prism-highlighted <pre> sitting behind it, purely for color.
+         The wrap is the ONLY scrolling element - pre and textarea are
+         both sized to their full content height (see editor.js's
+         resize()) and just sit absolutely positioned on top of each
+         other inside it. Letting each of them scroll independently and
+         copying scrollTop between them on every 'scroll' event is what
+         used to let the highlighted text and the real caret drift apart
+         after scrolling - one shared scroll position instead of two
+         synced ones removes that failure mode structurally. */
+      .code-editor-wrap {
+        position: relative;
+        height: 100%;
+        overflow: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* legacy Edge */
+      }
+      .code-editor-wrap::-webkit-scrollbar { display: none; } /* Chrome/Safari/new Edge */
+      .code-editor-wrap pre,
+      .code-editor-wrap textarea {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        margin: 0;
+        padding: 12px 16px;
+        border: 0;
+        font: 13px/1.6 'SF Mono', Menlo, Consolas, monospace;
+        white-space: pre;
+        overflow: hidden;
+        tab-size: 2;
+      }
+      .code-highlight {
+        pointer-events: none;
+        color: #ccc;
+        background: transparent;
+        z-index: 1;
+      }
+      .code-input {
+        z-index: 2;
+        background: transparent;
+        color: transparent;
+        caret-color: #eee;
+        resize: none;
+        outline: none;
+      }
+
+      /* Perform mode only (hidden otherwise - see rule below) - one small
+         blurred bar per non-blank line, sized in editor.js's
+         updateLineBackdrops() to hug just that line's own trimmed text,
+         sitting behind the highlighted text like a subtitle caption.
+         Replaces the single big panel box: instead of one translucent
+         rectangle behind the whole editor, legibility comes from many
+         small ones, each exactly where a line of text actually is. */
+      .line-backdrop-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 0;
+        pointer-events: none;
+        display: none;
+      }
+      #app.perform-mode .line-backdrop-layer { display: block; }
+      .line-bg {
+        position: absolute;
+        height: 20.8px;
+        background: rgba(20, 20, 20, 0.72);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+      }
+      /* the textarea's real text is transparent (the highlighted <pre>
+         shows through instead) - but that means a selection needs its
+         own explicit foreground color, or the selected span goes blank
+         too instead of showing plain readable text over the highlight. */
+      .code-input::selection { background: #3a5a78; color: #fff; }
+      .code-input::-moz-selection { background: #3a5a78; color: #fff; }
+
+      /* custom token palette - deliberately not a stock Prism theme */
+      .token.comment { color: #6a7280; font-style: italic; }
+      .token.punctuation { color: #9aa0a6; }
+      .token.number,
+      .token.boolean { color: #d19a66; }
+      .token.string,
+      .token.template-string,
+      .token.char { color: #9ece6a; }
+      .token.keyword,
+      .token.operator { color: #c586c0; }
+      .token.function,
+      .token.class-name { color: #7ab0e0; }
+      .token.regex,
+      .token.important,
+      .token.variable { color: #e39aa4; }
+
+      /* Preview cards float inside the editor's own scroll container
+         (see editor.js's previewLayer), anchored to the top-right of
+         whichever node requested them - overlapping that node's own
+         code rather than reserving space for themselves
+         (a plain textarea can't push later lines down without editing
+         the real source text). Semi-transparent so the code underneath
+         stays legible through it. */
+      .preview-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .node-preview {
+        position: absolute;
+        right: 8px;
+        width: 130px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 6px;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        font-family: 'SF Mono', Menlo, monospace;
+      }
+      .node-preview-label { font-size: 10px; color: #999; }
+      .node-preview-canvas {
+        width: 100%;
+        aspect-ratio: 1;
+        image-rendering: pixelated;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      .node-preview-canvas[hidden] { display: none; }
+      /* A Pattern's auto-plotted preview (see main.js's updatePreviews())
+         is a wide line graph with axis text, not a photo/texture - the
+         normal square thumbnail (and its `pixelated` scaling, meant for
+         blocky textures) squeezed it down until the labels were
+         illegible regardless of how high-resolution the plot itself was
+         drawn. Wider box, matching aspect ratio, and smooth (not
+         blocky) scaling instead. */
+      .node-preview.wide { width: 240px; }
+      .node-preview-canvas.wide { aspect-ratio: 240 / 108; image-rendering: auto; }
+      /* Unlike .node-preview-canvas (a real image, which stays legible
+         over anything behind it on its own), plain text has nothing
+         opaque of its own - .node-preview's card background is
+         deliberately `none` (so code stays visible around a shown image),
+         which left a bare number/JSON value blending into whatever busy
+         syntax-highlighted code happened to sit underneath that card.
+         This gives just the text its own solid backdrop instead. */
+      .node-preview-text {
+        font-size: 11px;
+        color: #b6f2b6;
+        word-break: break-all;
+        background: rgba(15, 15, 15, 0.9);
+        padding: 3px 5px;
+        border-radius: 3px;
+        width: 100%;
+      }
+      .node-preview-text[hidden] { display: none; }
+
+      /* Per-node "reset state" button (see ui/reset-panel.js) - sits in
+         the editor's otherwise-unused left padding margin, next to that
+         node's opening line. Same floating-overlay/pointer-events trick
+         as .control-widget below. */
+      .node-reset-btn {
+        position: absolute;
+        left: 0px;
+        z-index: 4;
+        width: 14px;
+        height: 14px;
+        line-height: 12px;
+        padding: 0;
+        font-size: 11px;
+        text-align: center;
+        pointer-events: auto;
+        background: #1a1a1a;
+        color: #666;
+        border: 1px solid #444;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .node-reset-btn:hover { color: #eee; border-color: #888; }
+
+      /* $slider$/$button$/$input$ widgets (see ui/control-panel.js) -
+         same floating-overlay trick as preview cards, but these need
+         real pointer interaction, so pointer-events is turned back on
+         just for these (the parent .preview-overlay disables it so the
+         overlay itself never blocks clicking into the code underneath). */
+      .control-widget {
+        position: absolute;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        pointer-events: auto;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font: 11px 'SF Mono', Menlo, Consolas, monospace;
+        white-space: nowrap;
+      }
+      .control-widget-label { color: #999; }
+      .control-widget-value { color: #9ece6a; min-width: 3em; }
+      .control-widget input[type="range"] { width: 90px; vertical-align: middle; }
+      .control-widget input[type="number"],
+      .control-widget input[type="text"] {
+        width: 60px;
+        background: #111;
+        color: #eee;
+        border: 1px solid #444;
+        border-radius: 3px;
+        font: inherit;
+      }
+      .control-widget button {
+        background: #2c2c2c;
+        color: #999;
+        border: 1px solid #444;
+        border-radius: 3px;
+        padding: 1px 8px;
+        font: inherit;
+        cursor: pointer;
+      }
+      .control-widget button.active { background: #1f5c2e; color: #eee; border-color: #2fae52; }
+
+      /* Signature-help popup (see ui/signatures.js) - sits just below the
+         caret's own line, in the same coordinate space as the preview
+         cards so it scrolls with the text for free. */
+      .signature-tip {
+        position: absolute;
+        z-index: 6;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font: 12px/1.4 'SF Mono', Menlo, Consolas, monospace;
+        color: #9ece6a;
+        white-space: pre;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      }
+      .signature-tip[hidden] { display: none; }
+
+      /* use(...) autocomplete popup - same positioning as .signature-tip
+         above (the two are mutually exclusive, see editor.js), just a
+         list of up to 4 matching class names instead of one line. */
+      .use-autocomplete {
+        position: absolute;
+        z-index: 6;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 2px;
+        font: 12px/1.4 'SF Mono', Menlo, Consolas, monospace;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        min-width: 100px;
+      }
+      .use-autocomplete[hidden] { display: none; }
+      .use-autocomplete-item {
+        padding: 2px 8px;
+        color: #7ab0e0;
+        white-space: pre;
+      }
+      .use-autocomplete-item:first-child { color: #eee; background: #2c2c2c; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <button id="mode-toggle" type="button">Perform mode</button>
+    <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
+    <div id="tps-counter"></div>
+    <div id="t-counter"></div>
+    <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>
+    <div id="app">
+      <div id="editor-pane">
+        <div id="editor-mount"></div>
+        <div id="errors"></div>
+      </div>
+      <div id="render-pane"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
