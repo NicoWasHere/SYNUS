@@ -23,7 +23,15 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # npm ci here (instead of npm install) hits a known npm bug:
+      # package-lock.json generated on Windows doesn't reliably carry the
+      # Linux-specific optional rollup binary (@rollup/rollup-linux-x64-gnu),
+      # so `npm ci`'s strict install fails on this Linux runner even though
+      # the same lockfile works fine locally on Windows - see
+      # https://github.com/npm/cli/issues/4828. `npm install` re-resolves
+      # optional deps for the current platform instead of trusting the
+      # lockfile's frozen resolution.
+      - run: npm install
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
