@@ -66,6 +66,24 @@ export class PreviewPanel {
     row.style.top = `${top}px`;
   }
 
+  // The y-position just below any preview card(s) currently shown for
+  // `nodeId` - lets ControlPanel float its own widgets right under a
+  // node's preview stack instead of on top of it, for the common case of
+  // a node calling both preview() and slider()/button()/input() (see
+  // main.js's updateControls(), which runs right after updatePreviews()
+  // every tick, so this always reflects the current tick's cards).
+  // Falls back to the node's own top position when it has no cards up.
+  getStackBottom(nodeId) {
+    const base = this.positions.get(nodeId);
+    if (base == null) return 4;
+    let maxIndex = 0;
+    for (const id of this.entries.keys()) {
+      const parsed = parseKey(id);
+      if (parsed.baseId === nodeId) maxIndex = Math.max(maxIndex, parsed.index);
+    }
+    return base + maxIndex * STACK_OFFSET;
+  }
+
   _createRow(id) {
     const row = document.createElement('div');
     row.className = 'node-preview';

@@ -13,10 +13,10 @@ export const SIGNATURES = {
   // makes for a popup that's more clutter than help. The constructor tip
   // alone still shows for `use(GLSL` / `use(HydraSource` / `use(Html`.
   GLSL: {
-    ctor: "new GLSL({ width = 512, height = 512, filter = 'linear' } = {})  // filter: 'linear' | 'nearest'",
+    ctor: "new GLSL({ width = screenSize(), height = screenSize(), filter = 'linear' } = {})  // filter: 'linear' | 'nearest'",
   },
   Canvas2D: {
-    ctor: "new Canvas2D(width = 512, height = 512, filter = 'linear')  // filter: 'linear' | 'nearest'",
+    ctor: "new Canvas2D(width = screenSize(), height = screenSize(), filter = 'linear')  // filter: 'linear' | 'nearest'",
   },
   Html: {
     ctor: 'new Html(width = 512, height = 512)',
@@ -30,7 +30,22 @@ export const SIGNATURES = {
   },
   Matte: {
     ctor: 'new Matte()',
-    tick: 'matte.tick(a, b, matteTexture)  // luma of matteTexture mixes a/b',
+    tick:
+      "matte.tick(a, b, matteTexture, { mode = 'lightness' })  // mode: 'lightness' | 'alpha'\n" +
+      '// matteTexture\'s lightness (or alpha) mixes a/b: 0 = all a, 1 = all b',
+  },
+  Layer: {
+    ctor: 'new Layer()',
+    tick:
+      "layer.tick(textures, mode = 'over', opacity = 1)\n" +
+      '// reduces an array of textures into one, bottom to top, same modes as Composite',
+  },
+  ComposeAt: {
+    ctor: 'new ComposeAt()',
+    tick:
+      'composeAt.tick(rects)  // rects: [{ value, x, y, w, h }, ...]\n' +
+      '// x,y = top-left corner (0..1, y=0 at top), w,h = size - places each value in its own box.\n' +
+      '// See $compose_at(n)$ to place boxes visually instead of by hand.',
   },
   Lag: {
     ctor: "new Lag(every = 1, filter = 'linear')  // filter: 'linear' | 'nearest' (see feedback-loop blur)",
@@ -57,7 +72,10 @@ export const SIGNATURES = {
   },
   ThreeSource: {
     ctor: 'new ThreeSource(width = 512, height = 512)',
-    tick: 'three.tick(scene, camera)  // real THREE.Scene/Camera - build with the THREE global',
+    tick:
+      'three.tick(scene, camera)  // real THREE.Scene/Camera - build with the THREE global\n' +
+      "three.toTexture(value, { width, height, key = 'default' })  // -> THREE.CanvasTexture\n" +
+      "// projects one of this project's own texture-bearing values onto a mesh's material.map",
   },
   ScreenOutput: {
     ctor: 'new ScreenOutput()',
@@ -118,11 +136,80 @@ export const SIGNATURES = {
   Posterize: { ctor: 'new Posterize()', tick: 'posterize.tick(src, levels = 4)  // color levels per channel' },
   Bloom: {
     ctor: 'new Bloom()',
-    tick: 'bloom.tick(src, { threshold = 0.6, blurAmount = 3, intensity = 1 })',
+    tick:
+      'bloom.tick(src, { threshold, softness, wideBaseRadius, wideGain, wobbleAmount, wobbleSpeed,\n' +
+      '                   feedback, tightBaseRadius, tightGain, t })\n' +
+      '// threshold=0.6 softness=0.2 wideBaseRadius=2 wideGain=1.5 wobbleAmount=0.015 wobbleSpeed=0.15\n' +
+      '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate',
   },
   ColorLookup: {
     ctor: 'new ColorLookup()',
     tick: "colorLookup.tick(src, lutTexture, { size = 8, amount = 1 })\n// load lutTexture with img.tick(url, { fit: 'stretch' }) - see media.js",
+  },
+  Mask: {
+    ctor: 'new Mask()',
+    tick:
+      "mask.tick(src, maskTexture, { mode = 'lightness', invert = false })\n" +
+      '// cuts a hole in src\'s alpha using maskTexture\'s shape - src\'s rgb is untouched',
+  },
+  ChromaKey: {
+    ctor: 'new ChromaKey()',
+    tick:
+      'chromaKey.tick(src, { color = [0,1,0], similarity = 0.4, smoothness = 0.1 })\n' +
+      '// keys out pixels near `color` (green-screen green by default)',
+  },
+  GradientMap: {
+    ctor: 'new GradientMap()',
+    tick:
+      "gradientMap.tick(src, rampTexture, { channel = 'lightness' })  // channel: 'lightness'|'red'|'green'|'blue'\n" +
+      '// repaints src from a 1D gradient (e.g. use(Ramp)) sampled at src\'s own value - NOT ColorLookup\'s 3D LUT',
+  },
+  Fisheye: {
+    ctor: 'new Fisheye()',
+    tick:
+      'fisheye.tick(src, amount = 0.5)\n' +
+      '// positive bulges outward (fisheye), negative pinches inward (pincushion), 0 = no change',
+  },
+  Invert: {
+    ctor: 'new Invert()',
+    tick: 'invert.tick(src, amount = 1)\n// 0 = original, 1 = fully inverted',
+  },
+  Colorize: {
+    ctor: 'new Colorize()',
+    tick:
+      "colorize.tick(src, color = '#ffffff')\n" +
+      "// recolors src's own lightness into a black -> color duotone. hex string or [r,g,b] 0..1",
+  },
+  CRT: {
+    ctor: 'new CRT()',
+    tick:
+      'crt.tick(src, { amount = 1, t = 0, bars = 1, barSize = 4 })\n' +
+      '// chromatic aberration + scanlines + vignette + `bars` simultaneous tear bars (0 = none),\n' +
+      '// each barSize texels thick (capped at 8 bars). t animates the tear positions/timing',
+  },
+  FilmGrain: {
+    ctor: 'new FilmGrain()',
+    tick: 'filmGrain.tick(src, { amount = 0.1, t = 0 })\n// animated noise added to rgb. t keeps the grain moving',
+  },
+  Bitmap: {
+    ctor: 'new Bitmap()',
+    tick:
+      "bitmap.tick(src, { scale = 2, colorA = '#000000', colorB = '#ffffff' })\n" +
+      "// 1-bit ordered (Bayer) dither - old-Mac bitmap look. scale = dither cell size in texels",
+  },
+  ChannelThreshold: {
+    ctor: 'new ChannelThreshold()',
+    tick:
+      'channelThreshold.tick(src, { r = 0.5, g = 0.5, b = 0.5 })\n' +
+      '// thresholds r/g/b independently (up to 8 output colors) - NOT the same as grayscale Threshold',
+  },
+  AudioSource: {
+    ctor: 'new AudioSource(fftSize = 2048)  // fftSize must be a power of 2',
+    tick:
+      'audio.tick()  // asks mic permission on first call - check audio.error\n' +
+      'audio.spectrum(cols = 32)   // -> flat array 0..1, cols bins across the frequency range\n' +
+      'audio.band(loHz, hiHz)      // -> 0..1 average magnitude in that Hz range (the EQ half)\n' +
+      'audio.waveform(samples = 128)  // -> flat array -1..1, raw time-domain signal (a scope trace)',
   },
   Ramp: {
     ctor: 'new Ramp(width = 512, height = 512)',
@@ -147,6 +234,14 @@ export const SIGNATURES = {
       '// pat.set(fn) mutates this SAME instance in place (keeps .plot()\'s cache) - use it for a\n' +
       '// pattern that needs to change on every tick, or across a patch send without losing state.',
     set: 'pat.set(fn)  // fn: x => number, or Pattern.sin/.ramp/.square/.triangle/.random/.pulse(...)',
+  },
+  Scope: {
+    ctor: 'new Scope(length = 128)  // ring-buffer size, in samples',
+    tick:
+      "out = scope.tick(value, { width = 512, height = 192, range, color = 'rgb(140,217,140)' })\n" +
+      '// use out, not scope itself - like Ramp/Noise/Pattern.plot(), tick() returns the actual texture\n' +
+      "// pushes `value` and draws its scrolling history (oscilloscope) - NOT Pattern.plot()'s function\n" +
+      '// plot. omit `range` to auto-scale to the buffer\'s own current min/max.',
   },
 };
 
@@ -180,6 +275,25 @@ const GLOBALS = {
     "sampleTexture(value, { cols = 8, rows = 8, channel = 'lightness' })\n" +
     "// channel: 'lightness' (default) | 'red' | 'green' | 'blue'\n" +
     '// -> flat array (0..1) per cell, row-major, row 0 = visual top',
+  beatmatch:
+    "beatmatch(bpm, t, { pulseWidth = 0.08, shape = 'triangle', ...shapeOpts })\n" +
+    '// -> { beat, phase, pulse, value, bpm } - replaces Math.round(t / secondsPerBeat) with real bpm timing\n' +
+    "// shape: 'pulse'|'build'|'triangle'|'adsr'|'sawJump'|'inverse' - value is phase reshaped by it, see beatEnvelope",
+  beatEnvelope:
+    "beatEnvelope(phase, shape = 'triangle', opts)  // -> reshaped 0..1 (or -1..1 for sawJump) value\n" +
+    "// 'pulse': {decay=12} quick spike, fast decay | 'build': smooth sine build-and-fall\n" +
+    "// 'triangle': {peak=0.5} linear build-and-fall | 'adsr': {attack,decay,sustain,release,sustainLevel}\n" +
+    "// 'sawJump': ramps -1..1 then jumps back | 'inverse': {falloff=8} 1/x-style spike+falloff",
+  COLORS:
+    'COLORS.RED / ORANGE / YELLOW / GREEN / CYAN / BLUE / PURPLE / PINK / WHITE / BLACK\n' +
+    '// hex string constants - not a function call, e.g. colorize.tick(src, COLORS.RED)',
+  colorPicker:
+    "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
+    '// floats a color-swatch widget next to this node, same as slider/button/input',
+  orbitCamera:
+    'orbitCamera(camera, { azimuth = 0, elevation = 0, radius = 3, target = [0,0,0] })\n' +
+    '// positions camera on a sphere around target and calls camera.lookAt() - just the ordinary\n' +
+    '// THREE.Camera position/lookAt API, spelled out once. See the three/three_sphere/three_text templates.',
   useInstances: 'useInstances(state)  // -> use(Ctor, ...ctorArgs), construct-once-per-call-order',
   nodeFunction:
     'nodeFunction((use, ...args) => result)  // -> a reusable callable with its OWN persistent state\n' +
@@ -272,6 +386,12 @@ function resolveUseCallImmediatelyBefore(text, calleeStart) {
 // all, nothing matches what's typed so far, or what's typed already
 // names a real class exactly (findSignatureAt's ctor tip takes over at
 // that point instead - see editor.js, which checks this first).
+//
+// Returns { matches, typed } rather than a bare array - editor.js's Tab-
+// to-complete needs `typed`'s length to know how much of the text to
+// replace (the identifier typed so far always ends exactly at `pos`,
+// per the anchored regex below, so the replace range is just
+// [pos - typed.length, pos] - no need to hand back an absolute offset).
 export function findUseCompletions(text, pos) {
   const openParenIdx = findEnclosingOpenParen(text, pos);
   if (openParenIdx == null) return null;
@@ -292,7 +412,7 @@ export function findUseCompletions(text, pos) {
   const contains = names.filter((n) => !starts.includes(n) && n.toLowerCase().includes(lower));
   const matches = [...starts, ...contains];
   if (typed !== '' && matches.length === 0) return null;
-  return matches.slice(0, 4);
+  return { matches: matches.slice(0, 4), typed };
 }
 
 // The one function editor.js calls: `null` if the caret isn't inside a

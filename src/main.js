@@ -11,7 +11,7 @@ import { Pattern } from './core/lib/pattern.js';
 import { getControlRequests } from './core/lib/controls.js';
 import { setMousePosition, setKeyState } from './core/lib/input-state.js';
 import { markNewPatch, clearNewPatch } from './core/lib/patch-flag.js';
-import { createEditor, lineTop, EDITOR_METRICS } from './ui/editor.js';
+import { createEditor, lineTop } from './ui/editor.js';
 import { PreviewPanel } from './ui/preview-panel.js';
 import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
@@ -50,15 +50,26 @@ const gl = createGLContext(glCanvas);
 // sized" by default is a content concern (how big a shape is drawn
 // relative to its own source texture, e.g. the *Node templates' use of
 // screenSize()), not something to fake by shrinking the canvas.
+// Backing-store resolution also scales by devicePixelRatio (capped at 2 -
+// a 3x/4x phone-class ratio would quadruple+ every texture's memory for
+// a sharpness gain past what's visible anyway) - CSS size stays in real
+// (unscaled) px via style.width/height, only the buffer itself grows, the
+// same "real resolution, not stretched" reasoning as GLSL/Canvas2D's own
+// screenSize()-based defaults above. Without this, a high-DPI/"big
+// monitor" display was stretching a 1x-resolution buffer across more
+// physical pixels than it had - every node's output plus this canvas
+// itself, both fixed by the two changes together.
+const MAX_DPR = 2;
 function resizeCanvas() {
   const rect = renderPane.getBoundingClientRect();
-  const size = Math.max(1, Math.round(Math.max(rect.width, rect.height)));
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  const size = Math.max(1, Math.round(Math.max(rect.width, rect.height) * dpr));
   if (glCanvas.width !== size || glCanvas.height !== size) {
     glCanvas.width = size;
     glCanvas.height = size;
   }
-  glCanvas.style.width = `${size}px`;
-  glCanvas.style.height = `${size}px`;
+  glCanvas.style.width = `${Math.max(1, Math.round(Math.max(rect.width, rect.height)))}px`;
+  glCanvas.style.height = glCanvas.style.width;
   setViewportSize(rect.width, rect.height);
 }
 window.addEventListener('resize', resizeCanvas);
@@ -102,30 +113,6 @@ function updatePreviewPositions(source) {
   resetPanel.setPositions(positions); // same per-node positions - see ui/reset-panel.js
 }
 
-// Same idea as updatePreviewPositions above, but for slider()/button()/
-// input() calls (see ui/control-panel.js) - these can appear on any line
-// inside any node's code(), not just at a node's own top line, so this
-// just regex-scans for the call itself rather than using node-parser.js.
-// Positioned right after that line's own text (not anchored to the
-// right edge like preview cards) since a control widget needs real
-// pointer interaction, and sitting over the code itself would get in
-// the way of editing it.
-const CONTROL_CALL_PATTERN = /\b(?:slider|button|input)\(\s*['"]([^'"]+)['"]/g;
-function updateControlPositions(source) {
-  const positions = new Map();
-  const lines = source.split('\n');
-  for (const match of source.matchAll(CONTROL_CALL_PATTERN)) {
-    const name = match[1];
-    const lineIndex = offsetToLine(source, match.index);
-    const lineText = lines[lineIndex] || '';
-    positions.set(name, {
-      top: lineTop(lineIndex),
-      left: EDITOR_METRICS.paddingLeft + lineText.length * EDITOR_METRICS.charWidth + 16,
-    });
-  }
-  controlPanel.setPositions(positions);
-}
-
 // Returns whether the load succeeded, so callers (flashSendResult below)
 // can give feedback - on failure the graph is left exactly as it was
 // (syncFromProject is never reached), same as any other tick where a
@@ -135,7 +122,6 @@ async function reload(source) {
     const projectNodes = await loadProject(gl, source);
     graph.syncFromProject(projectNodes);
     updatePreviewPositions(source);
-    updateControlPositions(source);
     loadError = null;
     markNewPatch(); // newPatch reads true for the one tick right after this - see lib/patch-flag.js
     return true;
@@ -170,13 +156,13 @@ async function send(text) {
 const view = createEditor({
   parent: editorMount,
   doc: defaultSource,
+  renderPane,
   onDocChanged(text) {
     // Live and cosmetic only - where each node's preview card (or a
     // control widget) floats follows the text as you type, independent
     // of whether it's been sent yet. Nothing here touches the running
     // graph.
     updatePreviewPositions(text);
-    updateControlPositions(text);
   },
   onSend: send,
 });
@@ -204,7 +190,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 const previewPanel = new PreviewPanel(view.previewLayer);
-const controlPanel = new ControlPanel(view.previewLayer);
+const controlPanel = new ControlPanel(view.previewLayer, previewPanel);
 const resetPanel = new ResetPanel(view.previewLayer, graph);
 
 modeToggle.addEventListener('click', () => {

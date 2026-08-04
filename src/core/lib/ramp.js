@@ -28,7 +28,9 @@ void main() {
 //   const out = ramp.tick({ angle: 45 });  // <- out has .texture, ramp doesn't
 //   return { screen: out };                //    NOT { screen: ramp }
 export class Ramp {
-  constructor(width = 512, height = 512) {
+  // No width/height default here - leave them undefined so GLSL's own
+  // default (the live screenSize(), not a fixed 512) takes over.
+  constructor(width, height) {
     this._glsl = new GLSL({ width, height });
   }
 

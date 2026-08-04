@@ -1,13 +1,14 @@
-import { getGL } from './context.js';
+import { getGL, screenSize } from './context.js';
 import { createTexture } from '../../gl/gl-context.js';
 
 // new Canvas2D(width, height, filter) inside a node's code(). Draw with
 // normal ctx.* calls, then call .upload() once you're done drawing for
 // this tick. No GLSL involved - proves a video-type node doesn't need
 // one. filter: 'linear' (default) or 'nearest' - see createTexture() in
-// gl-context.js.
+// gl-context.js. width/height default to the current screenSize() (real
+// output resolution), same reasoning as GLSL's own defaults.
 export class Canvas2D {
-  constructor(width = 512, height = 512, filter = 'linear') {
+  constructor(width = screenSize().width, height = screenSize().height, filter = 'linear') {
     this.gl = getGL();
     this.width = width;
     this.height = height;

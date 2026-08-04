@@ -10,7 +10,7 @@
 export const NODE_TEMPLATES = {
   glsl: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const glsl = use(GLSL);",
@@ -45,7 +45,7 @@ export const NODE_TEMPLATES = {
 
   screen: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs) {",
     "    render(inputs.src);",
     "    return {};",
@@ -55,7 +55,7 @@ export const NODE_TEMPLATES = {
 
   null: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs) {",
     "    return { out: inputs.src };",
     "  },",
@@ -67,7 +67,7 @@ export const NODE_TEMPLATES = {
   // it needs GLSL, Canvas2D, or nothing at all.
   node: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    return { screen: inputs.src };",
     "  },",
@@ -185,7 +185,7 @@ export const NODE_TEMPLATES = {
   // everything else falls through unchanged in between. See lib/lag.js.
   lag: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const held = use(Lag, 10).tick(inputs.src); // fires every 10 ticks",
@@ -200,7 +200,7 @@ export const NODE_TEMPLATES = {
   // rather than ever showing the frames in between. See lib/delay.js.
   delay: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const ticks = 30; // <- change this; passed to tick()'s second",
@@ -221,10 +221,99 @@ export const NODE_TEMPLATES = {
     "{",
     "  // modes: over, atop, xor, multiply, screen, darken, lighten, add,",
     "  // difference, hardLight, softLight, lightest, darkest",
-    "  in: { a: 'other.output', b: 'other.output' },",
+    "  in: { a: 'other.screen', b: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const out = use(Composite).tick(inputs.a, inputs.b, 'over', 1);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Cuts a hole in src using a second texture's shape - unlike composite
+  // above (which mixes two FULL sources), this only ever touches src's
+  // alpha. maskSrc here is a plain white circle on transparent, drawn
+  // once; swap in any shape (a Canvas2D drawing, particle2d output,
+  // ChromaKey's result, ...). See lib/fx/registry.js's mask entry.
+  mask: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const maskSrc = use(Canvas2D, width, height);",
+    "    if (!state.maskDrawn) {",
+    "      state.maskDrawn = true;",
+    "      const { ctx } = maskSrc;",
+    "      ctx.fillStyle = 'white';",
+    "      ctx.beginPath();",
+    "      ctx.arc(width / 2, height / 2, Math.min(width, height) * 0.3, 0, Math.PI * 2);",
+    "      ctx.fill();",
+    "      maskSrc.upload();",
+    "    }",
+    "    const out = use(Mask).tick(inputs.src, maskSrc, { mode: 'lightness' });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Green-screen style keying - swap `color` for whatever your actual
+  // backdrop is, and raise `similarity`/`smoothness` until the edges
+  // look clean without eating into the subject. See lib/fx/registry.js's
+  // chromaKey entry.
+  chroma_key: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const out = use(ChromaKey).tick(inputs.src, {",
+    "      color: [0, 1, 0], // the backdrop color to key out, 0..1 rgb",
+    "      similarity: 0.4,",
+    "      smoothness: 0.15,",
+    "    });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // The "Ramp -> Lookup" palette-mapping trick, TouchDesigner-style: build
+  // a multi-stop gradient by hand with Canvas2D (more control than
+  // Ramp's plain 2-color version), then recolor src entirely from it -
+  // every pixel's lightness picks which point along the gradient it
+  // becomes. See lib/fx/registry.js's gradientMap entry - and note this
+  // is a DIFFERENT tool from ColorLookup (a real 3D LUT, full rgb -> rgb
+  // grading), not a replacement for it.
+  gradient_map: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const ramp = use(Canvas2D, 256, 1);",
+    "    if (!state.rampDrawn) {",
+    "      state.rampDrawn = true;",
+    "      const { ctx } = ramp;",
+    "      const grad = ctx.createLinearGradient(0, 0, 256, 0);",
+    "      grad.addColorStop(0, '#0a0033');",
+    "      grad.addColorStop(0.5, '#ff2d75');",
+    "      grad.addColorStop(1, '#ffe86b');",
+    "      ctx.fillStyle = grad;",
+    "      ctx.fillRect(0, 0, 256, 1);",
+    "      ramp.upload();",
+    "    }",
+    "    const out = use(GradientMap).tick(inputs.src, ramp, { channel: 'lightness' });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Kaleidoscope is already a plain effect (lib/fx/registry.js) - this is
+  // just its starter node. segments = number of mirrored wedges.
+  kaleidoscope: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const out = use(Kaleidoscope).tick(inputs.src, 6);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -243,7 +332,7 @@ export const NODE_TEMPLATES = {
   // it - nothing here ever reads the exact texture it's writing into.
   spiral: () => [
     "{",
-    "  in: { src: 'other.output', prev: 'RENAME_ME.screen' },",
+    "  in: { src: 'other.screen', prev: 'RENAME_ME.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const held = use(Lag).tick(inputs.prev, 1); // safe copy of last tick's own output",
@@ -261,7 +350,7 @@ export const NODE_TEMPLATES = {
   // committing to what the effect actually does yet.
   effect: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const base = inputs.src;",
@@ -353,10 +442,16 @@ export const NODE_TEMPLATES = {
   // camera/mesh are built inside a plain `if (!state.x)` guard, not
   // useInstances - there's no single class to hand use() here, just a
   // handful of separate THREE objects - reused every tick; only their
-  // rotation updates. `|| newPatch` means editing what's INSIDE that
-  // guard (swapping BoxGeometry for SphereGeometry, say) takes effect on
-  // your next Send instead of needing a node reset button click or a
-  // rename - see lib/patch-flag.js. See lib/three-source.js.
+  // rotation (and the camera, via orbitCamera below) updates. `|| newPatch`
+  // means editing what's INSIDE that guard (swapping BoxGeometry for
+  // SphereGeometry, say) takes effect on your next Send instead of needing
+  // a node reset button click or a rename - see lib/patch-flag.js.
+  //
+  // orbitCamera(camera, { azimuth, elevation, radius, target }) (see
+  // lib/three-camera.js) just wraps the camera's own ordinary
+  // position/lookAt calls - moving azimuth over time (t * 0.3 here) orbits
+  // around the mesh; drop it entirely (and set camera.position once
+  // inside the guard, like before) for a fixed camera. See lib/three-source.js.
   three: () => [
     "{",
     "  in: {},",
@@ -367,7 +462,6 @@ export const NODE_TEMPLATES = {
     "    if (!state.scene || newPatch) {", // newPatch: rebuild on every send too, not just the first time - see lib/patch-flag.js
     "      state.scene = new THREE.Scene();",
     "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.camera.position.z = 3;",
     "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
     "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
     "      state.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x4488ff }));",
@@ -375,6 +469,117 @@ export const NODE_TEMPLATES = {
     "    }",
     "    state.mesh.rotation.x = t;",
     "    state.mesh.rotation.y = t * 0.7;",
+    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    const out = three.tick(state.scene, state.camera);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // A flat plane in 3D - "rectangle" in the sense of a 2D shape you can
+  // still position/rotate/light in a real 3D scene, as opposed to a full
+  // BoxGeometry (see the three template above). side: THREE.DoubleSide
+  // is what keeps it visible from the back once it rotates past edge-on.
+  three_rect: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(ThreeSource, width, height);",
+    "    if (!state.scene || newPatch) {",
+    "      state.scene = new THREE.Scene();",
+    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
+    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
+    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
+    "      state.mesh = new THREE.Mesh(",
+    "        new THREE.PlaneGeometry(1.6, 1),",
+    "        new THREE.MeshStandardMaterial({ color: 0x4488ff, side: THREE.DoubleSide })",
+    "      );",
+    "      state.scene.add(state.mesh);",
+    "    }",
+    "    state.mesh.rotation.y = t;",
+    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    const out = three.tick(state.scene, state.camera);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Projects one of this project's OWN texture-bearing values onto the
+  // sphere via three.toTexture() (see lib/three-source.js) - reads the
+  // GLSL/Canvas2D/etc result back onto a real THREE.CanvasTexture, since
+  // three.js renders in its own separate WebGL context and can't share a
+  // raw WebGLTexture from this project's context directly. Swap `noise`
+  // for any other node's output (an `inputs.x` wired in via the node's
+  // `in: {...}`, say) to project THAT instead.
+  three_sphere: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(ThreeSource, width, height);",
+    "    const noise = use(Noise).tick({ scale: 4, seed: t * 0.2 });",
+    "    const colored = use(Colorize).tick(noise, COLORS.CYAN);", // punches up contrast so the projection is obvious at a glance - toTexture() itself works with any texture, plain or processed
+    "    if (!state.scene || newPatch) {",
+    "      state.scene = new THREE.Scene();",
+    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
+    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
+    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
+    "      state.mesh = new THREE.Mesh(",
+    "        new THREE.SphereGeometry(0.8, 32, 32),",
+    "        new THREE.MeshStandardMaterial({ color: 0xffffff })",
+    "      );",
+    "      state.scene.add(state.mesh);",
+    "    }",
+    "    state.mesh.material.map = three.toTexture(colored);",
+    "    state.mesh.material.needsUpdate = true;",
+    "    state.mesh.rotation.y = t;",
+    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    const out = three.tick(state.scene, state.camera);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // True 3D-extruded text (THREE.TextGeometry) needs a font JSON loaded
+  // over the network, which this project doesn't bundle - drawing the
+  // label with Canvas2D (already built in) and mapping it onto a plane
+  // instead needs no external asset, and is far cheaper to render besides.
+  // Both the text-drawing and the scene setup live in the SAME `if` guard
+  // here (not two separate ones) so the CanvasTexture is always built
+  // from whatever the canvas already has drawn onto it, never one tick
+  // stale.
+  three_text: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(ThreeSource, width, height);",
+    "    const label = use(Canvas2D, 512, 128);",
+    "    if (!state.scene || newPatch) {",
+    "      const { ctx } = label;",
+    "      ctx.clearRect(0, 0, 512, 128);",
+    "      ctx.fillStyle = 'white';",
+    "      ctx.font = 'bold 72px sans-serif';",
+    "      ctx.textAlign = 'center';",
+    "      ctx.textBaseline = 'middle';",
+    "      ctx.fillText('hello', 256, 64);",
+    "      label.upload();",
+    "",
+    "      state.scene = new THREE.Scene();",
+    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
+    "      state.texture = new THREE.CanvasTexture(label.canvas);",
+    "      state.mesh = new THREE.Mesh(",
+    "        new THREE.PlaneGeometry(2.4, 0.6),",
+    "        new THREE.MeshBasicMaterial({ map: state.texture, transparent: true })",
+    "      );",
+    "      state.scene.add(state.mesh);",
+    "    }",
+    "    state.mesh.rotation.y = Math.sin(t) * 0.4;",
+    "    orbitCamera(state.camera, { azimuth: Math.sin(t * 0.3) * 0.6, elevation: 0.15, radius: 3 });",
     "    const out = three.tick(state.scene, state.camera);",
     "    return { screen: out };",
     "  },",
@@ -486,7 +691,7 @@ export const NODE_TEMPLATES = {
   // lib/node-function.js.
   node_function: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    state.rotateThenShrink ??= nodeFunction((use, src, degrees) => {",
     "      let out = use(Rotate).tick(src, degrees);",
@@ -523,7 +728,7 @@ export const NODE_TEMPLATES = {
   // .triangle/.random) and the chaining methods (.map/.mul/.add/.clip).
   sine: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const v = Pattern.sin(0.5).read(t); // 0..1, one full cycle every 2 seconds",
@@ -542,7 +747,7 @@ export const NODE_TEMPLATES = {
   // particle2d template instead. See lib/instance.js.
   instance: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const count = 12;",
@@ -566,7 +771,7 @@ export const NODE_TEMPLATES = {
   // See lib/instance.js.
   particle2d: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const out = particle2d(inputs.src, 24, 24, dot(), { t, min: 0.15, shakeSpeed: 1 });",
     "    return { screen: out };",
@@ -579,10 +784,42 @@ export const NODE_TEMPLATES = {
   // for the darkest cells up to '@' for the brightest. See lib/ascii.js.
   ascii: () => [
     "{",
-    "  in: { src: 'other.output' },",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const out = ascii2d(inputs.src, 60, 40);",
     "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // AudioSource pulls a live mic spectrum into plain numbers - nothing
+  // here is a texture, this is for driving OTHER things (a Pattern, an
+  // Instance/particle2d grid, an effect's parameter) with sound. .band()
+  // is the "EQ" half (pull out specific Hz ranges); wrapping .spectrum()
+  // as a Pattern for the "scope" half reuses .plot()'s axis labels/auto-
+  // scaling/resolution for free instead of drawing a bar graph by hand.
+  audio: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const audio = use(AudioSource);",
+    "    audio.tick(); // asks mic permission on first call - check audio.error",
+    "",
+    "    // EQ: pull out a few specific bands (Hz ranges) - split these",
+    "    // wherever actually matches your source material",
+    "    const bass = audio.band(20, 250);",
+    "    const mid = audio.band(250, 4000);",
+    "    const treble = audio.band(4000, 12000);",
+    "",
+    "    // scope: reread the CURRENT spectrum through a Pattern so",
+    "    // .plot() draws it as a live graph - not real-valued math, just",
+    "    // indexing into whatever audio.spectrum() returned this tick",
+    "    const cols = 64;",
+    "    const scope = use(Pattern).set((x) => audio.spectrum(cols)[Math.min(cols - 1, Math.floor(x))]);",
+    "    preview(scope, { range: [0, cols] });",
+    "",
+    "    return { bass, mid, treble };",
     "  },",
     "},",
   ].join('\n'),

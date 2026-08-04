@@ -1,13 +1,17 @@
 import { defineConfig } from 'vite';
 
+// GitHub Pages serves a project repo (not a user/org root page) under
+// /<repo-name>/, not /  - every asset URL Vite generates needs that
+// prefix baked in at build time, or they all 404 once deployed there.
+// `vite dev` ALSO mounts the whole app under this path (a bare `/`
+// request 302s to it) - the docs-index-fallback plugin below has to
+// account for that, not just the bare /docs it originally assumed. If
+// this ever moves to a root domain (a user/org page, or a custom
+// domain), this needs to go back to '/'.
+const BASE = '/SYNUS/';
+
 export default defineConfig({
-  // GitHub Pages serves a project repo (not a user/org root page) under
-  // /<repo-name>/, not /  - every asset URL Vite generates needs that
-  // prefix baked in at build time, or they all 404 once deployed there
-  // (this has no effect on `vite dev`, only `vite build`). If this ever
-  // moves to a root domain (a user/org page, or a custom domain), this
-  // needs to go back to '/'.
-  base: '/SYNUS/',
+  base: BASE,
   // hydra-synth's own dependency (raf-loop -> right-now) references the
   // Node.js `global` object directly, assuming a Node/Browserify-style
   // environment - browsers don't have `global` (they have `window`/
@@ -25,13 +29,19 @@ export default defineConfig({
     // not public/docs/index.html. Rewriting the URL here, BEFORE Vite's
     // own internal middlewares run (this hook form - not returning a
     // function - is what makes that ordering happen), is what makes
-    // plain /docs work as a real, un-hashed URL for the docs page.
+    // /docs work as a real, un-hashed URL for the docs page.
+    //
+    // The actual request path is BASE-prefixed in dev (e.g. /SYNUS/docs,
+    // matching index.html's relative `docs/` link) - stripping BASE
+    // before comparing (rather than hardcoding it a second time here)
+    // means this still works if BASE above ever changes.
     {
       name: 'docs-index-fallback',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          if (req.url === '/docs' || req.url === '/docs/') {
-            req.url = '/docs/index.html';
+          const path = req.url.startsWith(BASE) ? req.url.slice(BASE.length - 1) : req.url;
+          if (path === '/docs' || path === '/docs/') {
+            req.url = `${BASE}docs/index.html`;
           }
           next();
         });

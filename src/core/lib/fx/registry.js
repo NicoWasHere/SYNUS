@@ -185,4 +185,113 @@ export const EFFECTS = {
       return { uLut: lut, uSize: size, uBlockTexels: lutW / size, uAmount: amount };
     },
   },
+
+  mask: {
+    frag: shaders.MASK,
+    // mask(src, maskTexture, { mode: 'lightness', invert: false })  -
+    // cuts a hole in src's alpha using maskTexture's shape; src's rgb is
+    // untouched. mode: 'lightness' (default) or 'alpha'.
+    toUniforms: (maskTex, { mode = 'lightness', invert = false } = {}) => ({
+      uMask: maskTex,
+      uMode: mode === 'alpha' ? 1 : 0,
+      uInvert: invert ? 1 : 0,
+    }),
+  },
+
+  chromaKey: {
+    frag: shaders.CHROMA_KEY,
+    // chromaKey(src, { color: [0,1,0], similarity: 0.4, smoothness: 0.1 })
+    // - keys out pixels near `color` (0..1 rgb, green-screen green by
+    // default). Raise `similarity` to key a wider range of colors, raise
+    // `smoothness` to feather the cutoff edge instead of a hard cut.
+    toUniforms: ({ color = [0, 1, 0], similarity = 0.4, smoothness = 0.1 } = {}) => ({
+      uKeyColor: color,
+      uSimilarity: similarity,
+      uSmoothness: smoothness,
+    }),
+  },
+
+  gradientMap: {
+    frag: shaders.GRADIENT_MAP,
+    // gradientMap(src, rampTexture, { channel: 'lightness' })  - repaints
+    // src entirely from a 1D gradient (rampTexture - e.g. use(Ramp) or a
+    // hand-drawn Canvas2D gradient), sampled at src's own lightness/red/
+    // green/blue value per pixel. The "Ramp -> Lookup" palette-mapping
+    // trick - NOT the same as colorLookup above, which is a full 3D LUT.
+    toUniforms: (ramp, { channel = 'lightness' } = {}) => ({
+      uRamp: ramp,
+      uChannel: { lightness: 0, red: 1, green: 2, blue: 3 }[channel] ?? 0,
+    }),
+  },
+
+  fisheye: {
+    frag: shaders.FISHEYE,
+    // fisheye(src, 0.5)  -  positive bulges outward (fisheye), negative
+    // pinches inward (pincushion), 0 = no change
+    toUniforms: (amount = 0.5) => ({ uAmount: amount }),
+  },
+
+  invert: {
+    frag: shaders.INVERT,
+    // invert(src, 1)  -  0 = original, 1 = fully inverted
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
+  },
+
+  colorize: {
+    frag: shaders.COLORIZE,
+    // colorize(src, '#ff3366')  -  recolors src's own lightness into a
+    // black -> color duotone. Accepts a hex string or a [r,g,b] 0..1 array.
+    toUniforms: (color = '#ffffff') => ({ uColor: toRgb(color) }),
+  },
+
+  crt: {
+    frag: shaders.CRT,
+    // crt(src, { amount = 1, t = 0, bars = 1, barSize = 4 })  -  chromatic
+    // aberration + scanlines + vignette + `bars` simultaneous horizontal
+    // tear bars (0 for none), each `barSize` texels thick - capped at 8
+    // regardless of how high `bars` is set (see MAX_BARS in shaders.js).
+    // `t` is needed for the tear positions/timing to actually animate -
+    // pass the node's own `t`.
+    toUniforms: ({ amount = 1, t = 0, bars = 1, barSize = 4 } = {}) => ({
+      uAmount: amount,
+      uTime: t,
+      uBarCount: bars,
+      uBarSize: barSize,
+    }),
+  },
+
+  filmGrain: {
+    frag: shaders.FILM_GRAIN,
+    // filmGrain(src, { amount = 0.1, t = 0 })  -  animated noise added to
+    // rgb. `t` keeps the grain moving instead of a fixed static pattern.
+    toUniforms: ({ amount = 0.1, t = 0 } = {}) => ({ uAmount: amount, uTime: t }),
+  },
+
+  bitmap: {
+    frag: shaders.BITMAP,
+    // bitmap(src, { scale = 2, colorA = '#000000', colorB = '#ffffff' })  -
+    // 1-bit ordered (Bayer) dither, the classic "old Mac bitmap" look.
+    // scale is the on-screen size (in texels) of one dither cell.
+    toUniforms: ({ scale = 2, colorA = '#000000', colorB = '#ffffff' } = {}) => ({
+      uScale: scale,
+      uColorA: toRgb(colorA),
+      uColorB: toRgb(colorB),
+    }),
+  },
+
+  channelThreshold: {
+    frag: shaders.CHANNEL_THRESHOLD,
+    // channelThreshold(src, { r = 0.5, g = 0.5, b = 0.5 })  -  thresholds
+    // each channel independently (up to 8 distinct output colors) instead
+    // of one shared luma cutoff - see Threshold for the grayscale version.
+    toUniforms: ({ r = 0.5, g = 0.5, b = 0.5 } = {}) => ({ uLevels: [r, g, b] }),
+  },
 };
+
+function toRgb(color) {
+  if (Array.isArray(color)) return color;
+  const hex = color.replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
+  const int = parseInt(full, 16);
+  return [((int >> 16) & 255) / 255, ((int >> 8) & 255) / 255, (int & 255) / 255];
+}

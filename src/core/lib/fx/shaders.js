@@ -416,3 +416,215 @@ void main() {
   vec3 graded = lutLookup(c.rgb);
   outColor = vec4(mix(c.rgb, graded, uAmount), c.a);
 }`;
+
+// Cuts a hole in uSrc using a SEPARATE mask source's own shape - unlike
+// Matte (which mixes two full sources through a third mask), this only
+// ever touches uSrc's alpha, keeping its rgb untouched. mode: 0 =
+// lightness (the mask's luma - right for a plain black/white shape), 1 =
+// the mask's own alpha (right for an already-cutout mask, e.g. a Mask/
+// ChromaKey/Instance/particle2d result).
+export const MASK = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uMask;
+uniform float uMode;   // 0 = lightness, 1 = alpha
+uniform float uInvert; // 0/1
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  vec4 m = texture(uMask, vUv);
+  float v = uMode > 0.5 ? m.a : dot(m.rgb, vec3(0.299, 0.587, 0.114));
+  if (uInvert > 0.5) v = 1.0 - v;
+  outColor = vec4(src.rgb, src.a * v);
+}`;
+
+// Keys out pixels close to uKeyColor (plain Euclidean distance in rgb,
+// not a full YUV-based key like a dedicated switcher does, but cheap and
+// effective for a solid, evenly-lit backdrop) - green/blue screen style.
+// uSimilarity is the distance threshold (smaller = only near-exact
+// matches get keyed), uSmoothness feathers the cutoff edge instead of a
+// hard cut.
+export const CHROMA_KEY = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec3 uKeyColor;
+uniform float uSimilarity;
+uniform float uSmoothness;
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  float dist = distance(src.rgb, uKeyColor);
+  float alpha = smoothstep(uSimilarity, uSimilarity + uSmoothness, dist);
+  outColor = vec4(src.rgb, src.a * alpha);
+}`;
+
+// The "Ramp + Lookup" palette-mapping trick: recolors uSrc entirely from
+// a 1D gradient (uRamp - e.g. a Ramp() generator, or any wide/short
+// texture) by using uSrc's OWN value (lightness by default) as the x
+// position to sample that gradient at. This is NOT the same tool as
+// ColorLookup above - ColorLookup remaps full rgb -> rgb through a real
+// baked 3D LUT; this only ever looks at one scalar per pixel and repaints
+// everything along a single color gradient (a duotone/gradient-map
+// effect, not full color grading).
+export const GRADIENT_MAP = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uRamp;
+uniform float uChannel; // 0 = lightness, 1 = red, 2 = green, 3 = blue
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  float v;
+  if (uChannel < 0.5) v = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+  else if (uChannel < 1.5) v = src.r;
+  else if (uChannel < 2.5) v = src.g;
+  else v = src.b;
+  vec3 mapped = texture(uRamp, vec2(clamp(v, 0.0, 1.0), 0.5)).rgb;
+  outColor = vec4(mapped, src.a);
+}`;
+
+// Radial lens distortion - positive uAmount bulges outward (fisheye:
+// content pushed toward the edges bows out toward the viewer), negative
+// pinches inward (pincushion). The classic "r' = r*(1 + k*r^2)" barrel
+// distortion formula, applied around the frame's own center.
+export const FISHEYE = `${HEADER}${SAMPLE_CLAMPED}
+uniform sampler2D uSrc;
+uniform float uAmount; // 0 = none, >0 = bulge/fisheye, <0 = pinch
+
+void main() {
+  vec2 p = (vUv - 0.5) * 2.0;
+  float r2 = dot(p, p);
+  vec2 distorted = p * (1.0 + uAmount * r2);
+  outColor = sampleClamped(uSrc, distorted * 0.5 + 0.5);
+}`;
+
+export const INVERT = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uAmount; // 0 = original, 1 = fully inverted
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  outColor = vec4(mix(c.rgb, 1.0 - c.rgb, uAmount), c.a);
+}`;
+
+// Recolors src's own lightness into a black -> uColor duotone - a
+// one-line "give this a color" tool, as opposed to gradientMap above
+// (an arbitrary multi-stop gradient) or colorLookup (a full 3D LUT).
+export const COLORIZE = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec3 uColor;
+
+void main() {
+  vec4 c = texture(uSrc, vUv);
+  float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  outColor = vec4(uColor * luma, c.a);
+}`;
+
+// A tiny cheap hash, reused by both CRT (for its per-band glitch offset)
+// and FilmGrain (for its per-pixel noise) - not the same shape as
+// Noise.js's actual value-noise generator, this is just meant to look
+// like static/dirt, not smooth clouds.
+const HASH = `
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+`;
+
+// Glitchy CRT: chromatic aberration (R/G/B sampled with a slight x
+// offset), horizontal scanlines, a vignette, and `uBarCount` simultaneous
+// horizontal tear bars (each `uBarSize` texels thick, uv.x kicked
+// sideways for anything inside one) - an explicit count/size per tick,
+// not a per-row probability roll, so "0 bars" is really none and "1 bar"
+// is really exactly one. MAX_BARS caps the loop at compile time (GLSL
+// needs a constant upper bound); uBarCount can still be 0..anything, the
+// loop just breaks early once it's satisfied.
+const MAX_BARS = 8;
+
+export const CRT = `${HEADER}${SAMPLE_CLAMPED}${HASH}
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uAmount; // 0 = off, 1 = full intensity (default)
+uniform float uTime;
+uniform float uBarCount; // how many simultaneous tear bars this tick (capped at ${MAX_BARS})
+uniform float uBarSize;  // each bar's thickness, in texels
+
+void main() {
+  vec2 uv = vUv;
+  float glitchStep = floor(uTime * 6.0);
+  float barThickness = uBarSize * uTexel.y;
+
+  for (int i = 0; i < ${MAX_BARS}; i++) {
+    if (float(i) >= uBarCount) break;
+    float seed = float(i) * 17.0 + glitchStep * 100.0;
+    float barY = hash(vec2(seed, 1.0));
+    if (abs(uv.y - barY) < barThickness * 0.5) {
+      float dir = hash(vec2(seed, 2.0)) - 0.5;
+      uv.x += dir * 0.3 * uAmount;
+    }
+  }
+
+  float aberration = 0.004 * uAmount;
+  float r = sampleClamped(uSrc, uv + vec2(aberration, 0.0)).r;
+  float g = sampleClamped(uSrc, uv).g;
+  float b = sampleClamped(uSrc, uv - vec2(aberration, 0.0)).b;
+  float a = sampleClamped(uSrc, uv).a;
+
+  float scan = sin(uv.y * 800.0) * 0.5 + 0.5;
+  vec3 col = vec3(r, g, b) * mix(1.0, scan, 0.25 * uAmount);
+
+  vec2 centered = uv - 0.5;
+  float vignette = 1.0 - dot(centered, centered) * 0.6 * uAmount;
+
+  outColor = vec4(col * vignette, a);
+}`;
+
+// Animated per-pixel noise added to rgb - uTime keeps it a moving grain
+// instead of a fixed dirty-lens pattern baked into one frame.
+export const FILM_GRAIN = `${HEADER}${HASH}
+uniform sampler2D uSrc;
+uniform float uAmount; // 0 = none, ~0.1 = subtle, ~0.5 = heavy
+uniform float uTime;
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  float grain = hash(vUv * 1000.0 + uTime * 60.0) - 0.5;
+  outColor = vec4(src.rgb + grain * uAmount, src.a);
+}`;
+
+// 1-bit ordered (Bayer 4x4) dithering - unlike Threshold/Posterize (a
+// flat per-pixel cutoff, which bands and loses detail), an ordered dither
+// spreads the quantization error across a repeating pattern so gradients
+// still read as gradients at a glance, the classic "old Mac bitmap" look.
+// uScale is the on-screen size (in texels) of one dither cell.
+export const BITMAP = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uScale;
+uniform vec3 uColorA; // dark
+uniform vec3 uColorB; // light
+
+float bayer(ivec2 cell) {
+  float m[16] = float[16](
+    0.0, 8.0, 2.0, 10.0,
+    12.0, 4.0, 14.0, 6.0,
+    3.0, 11.0, 1.0, 9.0,
+    15.0, 7.0, 13.0, 5.0
+  );
+  return m[cell.y * 4 + cell.x];
+}
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  float luma = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+  ivec2 cell = ivec2(mod(floor(gl_FragCoord.xy / max(uScale, 1.0)), 4.0));
+  float threshold = (bayer(cell) + 0.5) / 16.0;
+  vec3 col = luma > threshold ? uColorB : uColorA;
+  outColor = vec4(col, src.a);
+}`;
+
+// Thresholds r/g/b independently (each channel becomes flat 0 or 1 on
+// its own) instead of one shared luma cutoff (see Threshold) - up to 8
+// distinct output colors, the "RGB glitch poster" look.
+export const CHANNEL_THRESHOLD = `${HEADER}
+uniform sampler2D uSrc;
+uniform vec3 uLevels; // per-channel threshold, r/g/b independently
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  vec3 col = step(uLevels, src.rgb);
+  outColor = vec4(col, src.a);
+}`;

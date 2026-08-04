@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getGL } from './context.js';
 import { createTexture } from '../../gl/gl-context.js';
+import { readTextureToImageData } from './texture-preview.js';
 
 // new ThreeSource(width, height) inside a node's code(), or
 // use(ThreeSource, width, height) via useInstances. tick(scene, camera)
@@ -40,5 +41,43 @@ export class ThreeSource {
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.canvas);
     return this;
+  }
+
+  // three.toTexture(value, { width, height, key }) - projects any of
+  // THIS project's own texture-bearing values (a GLSL/Canvas2D result, a
+  // media source, an effect chain's output, ...) onto a real
+  // THREE.CanvasTexture, for use as a mesh's material.map - e.g. wrapping
+  // a live effect chain around a THREE.SphereGeometry.
+  //
+  // Three.js's renderer runs in its OWN separate WebGL context (see the
+  // class comment above), so a raw WebGLTexture from this project's
+  // context can't just be handed to a three.js material directly - this
+  // reads it back to a plain <canvas> (readTextureToImageData - the same
+  // GPU->CPU bridge the preview cards use) and re-uploads THAT as a
+  // CanvasTexture, which three.js's context can use like any other image.
+  // That readback has a real per-tick cost (unlike everything else in
+  // this pipeline, which stays GPU-resident) - fine for one or two
+  // projected textures, but not something to do dozens of times a frame.
+  //
+  // `key` distinguishes more than one projected texture on the same
+  // ThreeSource (e.g. one per mesh) - each gets its own cached canvas/
+  // CanvasTexture, only recreated if the requested size actually changes.
+  toTexture(value, { width, height, key = 'default' } = {}) {
+    if (!value || !value.texture) return null;
+    const w = width || value.width || (value.canvas && value.canvas.width) || 256;
+    const h = height || value.height || (value.canvas && value.canvas.height) || 256;
+    this._projected ??= new Map();
+    let entry = this._projected.get(key);
+    if (!entry || entry.canvas.width !== w || entry.canvas.height !== h) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const texture = new THREE.CanvasTexture(canvas);
+      entry = { canvas, ctx: canvas.getContext('2d'), texture };
+      this._projected.set(key, entry);
+    }
+    entry.ctx.putImageData(readTextureToImageData(value.texture, w, h), 0, 0);
+    entry.texture.needsUpdate = true;
+    return entry.texture;
   }
 }

@@ -1,4 +1,4 @@
-import { getGL } from './context.js';
+import { getGL, screenSize } from './context.js';
 import {
   compileProgram,
   drawFullscreenQuad,
@@ -21,7 +21,13 @@ import {
 // Scale/Rotate) - LINEAR softens a little on every resample, which
 // compounds into visible blur over many iterations; NEAREST doesn't.
 export class GLSL {
-  constructor({ width = 512, height = 512, filter = 'linear' } = {}) {
+  // width/height default to the CURRENT screenSize() (not a fixed
+  // number) so every effect/composite/generator that doesn't pass its
+  // own size renders at real output resolution instead of a small fixed
+  // buffer that then gets stretched up on a bigger canvas (visibly
+  // blocky on a large/high-res monitor - the same "use real resolution"
+  // fix Pattern.plot()/preview cards already got).
+  constructor({ width = screenSize().width, height = screenSize().height, filter = 'linear' } = {}) {
     this.gl = getGL();
     this.width = width;
     this.height = height;

@@ -6,6 +6,8 @@ import 'prismjs/components/prism-javascript';
 import { explode, nodeTemplateBody, NODE_TEMPLATE_NAMES } from '../core/lib/explode.js';
 import { addFile } from '../core/lib/file-registry.js';
 import { downscaleVideo } from '../core/lib/video-downscale.js';
+import { openDrawTool } from './draw-tool.js';
+import { openComposeAtTool } from './compose-at-tool.js';
 import { findSignatureAt, findUseCompletions } from './signatures.js';
 
 // Every raw GLSL string in this codebase (see gl-context.js, screen-
@@ -66,6 +68,26 @@ const LOAD_PATTERN = /\$load\$/;
 // placeholder comment sits at the insertion point until it finishes.
 const DOWNSCALE_PATTERN = /\$downscale\$/;
 
+// $draw$ - opens a freehand-drawable canvas overlay directly on top of
+// the render pane (see ui/draw-tool.js), for turning a hand-drawn shape
+// into a real texture without leaving the editor. Finishing (the
+// overlay's own Done button, not this pattern completing) inserts a
+// complete image node wired to a data: URL of whatever got drawn - white
+// strokes on transparent, same convention as dot()/pixel(). Cancelling
+// removes the `$draw$` text with nothing inserted, same as $load$.
+const DRAW_PATTERN = /\$draw\$/;
+
+// $compose_at(n)$ - opens a box-placement overlay on top of the render
+// pane (see ui/compose-at-tool.js) with `n` draggable/resizable boxes,
+// one per screen input the generated node will composite (lib/compose-
+// at.js's ComposeAt class does the actual per-tick GPU compositing).
+// Finishing (the overlay's own Done button) inserts a complete node with
+// `n` input ports (in1..inN, each the usual 'other.screen' placeholder)
+// pre-wired to a ComposeAt call using the exact boxes you placed.
+// Cancelling removes the `$compose_at(n)$` text with nothing inserted,
+// same as $draw$/$load$.
+const COMPOSE_AT_PATTERN = /\$compose_at\((\d+)\)\$/;
+
 // $slider$/$button$/$input$ - inline snippets for lib/controls.js's
 // globals, each expanding to a call with an auto-numbered placeholder
 // name (e.g. "slider2" if one "slider(" call already exists) rather than
@@ -73,7 +95,15 @@ const DOWNSCALE_PATTERN = /\$downscale\$/;
 // $load$/$downscale$ these are plain synchronous text, so they're
 // expanded the same way as $explode(...)$/$name$ - see tryExpandControl()
 // below.
-const CONTROL_SNIPPET_PATTERN = /\$(slider|button|input)\$/;
+const CONTROL_SNIPPET_PATTERN = /\$(slider|button|input|color_picker)\$/;
+
+// $beatmatch$ - not a controls.js widget (no persistent value, no
+// floating UI), just a plain-text snippet the same mechanical way as the
+// CONTROL_SNIPPETS above: auto-numbered so two calls in one node's code()
+// don't collide as `const beat` redeclarations. Kept as its own pattern/
+// expander rather than folded into CONTROL_SNIPPET_PATTERN since it isn't
+// actually a control - see tryExpandBeatmatchSnippet() below.
+const BEATMATCH_SNIPPET_PATTERN = /\$beatmatch\$/;
 
 // Must match the font/padding declared for .code-editor-wrap in
 // index.html exactly - this is the one place that math is duplicated,
@@ -127,7 +157,7 @@ EDITOR_METRICS.charWidth = measureCharWidth();
 // desync by a pixel or two (differing native scrollbar-reserved widths,
 // scroll-anchoring, momentum scrolling). With only one scrollable
 // ancestor, that class of bug can't happen at all.
-export function createEditor({ parent, doc, onDocChanged, onSend }) {
+export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) {
   const wrap = document.createElement('div');
   wrap.className = 'code-editor-wrap';
 
@@ -175,6 +205,10 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
   const useAutocomplete = document.createElement('div');
   useAutocomplete.className = 'use-autocomplete';
   useAutocomplete.hidden = true;
+  // Set by updateSignatureTip() whenever useAutocomplete is showing -
+  // { matches, typed } from findUseCompletions(), read by the Tab-key
+  // handler below to fill in the top match without re-deriving it.
+  let activeUseCompletion = null;
 
   wrap.append(backdropLayer, pre, textarea, previewLayer, signatureTip, useAutocomplete);
   parent.appendChild(wrap);
@@ -232,16 +266,17 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
     if (textarea.selectionStart !== textarea.selectionEnd) {
       signatureTip.hidden = true;
       useAutocomplete.hidden = true;
+      activeUseCompletion = null;
       return;
     }
     const pos = textarea.selectionStart;
     const text = textarea.value;
 
-    const completions = findUseCompletions(text, pos);
-    if (completions) {
+    const completion = findUseCompletions(text, pos);
+    if (completion) {
       signatureTip.hidden = true;
       useAutocomplete.innerHTML = '';
-      for (const name of completions) {
+      for (const name of completion.matches) {
         const row = document.createElement('div');
         row.className = 'use-autocomplete-item';
         row.textContent = name;
@@ -249,9 +284,11 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
       }
       positionPopupAtCaret(useAutocomplete, pos);
       useAutocomplete.hidden = false;
+      activeUseCompletion = completion;
       return;
     }
     useAutocomplete.hidden = true;
+    activeUseCompletion = null;
 
     const info = findSignatureAt(text, pos);
     if (!info) {
@@ -318,19 +355,40 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
     slider: (n) => `slider('slider${n}', { min: 0, max: 1, default: 0.5 })`,
     button: (n) => `button('button${n}', { default: false })`,
     input: (n) => `input('input${n}', { default: 0 })`,
+    color_picker: (n) => `colorPicker('color${n}', { default: '#ffffff' })`,
   };
+  // $color_picker$'s trigger text (underscored, to read naturally as a
+  // phrase) doesn't match its real call name (colorPicker, camelCase like
+  // every other global) - this is what tryExpandControlSnippet below
+  // counts existing calls against for auto-numbering.
+  const CONTROL_CALL_NAMES = { slider: 'slider', button: 'button', input: 'input', color_picker: 'colorPicker' };
 
-  // A completed $slider$/$button$/$input$ - see CONTROL_SNIPPET_PATTERN
-  // above. The inserted call's name is auto-numbered from how many of
-  // that same kind of call already exist in the file, so pasting several
-  // doesn't produce colliding names by default (still just a starting
-  // point - nothing stops renaming it, same as explode()'s generated keys).
+  // A completed $slider$/$button$/$input$/$color_picker$ - see
+  // CONTROL_SNIPPET_PATTERN above. The inserted call's name is auto-
+  // numbered from how many of that same kind of call already exist in
+  // the file, so pasting several doesn't produce colliding names by
+  // default (still just a starting point - nothing stops renaming it,
+  // same as explode()'s generated keys).
   function tryExpandControlSnippet() {
     const match = textarea.value.match(CONTROL_SNIPPET_PATTERN);
     if (!match) return;
     const type = match[1];
-    const existing = textarea.value.match(new RegExp(`\\b${type}\\(`, 'g')) || [];
+    const callName = CONTROL_CALL_NAMES[type];
+    const existing = textarea.value.match(new RegExp(`\\b${callName}\\(`, 'g')) || [];
     const snippet = CONTROL_SNIPPETS[type](existing.length + 1);
+    replaceRange(match.index, match.index + match[0].length, snippet);
+  }
+
+  // A completed $beatmatch$ - see BEATMATCH_SNIPPET_PATTERN above. Auto-
+  // numbered the same way as CONTROL_SNIPPETS (counting existing `const
+  // beatN =` declarations), just so two in the same node's code() don't
+  // collide as redeclarations of the same variable name.
+  function tryExpandBeatmatchSnippet() {
+    const match = textarea.value.match(BEATMATCH_SNIPPET_PATTERN);
+    if (!match) return;
+    const existing = textarea.value.match(/\bconst beat\d*\s*=/g) || [];
+    const n = existing.length + 1;
+    const snippet = `const beat${n} = beatmatch(120, t, { shape: 'triangle' });`;
     replaceRange(match.index, match.index + match[0].length, snippet);
   }
 
@@ -386,6 +444,102 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
       replaceRange(insertAt, insertAt, buildLoadedNodeEntry(file));
     };
     loadFileInput.click();
+  }
+
+  // "shape1", "shape2", ... - counts existing `shapeN:` keys already in
+  // the file, same idea as CONTROL_SNIPPETS' auto-numbering above, so
+  // triggering $draw$ more than once doesn't produce colliding keys.
+  function nextShapeName() {
+    const existing = textarea.value.match(/\bshape\d*\s*:/g) || [];
+    return `shape${existing.length + 1}`;
+  }
+
+  // A complete `key: { ... },` node entry wired to a drawn shape - an
+  // ImageSource loading a data: URL rather than a real file/network URL,
+  // which is all a data: URL needs to work here (ImageSource's own
+  // `source` argument already accepts any string an <img> src would).
+  function buildDrawnNodeEntry(name, dataUrl) {
+    return (
+      `${name}: {\n` +
+      `  in: {},\n` +
+      `  code(inputs, state, t) {\n` +
+      `    const use = useInstances(state);\n` +
+      `    const img = use(ImageSource, 512, 512);\n` +
+      `    img.tick(${JSON.stringify(dataUrl)}, { fit: 'contain' });\n` +
+      `    return { screen: img };\n` +
+      `  },\n` +
+      `},`
+    );
+  }
+
+  // A completed $draw$ - see DRAW_PATTERN above. Same "remove the
+  // trigger text immediately, insert the real result once the async part
+  // resolves" shape as $load$ above, just with a drawing overlay instead
+  // of a file picker.
+  function tryExpandDraw() {
+    const match = textarea.value.match(DRAW_PATTERN);
+    if (!match) return;
+    const insertAt = match.index;
+    replaceRange(insertAt, insertAt + match[0].length, '');
+    openDrawTool({
+      renderPane,
+      onDone(dataUrl) {
+        replaceRange(insertAt, insertAt, buildDrawnNodeEntry(nextShapeName(), dataUrl));
+      },
+    });
+  }
+
+  // "composeAt1", "composeAt2", ... - same auto-numbering idea as
+  // nextShapeName() above, so triggering $compose_at(n)$ more than once
+  // doesn't produce colliding keys.
+  function nextComposeAtName() {
+    const existing = textarea.value.match(/\bcomposeAt\d*\s*:/g) || [];
+    return `composeAt${existing.length + 1}`;
+  }
+
+  // A complete `key: { ... },` node entry wired to a ComposeAt call -
+  // one input port per rect (in1..inN, 'other.screen' placeholder like
+  // every other template's inputs), each wired into its own box exactly
+  // where it was placed. See lib/compose-at.js for what x/y/w/h mean.
+  function buildComposeAtNodeEntry(name, rects) {
+    const ins = rects.map((_, i) => `      in${i + 1}: 'other.screen',`).join('\n');
+    const rectLines = rects
+      .map(
+        (r, i) =>
+          `        { value: inputs.in${i + 1}, x: ${r.x.toFixed(3)}, y: ${r.y.toFixed(3)}, w: ${r.w.toFixed(3)}, h: ${r.h.toFixed(3)} },`
+      )
+      .join('\n');
+    return (
+      `${name}: {\n` +
+      `  in: {\n${ins}\n  },\n` +
+      `  code(inputs, state, t) {\n` +
+      `    const use = useInstances(state);\n` +
+      `    const composeAt = use(ComposeAt);\n` +
+      `    const out = composeAt.tick([\n${rectLines}\n    ]);\n` +
+      `    return { screen: out };\n` +
+      `  },\n` +
+      `},`
+    );
+  }
+
+  // A completed $compose_at(n)$ - see COMPOSE_AT_PATTERN above. Same
+  // "remove the trigger text immediately, insert the real result once
+  // the overlay's Done button resolves" shape as $draw$, just with a
+  // box-placement overlay (n boxes) instead of freehand drawing.
+  function tryExpandComposeAt() {
+    const match = textarea.value.match(COMPOSE_AT_PATTERN);
+    if (!match) return;
+    const count = parseInt(match[1], 10);
+    if (!(count > 0)) return;
+    const insertAt = match.index;
+    replaceRange(insertAt, insertAt + match[0].length, '');
+    openComposeAtTool({
+      renderPane,
+      count,
+      onDone(rects) {
+        replaceRange(insertAt, insertAt, buildComposeAtNodeEntry(nextComposeAtName(), rects));
+      },
+    });
   }
 
   // Separate from loadFileInput above - only video makes sense here,
@@ -458,6 +612,9 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
       tryExpandExplode();
       tryExpandNodeShortcut();
       tryExpandControlSnippet();
+      tryExpandBeatmatchSnippet();
+      tryExpandDraw(); // no file-picker/fullscreen gesture requirement, unlike Load/Downscale above
+      tryExpandComposeAt(); // same reasoning as $draw$ above
     });
   }
 
@@ -513,6 +670,18 @@ export function createEditor({ parent, doc, onDocChanged, onSend }) {
 
     if (e.key === 'Tab') {
       e.preventDefault();
+      // If the use(...) class-name popup is up, Tab fills in its top
+      // match instead of indenting - the typed prefix always ends
+      // exactly at the caret (see findUseCompletions), so the replace
+      // range is just the last `typed.length` characters before it.
+      if (!useAutocomplete.hidden && activeUseCompletion && activeUseCompletion.matches.length > 0) {
+        const pos = textarea.selectionStart;
+        const from = pos - activeUseCompletion.typed.length;
+        replaceRange(from, pos, activeUseCompletion.matches[0]);
+        useAutocomplete.hidden = true;
+        activeUseCompletion = null;
+        return;
+      }
       const inserted = document.execCommand && document.execCommand('insertText', false, '  ');
       if (!inserted) {
         const { selectionStart: s, selectionEnd: en } = textarea;

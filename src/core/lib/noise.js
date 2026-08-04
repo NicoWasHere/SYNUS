@@ -80,7 +80,9 @@ void main() {
 // see ramp.js's own comment for why (same convention as Composite/Bloom/
 // every fx effect): const out = noise.tick({...}); return { screen: out };
 export class Noise {
-  constructor(width = 512, height = 512) {
+  // No width/height default here - leave them undefined so GLSL's own
+  // default (the live screenSize(), not a fixed 512) takes over.
+  constructor(width, height) {
     this._glsl = new GLSL({ width, height });
   }
 

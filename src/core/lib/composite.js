@@ -137,25 +137,31 @@ out vec4 outColor;
 uniform sampler2D uA;
 uniform sampler2D uB;
 uniform sampler2D uMatte;
+uniform float uMode; // 0 = lightness (luma of matte's rgb), 1 = matte's own alpha
 
 void main() {
   vec4 a = texture(uA, vUv);
   vec4 b = texture(uB, vUv);
-  float m = dot(texture(uMatte, vUv).rgb, vec3(0.299, 0.587, 0.114));
+  vec4 matte = texture(uMatte, vUv);
+  float m = uMode > 0.5 ? matte.a : dot(matte.rgb, vec3(0.299, 0.587, 0.114));
   outColor = mix(a, b, m);
 }`;
 
-// new Matte() inside a node's code(). tick(a, b, matte) mixes a and b
-// per-pixel using a third source's own luminance as the mix factor (0 =
-// all a, 1 = all b) - a luma matte/mask, the classic way to key one
-// layer through the shape of a separate (often plain black/white)
-// source instead of relying on that source's own alpha channel.
+// new Matte() inside a node's code(). tick(a, b, matte, { mode }) mixes a
+// and b per-pixel using a third source as the mix factor (0 = all a, 1 =
+// all b) - the classic way to key one layer through the shape of a
+// separate mask/matte source instead of relying on a's/b's own alpha.
+// mode: 'lightness' (default - the matte's luma, right for a plain
+// black/white shape drawn with Canvas2D/GLSL) or 'alpha' (the matte's own
+// alpha channel - right for a matte that's already a proper cutout, e.g.
+// a Mask/ChromaKey/Instance/particle2d result, rather than a flat white
+// shape on a black background).
 export class Matte {
   constructor() {
     this._glsl = new GLSL();
   }
-  tick(a, b, matte) {
-    this._glsl.tick(MATTE_FRAG, { uA: a, uB: b, uMatte: matte });
+  tick(a, b, matte, { mode = 'lightness' } = {}) {
+    this._glsl.tick(MATTE_FRAG, { uA: a, uB: b, uMatte: matte, uMode: mode === 'alpha' ? 1 : 0 });
     return this._glsl;
   }
 }

@@ -107,6 +107,20 @@
       }
       #fullscreen-btn:hover { background: #2c2c2c; }
 
+      /* Small, deliberately unobtrusive - docs are one click away but
+         shouldn't compete with the actual controls above for attention. */
+      #docs-link {
+        position: fixed;
+        bottom: 8px;
+        right: 10px;
+        z-index: 100;
+        color: #666;
+        font-family: inherit;
+        font-size: 11px;
+        text-decoration: none;
+      }
+      #docs-link:hover { color: #999; text-decoration: underline; }
+
       #app.perform-mode #render-pane {
         position: fixed;
         inset: 0;
@@ -317,12 +331,16 @@
       .node-reset-btn:hover { color: #eee; border-color: #888; }
 
       /* $slider$/$button$/$input$ widgets (see ui/control-panel.js) -
-         same floating-overlay trick as preview cards, but these need
-         real pointer interaction, so pointer-events is turned back on
-         just for these (the parent .preview-overlay disables it so the
-         overlay itself never blocks clicking into the code underneath). */
+         anchored to the same top-right-of-node column as .node-preview
+         (not inline after the call's own line - see control-panel.js's
+         getStackBottom() usage, which also keeps these from overlapping
+         a preview card on the same node), but pointer-events is turned
+         back on just for these (the parent .preview-overlay disables it
+         so the overlay itself never blocks clicking into the code
+         underneath). */
       .control-widget {
         position: absolute;
+        right: 8px;
         z-index: 4;
         display: flex;
         align-items: center;
@@ -346,6 +364,15 @@
         border: 1px solid #444;
         border-radius: 3px;
         font: inherit;
+      }
+      .control-widget input[type="color"] {
+        width: 28px;
+        height: 20px;
+        padding: 0;
+        background: none;
+        border: 1px solid #444;
+        border-radius: 3px;
+        cursor: pointer;
       }
       .control-widget button {
         background: #2c2c2c;
@@ -413,6 +440,7 @@
       </div>
       <div id="render-pane"></div>
     </div>
+    <a id="docs-link" href="docs/" target="_blank" rel="noopener">docs</a>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
