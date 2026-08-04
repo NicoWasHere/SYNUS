@@ -57,6 +57,9 @@ function makeEffectClass(name, frag, toUniforms) {
       this._glsl.tick(frag, { uSrc: src, uTexel, ...toUniforms(...args) });
       return this._glsl;
     }
+    dispose() {
+      this._glsl.dispose();
+    }
   };
   Object.defineProperty(cls, 'name', { value: capitalize(name) });
   return cls;
@@ -106,3 +109,5 @@ export const CRT = FX.crt;
 export const FilmGrain = FX.filmGrain;
 export const Bitmap = FX.bitmap;
 export const ChannelThreshold = FX.channelThreshold;
+export const ScanLines = FX.scanLines;
+export const Crop = FX.crop;

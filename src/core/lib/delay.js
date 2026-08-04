@@ -103,4 +103,14 @@ export class Delay {
     if (this.filled <= this.ticks) return value;
     return { texture: outSlot.texture, width, height };
   }
+  dispose() {
+    const gl = getGL();
+    if (this.pool) {
+      for (const { texture, fbo } of this.pool) {
+        gl.deleteTexture(texture);
+        gl.deleteFramebuffer(fbo);
+      }
+    }
+    if (this._program) gl.deleteProgram(this._program);
+  }
 }

@@ -27,6 +27,7 @@ export class AudioSource {
       navigator.mediaDevices
         .getUserMedia({ audio: true, video: false })
         .then((stream) => {
+          this._stream = stream;
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           const src = this.audioCtx.createMediaStreamSource(stream);
           this.analyser = this.audioCtx.createAnalyser();
@@ -100,5 +101,13 @@ export class AudioSource {
       out[i] = (this._timeData[idx] - 128) / 128;
     }
     return out;
+  }
+
+  // Same reasoning as WebcamSource.dispose() - stopping the stream's own
+  // tracks is what actually releases the mic (and clears the browser's
+  // recording indicator); closing the AudioContext alone doesn't.
+  dispose() {
+    if (this._stream) for (const track of this._stream.getTracks()) track.stop();
+    if (this.audioCtx) this.audioCtx.close().catch(() => {});
   }
 }

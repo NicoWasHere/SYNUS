@@ -286,6 +286,56 @@ export const EFFECTS = {
     // of one shared luma cutoff - see Threshold for the grayscale version.
     toUniforms: ({ r = 0.5, g = 0.5, b = 0.5 } = {}) => ({ uLevels: [r, g, b] }),
   },
+
+  scanLines: {
+    frag: shaders.SCAN_LINES,
+    // scanLines(src, { spacing = 22, thickness = 2, maxWobble = 50,
+    //                   wobbleFreq = 0.05, vertical = false,
+    //                   color = '#ffffff', darkCutoff = 0.08, t = 0,
+    //                   seed = 0 })
+    // Always-oscillating wavy lines - src's own lightness at a point
+    // drives how far THAT point's wave swings (maxWobble), not the
+    // line's thickness anymore (thickness is its own fixed parameter).
+    // Each line gets its own random phase/frequency jitter (see `seed` -
+    // change it for a different random pattern) so neighboring lines
+    // don't wobble as identical copies of each other. `t` is needed for
+    // the oscillation to actually animate - pass the node's own `t`.
+    // Never draws over src pixels darker than darkCutoff, so the pattern
+    // traces bright content instead of covering the whole frame. Output
+    // is transparent wherever no line is drawn - Composite it over a
+    // background rather than expecting solid black there.
+    toUniforms: ({
+      spacing = 22,
+      thickness = 2,
+      maxWobble = 50,
+      wobbleFreq = 0.05,
+      vertical = false,
+      color = '#ffffff',
+      darkCutoff = 0.08,
+      t = 0,
+      seed = 0,
+    } = {}) => ({
+      uSpacing: spacing,
+      uThickness: thickness,
+      uMaxWobble: maxWobble,
+      uWobbleFreq: wobbleFreq,
+      uVertical: vertical ? 1 : 0,
+      uColor: toRgb(color),
+      uDarkCutoff: darkCutoff,
+      uTime: t,
+      uSeed: seed,
+    }),
+  },
+
+  crop: {
+    frag: shaders.CROP,
+    // crop(src, { x = 0, y = 0, w = 1, h = 1 })  -  extracts src's
+    // [x,y,w,h] sub-rectangle (x,y = top-left corner, 0..1, y=0 at top -
+    // same convention as ComposeAt) and stretches it to fill the whole
+    // frame. NOT the same as Mask (cuts a hole in place, doesn't move or
+    // rescale anything).
+    toUniforms: ({ x = 0, y = 0, w = 1, h = 1 } = {}) => ({ uRect: [x, y, w, h] }),
+  },
 };
 
 function toRgb(color) {

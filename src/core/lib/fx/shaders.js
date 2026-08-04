@@ -628,3 +628,70 @@ void main() {
   vec3 col = step(uLevels, src.rgb);
   outColor = vec4(col, src.a);
 }`;
+
+// Periodic horizontal (or vertical) lines that ALWAYS oscillate up/down
+// (a sine wave riding each line's own position, animated by uTime) -
+// src's own lightness at a point drives how far THAT point's wave swings
+// (uMaxWobble), not the line's thickness (uThickness is its own fixed
+// parameter now). Each line gets its OWN random phase + a little
+// frequency variation (via HASH, keyed on that line's own band index) so
+// neighboring lines wobble independently instead of all being identical
+// copies of the same wave. Dark content still draws no line at all,
+// which is what makes the pattern read as tracing/conforming to
+// whatever's bright in the frame rather than a uniform grid painted over
+// everything. A simpler, single-pass approximation of "trace the
+// silhouette" - not a literal per-row edge scan.
+export const SCAN_LINES = `${HEADER}${HASH}
+uniform sampler2D uSrc;
+uniform float uSpacing;    // texels between adjacent line centers
+uniform float uThickness;  // line thickness, in texels - fixed, not luma-driven
+uniform float uMaxWobble;  // max wave swing, in texels, at luma = 1
+uniform float uWobbleFreq; // spatial frequency of the wave along the line's own length
+uniform float uVertical;   // 0 = horizontal lines, 1 = vertical
+uniform vec3 uColor;
+uniform float uDarkCutoff; // src luma below this never draws a line at all
+uniform float uTime;       // keeps the oscillation moving
+uniform float uSeed;       // reshuffles the per-line random phase/frequency jitter
+
+void main() {
+  vec4 src = texture(uSrc, vUv);
+  float luma = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+
+  // "across" = the axis that decides which line-band a pixel falls in
+  // (perpendicular to the lines); "along" = the axis a line runs along,
+  // which is what the wave's phase travels down.
+  float acrossPx = mix(gl_FragCoord.y, gl_FragCoord.x, uVertical);
+  float alongPx = mix(gl_FragCoord.x, gl_FragCoord.y, uVertical);
+
+  float cellSize = max(uSpacing, 1.0);
+  float center = cellSize * 0.5;
+  float bandIndex = floor(acrossPx / cellSize);
+
+  float phaseJitter = hash(vec2(bandIndex, uSeed)) * 6.2831853;
+  float freqJitter = 0.7 + hash(vec2(bandIndex, uSeed + 0.5)) * 0.6;
+
+  float wave = sin(alongPx * uWobbleFreq * freqJitter + uTime + phaseJitter) * (luma * uMaxWobble);
+  float linePos = mod(acrossPx - wave, cellSize);
+  float halfThickness = max(uThickness, 0.0) * 0.5;
+
+  float within = step(abs(linePos - center), halfThickness);
+  float visible = within * step(uDarkCutoff, luma);
+
+  outColor = vec4(uColor * visible, src.a * visible);
+}`;
+
+// Extracts a sub-rectangle of src and stretches it to fill the whole
+// frame - the "cut this part out and blow it up" meaning of crop, as
+// opposed to Mask (cuts a hole in place, doesn't reposition/rescale
+// anything) or Scale/Translate (moves the WHOLE frame, not a sub-region).
+// uRect is x,y (top-left corner, 0..1, y=0 at the top - same convention
+// ComposeAt/compose-at.js uses) and w,h (size, 0..1).
+export const CROP = `${HEADER}${SAMPLE_CLAMPED}
+uniform sampler2D uSrc;
+uniform vec4 uRect;
+
+void main() {
+  vec2 screenUv = vec2(vUv.x, 1.0 - vUv.y);
+  vec2 sourceUv = uRect.xy + screenUv * uRect.zw;
+  outColor = sampleClamped(uSrc, vec2(sourceUv.x, 1.0 - sourceUv.y));
+}`;

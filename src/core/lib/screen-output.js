@@ -32,4 +32,7 @@ export class ScreenOutput {
     gl.uniform1i(loc, 0);
     drawFullscreenQuad(gl, this.program);
   }
+  dispose() {
+    this.gl.deleteProgram(this.program);
+  }
 }

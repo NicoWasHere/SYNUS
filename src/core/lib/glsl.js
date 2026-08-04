@@ -108,4 +108,19 @@ export class GLSL {
     }
     drawFullscreenQuad(gl, this.program);
   }
+
+  // Frees this instance's own GPU resources (texture, framebuffer,
+  // compiled program) - called when the NODE that constructed it
+  // disappears from the project entirely (see graph.js's disposeState()),
+  // not on every edit; state (and everything use() built inside it)
+  // otherwise persists across edits by design. Without this, a removed
+  // node's textures/framebuffers just sit on the GPU as JS garbage,
+  // reclaimed only whenever the garbage collector gets around to it -
+  // fine for one edit, but adds up if you keep restructuring a project.
+  dispose() {
+    const gl = this.gl;
+    gl.deleteTexture(this.texture);
+    gl.deleteFramebuffer(this.fbo);
+    if (this.program) gl.deleteProgram(this.program);
+  }
 }

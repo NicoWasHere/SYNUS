@@ -96,4 +96,7 @@ export class Scope {
     canvas.upload();
     return canvas;
   }
+  dispose() {
+    this._canvas?.dispose();
+  }
 }

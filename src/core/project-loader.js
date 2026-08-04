@@ -14,7 +14,9 @@ import { COLORS } from './lib/colors.js';
 import { Lag } from './lib/lag.js';
 import { Delay } from './lib/delay.js';
 import { Bloom } from './lib/bloom.js';
+import { Flow } from './lib/flow.js';
 import { Ramp } from './lib/ramp.js';
+import { Gradient } from './lib/gradient.js';
 import { Noise } from './lib/noise.js';
 import { Pattern } from './lib/pattern.js';
 import { Scope } from './lib/scope.js';
@@ -69,6 +71,8 @@ import {
   FilmGrain,
   Bitmap,
   ChannelThreshold,
+  ScanLines,
+  Crop,
 } from './lib/fx/effects.js';
 import { explode } from './lib/explode.js';
 
@@ -78,7 +82,7 @@ import { explode } from './lib/explode.js';
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
-// beatmatch / beatEnvelope / COLORS / Lag / Delay / Bloom / Ramp / Noise / Pattern / Scope / ImageSource /
+// beatmatch / beatEnvelope / COLORS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / orbitCamera / THREE /
 // screenSize / viewportSize / mouse / keyPulse / newPatch / sampleTexture / render /
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
@@ -89,7 +93,7 @@ import { explode } from './lib/explode.js';
 // Edge, Emboss, Mirror, Tile, Kaleidoscope, Modulate, Displace,
 // Vignette, Pixelate, Posterize, ColorLookup, Mask, ChromaKey,
 // GradientMap, Fisheye, Invert, Colorize, CRT, FilmGrain, Bitmap,
-// ChannelThreshold), are exposed as plain
+// ChannelThreshold, ScanLines, Crop), are exposed as plain
 // globals so project code can write `new GLSL()`, `use(Rotate).tick(...)`,
 // `render(out)`, or `preview(out)` with zero import boilerplate. A
 // project file is still free to `import` anything else it wants at the
@@ -110,7 +114,9 @@ export async function loadProject(gl, source) {
   window.Lag = Lag;
   window.Delay = Delay;
   window.Bloom = Bloom;
+  window.Flow = Flow;
   window.Ramp = Ramp;
+  window.Gradient = Gradient;
   window.Noise = Noise;
   window.Pattern = Pattern;
   window.Scope = Scope;
@@ -182,6 +188,8 @@ export async function loadProject(gl, source) {
   window.FilmGrain = FilmGrain;
   window.Bitmap = Bitmap;
   window.ChannelThreshold = ChannelThreshold;
+  window.ScanLines = ScanLines;
+  window.Crop = Crop;
 
   const blob = new Blob([source], { type: 'text/javascript' });
   const url = URL.createObjectURL(blob);

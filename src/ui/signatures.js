@@ -61,7 +61,10 @@ export const SIGNATURES = {
   },
   VideoSource: {
     ctor: 'new VideoSource(width = 512, height = 512)',
-    tick: 'vid.tick(url)  // loops, muted, autoplays',
+    tick:
+      "vid.tick(url, { fit = 'contain', start = 0, end = 100 })  // loops, muted, autoplays\n" +
+      '// start/end: 0..100, percent of the video\'s own duration - trims both playback and looping\n' +
+      '// to that window, e.g. { start: 25, end: 75 } loops only the middle half',
   },
   WebcamSource: {
     ctor: 'new WebcamSource(width = 512, height = 512)',
@@ -137,10 +140,19 @@ export const SIGNATURES = {
   Bloom: {
     ctor: 'new Bloom()',
     tick:
-      'bloom.tick(src, { threshold, softness, wideBaseRadius, wideGain, wobbleAmount, wobbleSpeed,\n' +
-      '                   feedback, tightBaseRadius, tightGain, t })\n' +
+      'bloom.tick(src, { threshold = 0.6, softness = 0.2, wideRadius = 6, wideGain = 1.5,\n' +
+      '                   tightRadius = 2, tightGain = 2 })\n' +
+      '// basic/cheap glow - one blur pass per direction, no wobble/feedback (~8 draws a tick vs\n' +
+      "// Flow's ~30). Reach for this by default; use Flow for the wobble/feedback look.",
+  },
+  Flow: {
+    ctor: 'new Flow()',
+    tick:
+      'flow.tick(src, { threshold, softness, wideBaseRadius, wideGain, wobbleAmount, wobbleSpeed,\n' +
+      '                  feedback, tightBaseRadius, tightGain, t })\n' +
       '// threshold=0.6 softness=0.2 wideBaseRadius=2 wideGain=1.5 wobbleAmount=0.015 wobbleSpeed=0.15\n' +
-      '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate',
+      '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate.\n' +
+      '// Heavy (~30 draws/tick) - if tps drops more than you want, use Bloom instead.',
   },
   ColorLookup: {
     ctor: 'new ColorLookup()',
@@ -203,6 +215,22 @@ export const SIGNATURES = {
       'channelThreshold.tick(src, { r = 0.5, g = 0.5, b = 0.5 })\n' +
       '// thresholds r/g/b independently (up to 8 output colors) - NOT the same as grayscale Threshold',
   },
+  ScanLines: {
+    ctor: 'new ScanLines()',
+    tick:
+      'scanLines.tick(src, { spacing = 25, thickness = 2, maxWobble = 10 wobbleFreq = 0.05,\n' +
+      "                       vertical = false, color = '#ffffff', darkCutoff = 0.08, t = 0, seed = 0 })\n" +
+      '// lines always oscillate up/down - src lightness drives wave SWING (maxWobble), not thickness\n' +
+      '// (its own fixed param now). t animates it; seed reshuffles the per-line random phase/frequency\n' +
+      '// jitter (each line wobbles independently, not as identical copies). Never draws over dark pixels.',
+  },
+  Crop: {
+    ctor: 'new Crop()',
+    tick:
+      'crop.tick(src, { x = 0, y = 0, w = 1, h = 1 })\n' +
+      "// extracts src's [x,y,w,h] sub-rect (x,y = top-left, 0..1) and stretches it to fill the frame -\n" +
+      "// NOT Mask (cuts a hole in place, doesn't move/rescale anything)",
+  },
   AudioSource: {
     ctor: 'new AudioSource(fftSize = 2048)  // fftSize must be a power of 2',
     tick:
@@ -214,6 +242,12 @@ export const SIGNATURES = {
   Ramp: {
     ctor: 'new Ramp(width = 512, height = 512)',
     tick: "out = ramp.tick({ angle = 0, from = [0,0,0], to = [1,1,1] })\n// use out, not ramp itself - ramp is the wrapper, tick()'s return value is the actual texture",
+  },
+  Gradient: {
+    ctor: 'new Gradient(width = 256, height = 8)',
+    tick:
+      'out = gradient.tick(colors, stops)  // colors: hex/[r,g,b]/COLORS.X array. stops: 0..1, optional\n' +
+      '// use out, not gradient itself. stops omitted -> evenly spaced. Any number of colors, unlike Ramp',
   },
   Noise: {
     ctor: 'new Noise(width = 512, height = 512)',

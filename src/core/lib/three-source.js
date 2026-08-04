@@ -80,4 +80,17 @@ export class ThreeSource {
     entry.texture.needsUpdate = true;
     return entry.texture;
   }
+
+  // Each ThreeSource owns a WHOLE separate WebGL context (see the class
+  // comment above) - browsers cap how many can exist at once (commonly
+  // ~8-16), so leaving these to garbage collection alone is riskier than
+  // the plain-texture classes elsewhere in this file: renderer.dispose()
+  // frees three.js's own internal GL resources, but forceContextLoss()
+  // is what actually releases the CONTEXT ITSELF back to the browser.
+  dispose() {
+    if (this._projected) for (const entry of this._projected.values()) entry.texture.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
+    this.gl.deleteTexture(this.texture);
+  }
 }

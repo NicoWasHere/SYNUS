@@ -1,3 +1,7 @@
+import { disposeState } from '../core/lib/dispose-state.js';
+import { disposeParticlesForNode } from '../core/lib/instance.js';
+import { disposeAsciiForNode } from '../core/lib/ascii.js';
+
 // One small "reset state" button per node, anchored to the left margin
 // of that node's own opening line (see main.js, which computes each
 // node's line via ui/node-parser.js and calls setPositions() - same data
@@ -58,7 +62,14 @@ export class ResetPanel {
     btn.title = `Reset ${id}'s persistent state (re-runs any if (!state.x) setup)`;
     btn.addEventListener('click', () => {
       const node = this.graph.nodes.get(id);
-      if (node) node.state = {};
+      if (!node) return;
+      // Same reasoning as main.js's mode-toggle handler - free the OLD
+      // state's resources before replacing it, rather than leaving them
+      // as JS garbage (see dispose-state.js).
+      disposeState(node.state);
+      disposeParticlesForNode(id);
+      disposeAsciiForNode(id);
+      node.state = {};
     });
     return btn;
   }

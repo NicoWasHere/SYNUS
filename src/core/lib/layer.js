@@ -21,4 +21,7 @@ export class Layer {
     }
     return acc;
   }
+  dispose() {
+    for (const c of this._composites) c.dispose();
+  }
 }

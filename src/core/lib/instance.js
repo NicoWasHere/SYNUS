@@ -235,6 +235,15 @@ export class Instance {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return this;
   }
+  dispose() {
+    const gl = this.gl;
+    if (this.texture) gl.deleteTexture(this.texture);
+    if (this.fbo) gl.deleteFramebuffer(this.fbo);
+    if (this.program) gl.deleteProgram(this.program);
+    if (this.vao) gl.deleteVertexArray(this.vao);
+    if (this.quadBuffer) gl.deleteBuffer(this.quadBuffer);
+    if (this.instanceBuffer) gl.deleteBuffer(this.instanceBuffer);
+  }
 }
 
 // particle2d(source, cols, rows, stamp, options) - the batteries-included
@@ -274,6 +283,20 @@ let particleCallCounts = new Map(); // nodeId -> how many times particle2d() has
 
 export function beginParticleTick() {
   particleCallCounts = new Map();
+}
+
+// particle2d() keys its Instance cache by call site (nodeId/"nodeId#n"),
+// NOT through useInstances - so a removed node's particle systems live
+// OUTSIDE node.state and graph.js's normal disposeState() walk can't see
+// them. Called from graph.js when a node id disappears from the project,
+// so these don't leak the same way an unwired VideoSource would.
+export function disposeParticlesForNode(nodeId) {
+  for (const [key, inst] of particleCache) {
+    if (key === nodeId || key.startsWith(`${nodeId}#`)) {
+      inst.dispose();
+      particleCache.delete(key);
+    }
+  }
 }
 
 export function particle2d(source, cols, rows, stamp, options = {}) {

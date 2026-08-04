@@ -70,4 +70,7 @@ export class ComposeAt {
     this._glsl.tick(this._frag, uniforms);
     return this._glsl;
   }
+  dispose() {
+    this._glsl.dispose();
+  }
 }

@@ -95,4 +95,7 @@ export class Noise {
     });
     return this._glsl;
   }
+  dispose() {
+    this._glsl.dispose();
+  }
 }

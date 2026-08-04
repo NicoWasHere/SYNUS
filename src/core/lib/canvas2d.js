@@ -24,4 +24,11 @@ export class Canvas2D {
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.canvas);
   }
+
+  // Frees the GL texture - see GLSL.dispose()'s comment for when/why this
+  // gets called. this.canvas/this.ctx are plain DOM/2D objects, not GPU
+  // resources - ordinary GC handles those fine on its own.
+  dispose() {
+    this.gl.deleteTexture(this.texture);
+  }
 }

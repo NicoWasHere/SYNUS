@@ -169,6 +169,12 @@ export class ImageSource {
     }
     return this;
   }
+  dispose() {
+    this.img.onload = null;
+    this.img.src = '';
+    if (this._blobUrl) URL.revokeObjectURL(this._blobUrl);
+    this.gl.deleteTexture(this.texture);
+  }
 }
 
 // new VideoSource(width, height) inside a node's code(), or
@@ -187,6 +193,10 @@ export class ImageSource {
 // the browser keep decoding - on a large/high-bitrate file already
 // struggling to decode in real time, that competition can be the
 // difference between smooth playback and visibly falling behind.
+//
+// No native video.loop - looping is handled in tick() below instead (see
+// its start/end options), so a trimmed range loops just that range;
+// native loop only ever loops the whole file, 0..duration.
 export class VideoSource {
   constructor(width = 512, height = 512) {
     this.gl = getGL();
@@ -200,23 +210,47 @@ export class VideoSource {
     this.lastUrl = null;
     this.video = document.createElement('video');
     this.video.crossOrigin = 'anonymous';
-    this.video.loop = true;
     this.video.muted = true;
     this.video.playsInline = true;
   }
 
-  tick(source, { fit = 'contain' } = {}) {
+  // start/end trim the video to a [start%, end%] window of its own
+  // duration (0..100, defaults to the whole file) - both playback AND
+  // looping stay inside that window, e.g. { start: 25, end: 75 } plays
+  // and loops only the middle half. duration isn't known until the video
+  // has loaded enough metadata (readyState >= 2, same gate the existing
+  // draw already waited on), so this only takes effect once that's true.
+  tick(source, { fit = 'contain', start = 0, end = 100 } = {}) {
     const url = resolveSource(this, source);
     if (url !== this.lastUrl) {
       this.lastUrl = url;
       this.video.src = url;
       this.video.play().catch(() => {});
     }
-    if (this.video.readyState >= 2) {
+    if (this.video.readyState >= 2 && this.video.duration) {
+      const startTime = (start / 100) * this.video.duration;
+      const endTime = (end / 100) * this.video.duration;
+      if (this.video.currentTime < startTime || this.video.currentTime >= endTime) {
+        this.video.currentTime = startTime;
+      }
+      // Reaching the end of the file (or of a trimmed range once seeked
+      // past it) pauses the element - without native video.loop, nothing
+      // else ever resumes it, so seeking currentTime back to startTime
+      // alone left it sitting there paused on the first frame forever
+      // instead of actually looping. Re-triggering .play() every time
+      // it's found paused is what makes the loop keep going.
+      if (this.video.paused) this.video.play().catch(() => {});
       capToNativeSize(this, this.video.videoWidth, this.video.videoHeight);
       drawLetterboxed(this.gl, this.ctx, this.canvas, this.texture, this.video, this.video.videoWidth, this.video.videoHeight, fit);
     }
     return this;
+  }
+  dispose() {
+    this.video.pause();
+    this.video.removeAttribute('src');
+    this.video.load(); // actually releases the decoder, removeAttribute alone doesn't
+    if (this._blobUrl) URL.revokeObjectURL(this._blobUrl);
+    this.gl.deleteTexture(this.texture);
   }
 }
 
@@ -273,5 +307,17 @@ export class WebcamSource {
       drawLetterboxed(this.gl, this.ctx, this.canvas, this.texture, this.video, this.video.videoWidth, this.video.videoHeight, 'cover');
     }
     return this;
+  }
+  // Stopping every track is what actually turns the camera off (and
+  // clears the browser's recording indicator) - pausing the <video>
+  // element alone leaves the underlying MediaStream (and the camera
+  // hardware itself) still running.
+  dispose() {
+    const stream = this.video.srcObject;
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+      this.video.srcObject = null;
+    }
+    this.gl.deleteTexture(this.texture);
   }
 }

@@ -53,4 +53,9 @@ export class Html {
     this.img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     return this;
   }
+  dispose() {
+    this.img.onload = null;
+    this.img.src = '';
+    this.gl.deleteTexture(this.texture);
+  }
 }

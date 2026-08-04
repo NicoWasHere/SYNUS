@@ -82,4 +82,14 @@ export class HydraSource {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.canvas);
     return this;
   }
+
+  // Same "owns a whole separate WebGL context" concern as ThreeSource -
+  // hydra-synth is built on regl, and regl.destroy() is what actually
+  // releases that context back to the browser (it calls the
+  // WEBGL_lose_context extension internally), not just hydra's own
+  // internal GPU resources.
+  dispose() {
+    this.hydra.regl.destroy();
+    this.gl.deleteTexture(this.texture);
+  }
 }

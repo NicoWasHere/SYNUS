@@ -77,4 +77,10 @@ export class Lag {
     }
     return this.value;
   }
+  dispose() {
+    const gl = getGL();
+    if (this._texture) gl.deleteTexture(this._texture);
+    if (this._fbo) gl.deleteFramebuffer(this._fbo);
+    if (this._program) gl.deleteProgram(this._program);
+  }
 }

@@ -128,6 +128,9 @@ export class Composite {
     this._glsl.tick(FRAG, { uA: a, uB: b, uMode: code, uOpacity: opacity });
     return this._glsl;
   }
+  dispose() {
+    this._glsl.dispose();
+  }
 }
 
 const MATTE_FRAG = `#version 300 es
@@ -163,5 +166,8 @@ export class Matte {
   tick(a, b, matte, { mode = 'lightness' } = {}) {
     this._glsl.tick(MATTE_FRAG, { uA: a, uB: b, uMatte: matte, uMode: mode === 'alpha' ? 1 : 0 });
     return this._glsl;
+  }
+  dispose() {
+    this._glsl.dispose();
   }
 }

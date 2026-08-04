@@ -38,4 +38,7 @@ export class Ramp {
     this._glsl.tick(RAMP_FRAG, { uAngle: (angle * Math.PI) / 180, uFrom: from, uTo: to });
     return this._glsl;
   }
+  dispose() {
+    this._glsl.dispose();
+  }
 }

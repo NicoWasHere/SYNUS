@@ -88,6 +88,19 @@ const DRAW_PATTERN = /\$draw\$/;
 // same as $draw$/$load$.
 const COMPOSE_AT_PATTERN = /\$compose_at\((\d+)\)\$/;
 
+// $feedback$ - a complete, standalone feedback-loop skeleton: an "in"
+// passthrough (wire this to your real source), a Composite ("comp") that
+// mixes that source against the loop's own fed-back output, a Delay
+// (Composite's `b` input MUST go through Delay/Lag, never straight back
+// to comp's own output - see the composite template's comment for why),
+// and an "effect" node (the $effect$ template's own base/out shape) in
+// between Delay and comp to actually process what's looping. Rewire the
+// "effect" node's body to whatever transform you want trailing/
+// accumulating - same "just a starting point" convention as every other
+// bare $name$ template. Standalone only (generates 4 of its own keys),
+// same as $draw$/$compose_at$ - not for `someKey: $feedback$`-style use.
+const FEEDBACK_PATTERN = /\$feedback\$/;
+
 // $slider$/$button$/$input$ - inline snippets for lib/controls.js's
 // globals, each expanding to a call with an auto-numbered placeholder
 // name (e.g. "slider2" if one "slider(" call already exists) rather than
@@ -542,6 +555,69 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     });
   }
 
+  // "feedback1", "feedback2", ... - same auto-numbering idea as
+  // nextShapeName()/nextComposeAtName() above, so triggering $feedback$
+  // more than once doesn't produce colliding keys across its 4 nodes.
+  function nextFeedbackName() {
+    const existing = textarea.value.match(/\bfeedbackIn\d*\s*:/g) || [];
+    return `feedback${existing.length + 1}`;
+  }
+
+  // A complete feedback-loop skeleton - see FEEDBACK_PATTERN above for
+  // the shape (in -> comp -> delay -> effect -> back into comp).
+  function buildFeedbackNodeEntry(n) {
+    return [
+      `${n}In: {`,
+      `  in: { src: 'other.screen' },`,
+      `  code(inputs, state, t) {`,
+      `    return { screen: inputs.src };`,
+      `  },`,
+      `},`,
+      ``,
+      `// modes: over, atop, xor, multiply, screen, darken, lighten, add,`,
+      `// difference, hardLight, softLight, lightest, darkest`,
+      `${n}Comp: {`,
+      `  in: { a: '${n}In.screen', b: '${n}Effect.screen' },`,
+      `  code(inputs, state, t) {`,
+      `    const use = useInstances(state);`,
+      `    const out = use(Composite).tick(inputs.a, inputs.b, 'over', 1);`,
+      `    return { screen: out };`,
+      `  },`,
+      `},`,
+      ``,
+      `${n}Delay: {`,
+      `  in: { src: '${n}Comp.screen' },`,
+      `  code(inputs, state, t) {`,
+      `    const use = useInstances(state);`,
+      `    const ticks = 1; // <- change this; passed to tick()'s second`,
+      `    // argument (not the constructor) so editing it takes effect live`,
+      `    const out = use(Delay, undefined, 'nearest').tick(inputs.src, ticks);`,
+      `    return { screen: out };`,
+      `  },`,
+      `},`,
+      ``,
+      `${n}Effect: {`,
+      `  in: { src: '${n}Delay.screen' },`,
+      `  code(inputs, state, t) {`,
+      `    const use = useInstances(state);`,
+      `    const base = inputs.src;`,
+      `    let out = base; // <- put whatever should trail/accumulate here`,
+      `    return { screen: out };`,
+      `  },`,
+      `},`,
+    ].join('\n');
+  }
+
+  // A completed $feedback$ - see FEEDBACK_PATTERN above. Same "remove the
+  // trigger text, insert the real result" shape as $draw$/$compose_at$,
+  // just synchronous (no overlay/picker to wait on).
+  function tryExpandFeedback() {
+    const match = textarea.value.match(FEEDBACK_PATTERN);
+    if (!match) return;
+    const insertAt = match.index;
+    replaceRange(insertAt, insertAt + match[0].length, buildFeedbackNodeEntry(nextFeedbackName()));
+  }
+
   // Separate from loadFileInput above - only video makes sense here,
   // and keeping them apart means picking a file for one never has to
   // reason about the other's onchange handler.
@@ -615,6 +691,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       tryExpandBeatmatchSnippet();
       tryExpandDraw(); // no file-picker/fullscreen gesture requirement, unlike Load/Downscale above
       tryExpandComposeAt(); // same reasoning as $draw$ above
+      tryExpandFeedback(); // purely synchronous, no overlay/picker involved at all
     });
   }
 

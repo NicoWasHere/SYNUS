@@ -1,8 +1,9 @@
 import { setCurrentNode } from './lib/current-node.js';
 import { beginPreviewTick } from './lib/preview-sink.js';
 import { beginControlsTick } from './lib/controls.js';
-import { beginParticleTick } from './lib/instance.js';
-import { beginAsciiTick } from './lib/ascii.js';
+import { beginParticleTick, disposeParticlesForNode } from './lib/instance.js';
+import { beginAsciiTick, disposeAsciiForNode } from './lib/ascii.js';
+import { disposeState } from './lib/dispose-state.js';
 
 // Every node is just { id, code, inputs, state, error, lastOutputs}.
 // "Type" isn't a structural property - it's whichever lib class (GLSL,
@@ -29,7 +30,19 @@ export class Graph {
       node.inputs = def.in || {};
     }
     for (const id of [...this.nodes.keys()]) {
-      if (!projectNodes[id]) this.nodes.delete(id);
+      if (!projectNodes[id]) {
+        // Free whatever this node's own code() built up (GLSL/Canvas2D
+        // textures, a still-playing video, a live mic/camera stream, ...)
+        // before dropping it - see dispose-state.js for why this can't
+        // just be left to the garbage collector. particle2d()/ascii2d()
+        // key their own instance caches by node id rather than through
+        // useInstances, so they need their own separate cleanup call.
+        const node = this.nodes.get(id);
+        disposeState(node.state);
+        disposeParticlesForNode(id);
+        disposeAsciiForNode(id);
+        this.nodes.delete(id);
+      }
     }
   }
 

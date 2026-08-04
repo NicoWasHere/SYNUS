@@ -4,6 +4,9 @@ import { setViewportSize } from './core/lib/context.js';
 import { DataBus } from './core/bus.js';
 import { Clock } from './core/clock.js';
 import { Graph } from './core/graph.js';
+import { disposeState } from './core/lib/dispose-state.js';
+import { disposeParticlesForNode } from './core/lib/instance.js';
+import { disposeAsciiForNode } from './core/lib/ascii.js';
 import { loadProject } from './core/project-loader.js';
 import { readTextureToImageData } from './core/lib/texture-preview.js';
 import { getPreviewRequests } from './core/lib/preview-sink.js';
@@ -203,7 +206,16 @@ modeToggle.addEventListener('click', () => {
   // running feedback loop every time I tweak a line" problem a global
   // reset-on-every-send would. Every node starts completely fresh
   // (every `if (!state.x)`/use() call fires again) on the very next tick.
-  for (const node of graph.nodes.values()) node.state = {};
+  for (const node of graph.nodes.values()) {
+    // Free the OLD state's resources before replacing it - same reason
+    // graph.js's syncFromProject() does this on node removal (see
+    // dispose-state.js): a plain `node.state = {}` would otherwise leave
+    // the previous state's textures/videos/streams as JS garbage.
+    disposeState(node.state);
+    disposeParticlesForNode(node.id);
+    disposeAsciiForNode(node.id);
+    node.state = {};
+  }
 });
 
 // Real OS-level fullscreen (hides the browser's own tab/address bar

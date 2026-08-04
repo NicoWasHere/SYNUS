@@ -196,6 +196,10 @@ export class Pattern {
     return canvas;
   }
 
+  dispose() {
+    this._canvas?.dispose();
+  }
+
   // Convenience constructors for the common LFO shapes - each already
   // outputs 0..1 (except sin, which is also 0..1 - a plain -1..1 sine is
   // just Pattern.sin(freq).mul(2).add(-1)). freq/phase scale/shift x

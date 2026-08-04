@@ -354,7 +354,8 @@ export const NODE_TEMPLATES = {
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const base = inputs.src;",
-    "    return { screen: base };",
+    "    let out = base;",
+    "    return { screen: out };",
     "  },",
     "},",
   ].join('\n'),
@@ -393,7 +394,10 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const vid = use(VideoSource, width, height);",
-    "    vid.tick('https://your-video-url-here.mp4');",
+    "    vid.tick('https://your-video-url-here.mp4', { start: 0, end: 100 });",
+    "    // start/end: 0..100, percent of the video's own duration - trims BOTH",
+    "    // playback and looping to that window, e.g. { start: 25, end: 75 }",
+    "    // loops only the middle half. Defaults to the whole file.",
     "    // or a local file - type $load$ elsewhere in the editor to pick",
     "    // one and get a node like this one already wired up:",
     "    // vid.tick(files.get('your-file-name.mp4'));",
@@ -595,6 +599,27 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const ramp = use(Ramp);",
     "    const out = ramp.tick({ angle: 0, from: [0, 0, 0], to: [1, 1, 1] });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // A multi-stop gradient, live-editable via colorPicker - unlike ramp
+  // above (exactly 2 colors, from/to), Gradient (lib/gradient.js) takes
+  // any number of colors, evenly spaced by default. 2 color pickers to
+  // start; add more calls + more entries in the array for extra stops.
+  // Rename the colorPicker names if you use $gradient$ more than once in
+  // the same file - just a starting point, same as every other bare
+  // $name$ template's generated body, nothing stops renaming it.
+  gradient: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const c1 = colorPicker('gradient1', { default: '#ffffff' });",
+    "    const c2 = colorPicker('gradient2', { default: '#000000' });",
+    "    const out = use(Gradient).tick([c1, c2]);",
+    "    preview(out);",
     "    return { screen: out };",
     "  },",
     "},",

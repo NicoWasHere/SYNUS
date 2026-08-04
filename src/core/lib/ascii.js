@@ -29,6 +29,18 @@ export function beginAsciiTick() {
   asciiCallCounts = new Map();
 }
 
+// ascii2d() keys its Canvas2D cache by call site (nodeId/"nodeId#n"), NOT
+// through useInstances - same reasoning as instance.js's
+// disposeParticlesForNode(), see there.
+export function disposeAsciiForNode(nodeId) {
+  for (const [key, canvas] of asciiCache) {
+    if (key === nodeId || key.startsWith(`${nodeId}#`)) {
+      canvas.dispose();
+      asciiCache.delete(key);
+    }
+  }
+}
+
 export function ascii2d(source, cols, rows, options = {}) {
   const { channel = 'lightness', ramp = RAMP, color = 'white' } = options;
 
