@@ -20,6 +20,8 @@ import { Flow } from './lib/flow.js';
 import { Ramp } from './lib/ramp.js';
 import { Gradient } from './lib/gradient.js';
 import { Noise } from './lib/noise.js';
+import { Warp } from './lib/warp.js';
+import { Ripple } from './lib/ripple.js';
 import { Pattern } from './lib/pattern.js';
 import { Scope } from './lib/scope.js';
 import { ImageSource, VideoSource, WebcamSource } from './lib/media.js';
@@ -84,7 +86,7 @@ import { explode } from './lib/explode.js';
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
-// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Pattern / Scope / ImageSource /
+// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / orbitCamera / THREE /
 // screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
@@ -122,6 +124,8 @@ export async function loadProject(gl, source) {
   window.Ramp = Ramp;
   window.Gradient = Gradient;
   window.Noise = Noise;
+  window.Warp = Warp;
+  window.Ripple = Ripple;
   window.Pattern = Pattern;
   window.Scope = Scope;
   window.ImageSource = ImageSource;

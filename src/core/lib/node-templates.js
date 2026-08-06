@@ -644,17 +644,44 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
-  // Another generator (no src) - grayscale, 'fbm' (smooth/cloudy) or
-  // 'cellular' (Voronoi/Pebble-like). Passing t as the seed animates it
-  // for free, since seed is just an offset into the noise field. See
-  // lib/noise.js.
+  // Another generator (no src) - 'value'/'perlin' (smooth/cloudy),
+  // 'voronoi' (Pebble-like), or 'static' (flickering TV noise). Passing t
+  // as z morphs the field in place (no x/y panning) - see lib/noise.js.
   noise: () => [
     "{",
     "  in: {},",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const noise = use(Noise);",
-    "    const out = noise.tick({ scale: 4, seed: t * 0.2, octaves: 4, type: 'fbm' });",
+    "    const out = noise.tick({ scale: 4, z: t * 0.2, octaves: 4, type: 'perlin' });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Localized bulge/pinch per point - see lib/warp.js. Positive amount
+  // magnifies outward, negative pinches inward; add more points for more
+  // warps (each composes on top of the others).
+  warp: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state) {",
+    "    const use = useInstances(state);",
+    "    const out = use(Warp).tick(inputs.src, [{ x: 0.5, y: 0.5, radius: 0.4, amount: 0.8 }]);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Wave-like ripples radiating from each point, moving with t - see
+  // lib/ripple.js. Add more points for more ripple sources; overlapping
+  // waves blend rather than one replacing the other.
+  ripple: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const out = use(Ripple).tick(inputs.src, [{ x: 0.5, y: 0.5, frequency: 40, amplitude: 0.02, speed: 4 }], t);",
     "    return { screen: out };",
     "  },",
     "},",

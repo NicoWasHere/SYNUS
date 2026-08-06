@@ -323,16 +323,25 @@ void main() {
   outColor = texture(uSrc, clamp(uv, 0.0, 1.0));
 }`;
 
-// A proper 2-channel displacement map: uMap's red/green channels (each
-// remapped from 0..1 to -1..1) push uSrc's sample coordinate on the x/y
-// axes independently.
+// uMap's red channel pushes uSrc's sample coordinate on x; green pushes
+// it on y - a REAL 2-channel map (r != g, e.g. Noise with mono: false)
+// gives fully independent x/y displacement. The green sample is ALSO
+// taken from an offset uv rather than vUv directly, so a plain grayscale
+// map (r == g at every pixel, which is what most sources are - a photo, a
+// mono Noise, ...) still doesn't collapse into a diagonal-only shift: with
+// both channels reading the same value at the same position, offset.x and
+// offset.y would always be equal, which is what made this feel like it
+// "wasn't doing anything" distinctive (a uniform diagonal push reads as
+// barely different from no displacement at all on most content).
 export const DISPLACE = `${HEADER}
 uniform sampler2D uSrc;
 uniform sampler2D uMap;
 uniform float uAmount;
 
 void main() {
-  vec2 offset = (texture(uMap, vUv).rg - 0.5) * 2.0 * uAmount;
+  float dx = texture(uMap, vUv).r - 0.5;
+  float dy = texture(uMap, vUv + vec2(0.13, 0.29)).g - 0.5;
+  vec2 offset = vec2(dx, dy) * 2.0 * uAmount;
   outColor = texture(uSrc, clamp(vUv + offset, 0.0, 1.0));
 }`;
 

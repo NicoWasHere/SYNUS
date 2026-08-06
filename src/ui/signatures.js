@@ -129,7 +129,9 @@ export const SIGNATURES = {
   },
   Displace: {
     ctor: 'new Displace()',
-    tick: "displace.tick(src, mapTexture, amount = 0.1)  // map's r/g push uv.x/uv.y independently",
+    tick:
+      "displace.tick(src, mapTexture, amount = 0.1)  // map's r/g push uv.x/uv.y independently\n" +
+      '// green is sampled from an offset uv too, so even a grayscale map (r == g) still gives real 2-axis motion',
   },
   Vignette: {
     ctor: 'new Vignette()',
@@ -251,7 +253,22 @@ export const SIGNATURES = {
   },
   Noise: {
     ctor: 'new Noise(width = 512, height = 512)',
-    tick: "out = noise.tick({ scale = 4, seed = 0, octaves = 4, type = 'fbm' })\n// use out, not noise itself - noise is the wrapper, tick()'s return value is the actual texture",
+    tick:
+      "out = noise.tick({ scale = 4, seed = 0, z = 0, octaves = 4, type = 'value', mono = true })\n" +
+      "// type: 'value'|'perlin'|'voronoi'|'static'. Animate z (not seed) to morph in place with no x/y pan\n" +
+      '// mono: false for a decorrelated color version. use out, not noise itself',
+  },
+  Warp: {
+    ctor: 'new Warp()',
+    tick:
+      'warp.tick(src, [{ x, y, radius = 0.3, amount = 0.5 }, ...])  // x,y: 0..1\n' +
+      '// positive amount bulges/magnifies around that point, negative pinches/shrinks - points compose',
+  },
+  Ripple: {
+    ctor: 'new Ripple()',
+    tick:
+      'ripple.tick(src, [{ x, y, frequency = 40, amplitude = 0.02, speed = 4 }, ...], t)\n' +
+      '// each point radiates its own moving wave - overlapping waves blend (weighted by distance), not replace',
   },
   Instance: {
     ctor: 'use(Instance)  // owns one shared destination texture, however large count is',
