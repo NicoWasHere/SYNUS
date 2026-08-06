@@ -302,6 +302,27 @@ const GLOBALS = {
   viewportSize: 'viewportSize()  // -> { width, height } of the real, visible (non-square) box',
   mouse: 'mouse()  // -> { x, y } 0..1 over the visible viewport, (0,0) top-left',
   keyPulse: "keyPulse('a')  // -> 1 while that key is held, 0 otherwise (ignored while typing in the editor)",
+  midi:
+    'midi.knobs / midi.pads / midi.error  // NOT function calls - live key-value stores\n' +
+    "// midi.knobs: { knob_N: 0..1 }, midi.pads: { pad_N: true|false } - grows automatically as\n" +
+    '// new CC/note numbers are seen. Reading either triggers the lazy connect. Use midiVelocity(note)\n' +
+    "// (raw note number, not 'pad_N') separately if you need press strength.",
+  midiKnob:
+    'midiKnob(cc, { min = 0, max = 1, default = min })  // -> last CC value, scaled to [min, max]\n' +
+    '// connects lazily (permission prompt on first call) - check midiError(). Unknown cc -> default.\n' +
+    "// See LPD8.knobs for the factory mapping, or watch the console for '[midi] knob/CC N seen'.",
+  midiPad:
+    "midiPad(note, { mode = 'momentary' })  // -> true while held ('momentary') or toggled per press ('toggle')\n" +
+    "// See LPD8.padsA/padsB/padsC, or watch the console for '[midi] pad/note N seen'.",
+  midiVelocity: 'midiVelocity(note)  // -> 0..1 from the most recent press, holds after release (no reset to 0)',
+  midiError: 'midiError()  // -> error string if Web MIDI is unsupported/denied, null otherwise',
+  LPD8:
+    'LPD8.knobs / LPD8.padsA / LPD8.padsB / LPD8.padsC  // ORIGINAL Akai LPD8 factory mapping\n' +
+    "// not a function call - the mk2 ships a DIFFERENT default, see LPD8_MK2 instead",
+  LPD8_MK2:
+    'LPD8_MK2.knobs / LPD8_MK2.padsA / LPD8_MK2.padsB / LPD8_MK2.padsC  // LPD8 mk2 factory mapping\n' +
+    '// knobs on CC 20..27, pads on a C-major scale (C4..) rather than chromatic - padsA confirmed\n' +
+    "// against real hardware, padsB/padsC are inferred - check the console if they're off",
   newPatch:
     "newPatch  // true for the one tick right after a send succeeds, false otherwise - not a function call\n" +
     '// use in a one-time-setup guard to also rebuild on every patch: if (!state.x || newPatch) { ... }',
@@ -310,9 +331,10 @@ const GLOBALS = {
     "// channel: 'lightness' (default) | 'red' | 'green' | 'blue'\n" +
     '// -> flat array (0..1) per cell, row-major, row 0 = visual top',
   beatmatch:
-    "beatmatch(bpm, t, { pulseWidth = 0.08, shape = 'triangle', ...shapeOpts })\n" +
-    '// -> { beat, phase, pulse, value, bpm } - replaces Math.round(t / secondsPerBeat) with real bpm timing\n' +
-    "// shape: 'pulse'|'build'|'triangle'|'adsr'|'sawJump'|'inverse' - value is phase reshaped by it, see beatEnvelope",
+    "beatmatch(bpm, t, { pulseWidth = 0.08, shape = 'triangle', subdivide = 1, ...shapeOpts })\n" +
+    '// -> { beat, phase, pulse, value, step, stepPhase, stepPulse, bpm } - replaces Math.round(t / secondsPerBeat) with real bpm timing\n' +
+    "// shape: 'pulse'|'build'|'triangle'|'adsr'|'sawJump'|'inverse' - value is phase reshaped by it, see beatEnvelope\n" +
+    '// subdivide: steps per beat for step/stepPhase/stepPulse - e.g. 4 to trigger things every 1/4 beat',
   beatEnvelope:
     "beatEnvelope(phase, shape = 'triangle', opts)  // -> reshaped 0..1 (or -1..1 for sawJump) value\n" +
     "// 'pulse': {decay=12} quick spike, fast decay | 'build': smooth sine build-and-fall\n" +
@@ -321,6 +343,10 @@ const GLOBALS = {
   COLORS:
     'COLORS.RED / ORANGE / YELLOW / GREEN / CYAN / BLUE / PURPLE / PINK / WHITE / BLACK\n' +
     '// hex string constants - not a function call, e.g. colorize.tick(src, COLORS.RED)',
+  COLORMAPS:
+    'COLORMAPS.viridis / plasma / inferno / magma / cividis / turbo / jet / rainbow / coolwarm / spectral / ...\n' +
+    '// each is an array of hex stops - drop straight into Gradient/gradientMap: use(Gradient).tick(COLORMAPS.viridis)\n' +
+    '// tab10 / tab20 are qualitative (index them, e.g. COLORMAPS.tab10[i % 10]) - not a gradient',
   colorPicker:
     "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
     '// floats a color-swatch widget next to this node, same as slider/button/input',

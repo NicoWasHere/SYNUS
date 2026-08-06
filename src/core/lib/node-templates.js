@@ -81,6 +81,13 @@ export const NODE_TEMPLATES = {
   // buffer up to fill a much bigger screen). Drawing it at the real
   // output resolution instead means far more headroom before either
   // problem shows up.
+  // Drawn ONCE (guarded by state.drawn, re-armed by newPatch on your next
+  // Send) rather than every tick - a plain static shape never changes, so
+  // redrawing (ctx.*) and re-uploading (texImage2D) a full-resolution
+  // canvas 60 times a second for it is pure wasted work, worse the
+  // bigger/higher-DPI your screen is. Same "if (!state.x || newPatch)"
+  // one-time-setup convention the three.js templates already use - see
+  // lib/patch-flag.js.
   square: () => [
     "{",
     "  in: {},",
@@ -88,12 +95,15 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const canvas = use(Canvas2D, width, height);",
-    "    const { ctx } = canvas;",
-    "    ctx.clearRect(0, 0, width, height);",
-    "    ctx.fillStyle = 'white';",
-    "    const size = Math.min(width, height) * 0.4;",
-    "    ctx.fillRect((width - size) / 2, (height - size) / 2, size, size);",
-    "    canvas.upload();",
+    "    if (!state.drawn || newPatch) {",
+    "      const { ctx } = canvas;",
+    "      ctx.clearRect(0, 0, width, height);",
+    "      ctx.fillStyle = 'white';",
+    "      const size = Math.min(width, height) * 0.4;",
+    "      ctx.fillRect((width - size) / 2, (height - size) / 2, size, size);",
+    "      canvas.upload();",
+    "      state.drawn = true;",
+    "    }",
     "    return { screen: canvas };",
     "  },",
     "},",
@@ -106,13 +116,16 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const canvas = use(Canvas2D, width, height);",
-    "    const { ctx } = canvas;",
-    "    ctx.clearRect(0, 0, width, height);",
-    "    ctx.fillStyle = 'white';",
-    "    ctx.beginPath();",
-    "    ctx.arc(width / 2, height / 2, Math.min(width, height) * 0.23, 0, Math.PI * 2);",
-    "    ctx.fill();",
-    "    canvas.upload();",
+    "    if (!state.drawn || newPatch) {",
+    "      const { ctx } = canvas;",
+    "      ctx.clearRect(0, 0, width, height);",
+    "      ctx.fillStyle = 'white';",
+    "      ctx.beginPath();",
+    "      ctx.arc(width / 2, height / 2, Math.min(width, height) * 0.23, 0, Math.PI * 2);",
+    "      ctx.fill();",
+    "      canvas.upload();",
+    "      state.drawn = true;",
+    "    }",
     "    return { screen: canvas };",
     "  },",
     "},",
@@ -127,17 +140,20 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const canvas = use(Canvas2D, width, height);",
-    "    const { ctx } = canvas;",
-    "    ctx.clearRect(0, 0, width, height);",
-    "    ctx.fillStyle = 'white';",
-    "    const cx = width / 2, cy = height / 2, r = Math.min(width, height) * 0.3;",
-    "    ctx.beginPath();",
-    "    ctx.moveTo(cx, cy - r);",
-    "    ctx.lineTo(cx + r, cy + r);",
-    "    ctx.lineTo(cx - r, cy + r);",
-    "    ctx.closePath();",
-    "    ctx.fill();",
-    "    canvas.upload();",
+    "    if (!state.drawn || newPatch) {",
+    "      const { ctx } = canvas;",
+    "      ctx.clearRect(0, 0, width, height);",
+    "      ctx.fillStyle = 'white';",
+    "      const cx = width / 2, cy = height / 2, r = Math.min(width, height) * 0.3;",
+    "      ctx.beginPath();",
+    "      ctx.moveTo(cx, cy - r);",
+    "      ctx.lineTo(cx + r, cy + r);",
+    "      ctx.lineTo(cx - r, cy + r);",
+    "      ctx.closePath();",
+    "      ctx.fill();",
+    "      canvas.upload();",
+    "      state.drawn = true;",
+    "    }",
     "    return { screen: canvas };",
     "  },",
     "},",
@@ -150,14 +166,17 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const canvas = use(Canvas2D, width, height);",
-    "    const { ctx } = canvas;",
-    "    ctx.clearRect(0, 0, width, height);",
-    "    ctx.fillStyle = 'white';",
-    "    ctx.font = `${Math.round(height * 0.12)}px sans-serif`;",
-    "    ctx.textAlign = 'center';",
-    "    ctx.textBaseline = 'middle';",
-    "    ctx.fillText('text', width / 2, height / 2);",
-    "    canvas.upload();",
+    "    if (!state.drawn || newPatch) {",
+    "      const { ctx } = canvas;",
+    "      ctx.clearRect(0, 0, width, height);",
+    "      ctx.fillStyle = 'white';",
+    "      ctx.font = `${Math.round(height * 0.12)}px sans-serif`;",
+    "      ctx.textAlign = 'center';",
+    "      ctx.textBaseline = 'middle';",
+    "      ctx.fillText('text', width / 2, height / 2);",
+    "      canvas.upload();",
+    "      state.drawn = true;",
+    "    }",
     "    return { screen: canvas };",
     "  },",
     "},",
@@ -845,6 +864,88 @@ export const NODE_TEMPLATES = {
     "    preview(scope, { range: [0, cols] });",
     "",
     "    return { bass, mid, treble };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // A quick way to confirm your MIDI controller is actually connected
+  // and see what its knobs/pads report - midi.knobs/midi.pads (lib/
+  // midi.js) are live key-value stores that grow automatically as you
+  // touch each control, keyed by its raw CC/note number, so this works
+  // for ANY controller with no hardcoded per-device mapping needed at
+  // all. Once you know which numbers matter, swap to midiKnob(cc)/
+  // midiPad(note) directly for real use (or LPD8/LPD8_MK2 if you happen
+  // to have one of those and its factory numbers already match).
+  midi: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    if (midi.error) preview(midi.error);",
+    "    preview(midi.knobs);",
+    "    preview(midi.pads);",
+    "    return { knobs: midi.knobs, pads: midi.pads };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // A generic MIDI-knob-driven tempo node - deliberately NOT hardcoded to
+  // any one controller's CC numbers (an LPD8 mk1 and mk2 already don't
+  // agree - see midi.js's LPD8/LPD8_MK2), so this ships with a placeholder
+  // CC to swap for your own: watch console/midi.knobs once (the $midi$
+  // template) to find it, same discovery workflow as any other CC/note.
+  bpm: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    // your CC - see midi.knobs",
+    "    const cc = 20;",
+    "    const bpm = midiKnob(cc, { min: 60, max: 200, default: 120 });",
+    "    const beat = beatmatch(bpm, t, { shape: 'triangle', subdivide: 4 });",
+    "    preview({",
+    "      bpm: Math.round(bpm),",
+    "      beat: beat.beat,",
+    "      step: beat.step,",
+    "      pulse: beat.pulse,",
+    "      stepPulse: beat.stepPulse,",
+    "    });",
+    "    return {",
+    "      bpm,",
+    "      beat: beat.beat,",
+    "      phase: beat.phase,",
+    "      pulse: beat.pulse,",
+    "      value: beat.value,",
+    "      step: beat.step,",
+    "      stepPhase: beat.stepPhase,",
+    "      stepPulse: beat.stepPulse,",
+    "    };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // A generic "which pad was pressed most recently" node - outputs an
+  // integer index (0..maxIndex) for driving a $switch(n)$ node. Defaults
+  // to the LPD8 mk2's own padsA notes (see LPD8_MK2 in midi.js) since
+  // that's the most common real controller this gets used with - swap
+  // `allNotes` for your own pad numbers if yours differ (watch console/
+  // midi.pads to find them). `maxIndex` caps how many of those get used
+  // without needing to shorten the array itself - e.g. leave allNotes at
+  // its full 8 and just lower maxIndex for a smaller $switch(n)$.
+  pad_index: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state) {",
+    "    const allNotes = [60, 62, 64, 65, 67, 69, 71, 72];",
+    "    const maxIndex = 3;",
+    "    const notes = allNotes.slice(0, maxIndex + 1);",
+    "    if (state.selected === undefined) state.selected = 0;",
+    "    if (!state.prev) state.prev = notes.map(() => false);",
+    "    notes.forEach((note, i) => {",
+    "      const on = midi.pads[`pad_${note}`] || false;",
+    "      if (on && !state.prev[i]) state.selected = i;",
+    "      state.prev[i] = on;",
+    "    });",
+    "    preview({ selected: state.selected });",
+    "    return { index: state.selected };",
     "  },",
     "},",
   ].join('\n'),

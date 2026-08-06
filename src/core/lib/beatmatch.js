@@ -18,14 +18,38 @@
 //   actual thing most projects want to drive brightness/scale/etc from,
 //   rather than the raw linear phase. Pass `shape` (and any of that
 //   shape's own options) straight through beatmatch's own options object.
-export function beatmatch(bpm, t = 0, { pulseWidth = 0.08, shape = 'triangle', ...shapeOpts } = {}) {
+//
+// subdivide: how many even steps to split EACH beat into for the step*
+// fields below (default 1 - a "step" IS a beat). Pass 4 to trigger things
+// on every quarter-beat (a 16th note if `beat` itself is a quarter note),
+// 3 for triplets, etc. - whatever fraction you had in mind by "every
+// 1/4 of a beat":
+//
+//   const { step, stepPulse } = beatmatch(120, t, { subdivide: 4 });
+//   if (stepPulse) out = use(Rotate).tick(out, step * 15);
+//
+// step: integer count of subdivisions since t=0 (like `beat`, but finer -
+//   step increments `subdivide` times per beat instead of once).
+// stepPhase: 0..1 progress through the CURRENT subdivision (like `phase`,
+//   but relative to one step instead of one whole beat).
+// stepPulse: true near each subdivision boundary (like `pulse`, but firing
+//   `subdivide` times per beat instead of once) - this is what actually
+//   answers "how do I make something happen every 1/4 beat": trigger off
+//   stepPulse (or watch `step` change), not off a hand-rolled fractional
+//   counter like `beat + phase`, which only ever grows continuously and
+//   never tells you when you've crossed a subdivision line.
+export function beatmatch(bpm, t = 0, { pulseWidth = 0.08, shape = 'triangle', subdivide = 1, ...shapeOpts } = {}) {
   const beatDuration = 60 / bpm;
   const total = t / beatDuration;
   const beat = Math.floor(total);
   const phase = total - beat;
   const pulse = phase < pulseWidth || phase > 1 - pulseWidth;
   const value = beatEnvelope(phase, shape, shapeOpts);
-  return { beat, phase, pulse, value, bpm };
+  const stepTotal = total * subdivide;
+  const step = Math.floor(stepTotal);
+  const stepPhase = stepTotal - step;
+  const stepPulse = stepPhase < pulseWidth || stepPhase > 1 - pulseWidth;
+  return { beat, phase, pulse, value, bpm, step, stepPhase, stepPulse };
 }
 
 // beatEnvelope(phase, shape, opts) - reshapes a 0..1 beat phase (see

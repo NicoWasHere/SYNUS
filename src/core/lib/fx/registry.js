@@ -246,13 +246,16 @@ export const EFFECTS = {
 
   crt: {
     frag: shaders.CRT,
-    // crt(src, { amount = 1, t = 0, bars = 1, barSize = 4 })  -  chromatic
+    // crt(src, { amount = 1, t = 0, bars = 1, barSize = 16 })  -  chromatic
     // aberration + scanlines + vignette + `bars` simultaneous horizontal
     // tear bars (0 for none), each `barSize` texels thick - capped at 8
     // regardless of how high `bars` is set (see MAX_BARS in shaders.js).
     // `t` is needed for the tear positions/timing to actually animate -
-    // pass the node's own `t`.
-    toUniforms: ({ amount = 1, t = 0, bars = 1, barSize = 4 } = {}) => ({
+    // pass the node's own `t`. barSize's default was 4 (a couple texels,
+    // easy to lose entirely against real content/scaling - the mechanism
+    // was firing correctly at that size, it just wasn't visible), bumped
+    // to 16 so a plain crt(src, { t }) actually shows a tear on-screen.
+    toUniforms: ({ amount = 1, t = 0, bars = 1, barSize = 16 } = {}) => ({
       uAmount: amount,
       uTime: t,
       uBarCount: bars,
@@ -305,13 +308,13 @@ export const EFFECTS = {
     // is transparent wherever no line is drawn - Composite it over a
     // background rather than expecting solid black there.
     toUniforms: ({
-      spacing = 22,
+      spacing = 20,
       thickness = 2,
-      maxWobble = 50,
+      maxWobble = 10,
       wobbleFreq = 0.05,
       vertical = false,
       color = '#ffffff',
-      darkCutoff = 0.08,
+      darkCutoff = 0.05,
       t = 0,
       seed = 0,
     } = {}) => ({

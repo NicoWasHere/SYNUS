@@ -1,5 +1,6 @@
 import { setGL, screenSize, viewportSize } from './lib/context.js';
 import { mouse, keyPulse } from './lib/input-state.js';
+import { midi, midiKnob, midiPad, midiVelocity, midiError, LPD8, LPD8_MK2 } from './lib/midi.js';
 import { getNewPatch } from './lib/patch-flag.js';
 import { sampleTexture } from './lib/texture-sample.js';
 import { GLSL } from './lib/glsl.js';
@@ -11,6 +12,7 @@ import { Layer } from './lib/layer.js';
 import { ComposeAt } from './lib/compose-at.js';
 import { beatmatch, beatEnvelope } from './lib/beatmatch.js';
 import { COLORS } from './lib/colors.js';
+import { COLORMAPS } from './lib/colormaps.js';
 import { Lag } from './lib/lag.js';
 import { Delay } from './lib/delay.js';
 import { Bloom } from './lib/bloom.js';
@@ -82,9 +84,10 @@ import { explode } from './lib/explode.js';
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
-// beatmatch / beatEnvelope / COLORS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Pattern / Scope / ImageSource /
+// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / orbitCamera / THREE /
-// screenSize / viewportSize / mouse / keyPulse / newPatch / sampleTexture / render /
+// screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
+// midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
 // Instance / particle2d / ascii2d / dot / pixel / AudioSource / explode /
 // files, plus every effect
@@ -111,6 +114,7 @@ export async function loadProject(gl, source) {
   window.beatmatch = beatmatch;
   window.beatEnvelope = beatEnvelope;
   window.COLORS = COLORS;
+  window.COLORMAPS = COLORMAPS;
   window.Lag = Lag;
   window.Delay = Delay;
   window.Bloom = Bloom;
@@ -132,6 +136,13 @@ export async function loadProject(gl, source) {
   window.viewportSize = viewportSize;
   window.mouse = mouse;
   window.keyPulse = keyPulse;
+  window.midi = midi;
+  window.midiKnob = midiKnob;
+  window.midiPad = midiPad;
+  window.midiVelocity = midiVelocity;
+  window.midiError = midiError;
+  window.LPD8 = LPD8;
+  window.LPD8_MK2 = LPD8_MK2;
   // A live-reflecting plain property (not a function call, unlike mouse()/
   // keyPulse() above) - see lib/patch-flag.js for what it means and why.
   // Redefined every loadProject() call, but that's harmless/idempotent -

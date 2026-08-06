@@ -304,8 +304,32 @@
         padding: 3px 5px;
         border-radius: 3px;
         width: 100%;
+        /* Lets the json-tree's <summary> toggles below actually receive
+           clicks - the parent .preview-overlay turns pointer-events off
+           so the overlay never blocks clicking into the code underneath,
+           and this box is no bigger than before so nothing new gets
+           blocked by turning it back on here. */
+        pointer-events: auto;
       }
       .node-preview-text[hidden] { display: none; }
+      /* Per-object/array preview card (see ui/json-tree.js) - one entry
+         per line with its own expand/collapse triangle, instead of a
+         single unreadable JSON.stringify() line. */
+      .json-tree-node { margin: 0; }
+      .json-tree-summary {
+        cursor: pointer;
+        color: #8fd3ff;
+        list-style-position: outside;
+      }
+      .json-tree-summary::marker { color: #666; }
+      .json-tree-children {
+        margin-left: 12px;
+        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        padding-left: 6px;
+      }
+      .json-tree-line { word-break: break-all; }
+      .json-tree-key { color: #999; }
+      .json-tree-val { color: #b6f2b6; }
 
       /* Per-node "reset state" button (see ui/reset-panel.js) - sits in
          the editor's otherwise-unused left padding margin, next to that

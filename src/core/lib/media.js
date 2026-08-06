@@ -114,13 +114,37 @@ function uploadBlankFrame(gl, canvas, texture) {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 }
 
+// First few bytes of the fetched file identify GIF/PNG/WebP well enough to
+// pick an ImageDecoder `type` - see _tryDecodeAnimated() below. null for
+// anything else (JPEG, ...), which just skips the animated-decode attempt
+// entirely and keeps using the plain <img> path.
+function sniffMimeType(bytes) {
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif'; // "GIF8[79]a"
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png'; // also covers APNG
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
 // new ImageSource(width, height) inside a node's code(), or
 // use(ImageSource, width, height) via useInstances. tick(source) loads
-// (and keeps showing) an image - this also just handles animated GIFs,
-// with no separate code path: the browser advances a loaded <img>'s
-// displayed frame on its own, so redrawing that same element into the
-// canvas every tick (which this does unconditionally, like every other
-// lib class here) is all animation needs. `source` is either a plain URL
+// (and keeps showing) an image, including animated GIF/APNG/WebP.
+//
+// Animated frames are decoded ourselves via WebCodecs' ImageDecoder (see
+// _tryDecodeAnimated() below) and stepped off real elapsed time, rather
+// than relying on the browser's own native <img> frame-advance timer -
+// that native timer turned out to be unreliable to depend on (silently
+// never advancing past frame 1 in some circumstances, seemingly tied to
+// whatever the browser/compositor decides counts as "worth animating"),
+// so driving it ourselves is both the fix and more in keeping with
+// everything else here already running off its own explicit clock. Falls
+// back to the plain <img> draw (single frame, or whatever the browser
+// itself shows) when ImageDecoder isn't supported (Safari, older Firefox)
+// or the source isn't multi-frame at all. `source` is either a plain URL
 // string, or a File/Blob - e.g. files.get('name.jpg') from the "Load
 // file(s)" button (see file-registry.js) for a local file with no server
 // or public/ folder involved at all.
@@ -154,6 +178,21 @@ export class ImageSource {
     this.img.onload = () => {
       this.loaded = true;
     };
+    // Kept attached (off-screen) rather than left detached or
+    // `display:none` - some browsers throttle a detached/hidden <img>'s
+    // OWN decode differently, and this is still the fallback path for
+    // browsers without ImageDecoder below.
+    this.img.style.cssText = 'position:fixed; left:-99999px; top:-99999px; width:1px; height:1px;';
+    document.body.appendChild(this.img);
+
+    // Populated by _tryDecodeAnimated() below when `source` turns out to
+    // be multi-frame and ImageDecoder is available - an array of
+    // { image: VideoFrame, duration: microseconds }. null otherwise (a
+    // plain photo, or no ImageDecoder support), in which case tick() just
+    // falls back to drawing this.img directly, same as before.
+    this.frames = null;
+    this.frameStart = 0;
+    this.decodeToken = 0; // bumped on every new source - lets a still-in-flight decode from a previous source notice it's stale and discard itself
   }
 
   tick(source, { fit = 'contain' } = {}) {
@@ -161,17 +200,82 @@ export class ImageSource {
     if (url !== this.lastUrl) {
       this.lastUrl = url;
       this.loaded = false;
+      this._clearFrames();
       this.img.src = url;
+      this._tryDecodeAnimated(url);
     }
-    if (this.loaded) {
+    if (this.frames) {
+      const frame = this._currentFrame();
+      capToNativeSize(this, frame.displayWidth, frame.displayHeight);
+      drawLetterboxed(this.gl, this.ctx, this.canvas, this.texture, frame, frame.displayWidth, frame.displayHeight, fit);
+    } else if (this.loaded) {
       capToNativeSize(this, this.img.naturalWidth, this.img.naturalHeight);
       drawLetterboxed(this.gl, this.ctx, this.canvas, this.texture, this.img, this.img.naturalWidth, this.img.naturalHeight, fit);
     }
     return this;
   }
+
+  // Which decoded VideoFrame is "now", based on real elapsed time since
+  // decode finished - looping over the frames' total duration. Durations
+  // are in microseconds (VideoFrame's own unit), so performance.now()'s
+  // milliseconds get scaled up to match.
+  _currentFrame() {
+    const total = this._totalDuration;
+    let elapsed = ((performance.now() - this.frameStart) * 1000) % total;
+    for (const f of this.frames) {
+      if (elapsed < f.duration) return f.image;
+      elapsed -= f.duration;
+    }
+    return this.frames[this.frames.length - 1].image;
+  }
+
+  _clearFrames() {
+    if (this.frames) this.frames.forEach((f) => f.image.close());
+    this.frames = null;
+  }
+
+  async _tryDecodeAnimated(url) {
+    if (typeof ImageDecoder === 'undefined') return;
+    const token = ++this.decodeToken;
+    let decoder;
+    try {
+      const buf = await (await fetch(url)).arrayBuffer();
+      const type = sniffMimeType(new Uint8Array(buf));
+      if (!type) return;
+      decoder = new ImageDecoder({ data: buf, type });
+      await decoder.tracks.ready;
+      const track = decoder.tracks.selectedTrack;
+      if (!track || track.frameCount <= 1) return; // a plain (non-animated) image - the <img> path already has it covered
+      const frames = [];
+      for (let i = 0; i < track.frameCount; i++) {
+        const { image } = await decoder.decode({ frameIndex: i });
+        frames.push({ image, duration: image.duration || 100000 }); // 100ms fallback if a frame somehow reports no duration
+      }
+      if (token !== this.decodeToken) {
+        // A newer source started loading while this decode was still in
+        // flight (tick() already called _clearFrames() for the new one) -
+        // these frames are for a source nobody's looking at anymore.
+        frames.forEach((f) => f.image.close());
+        return;
+      }
+      this.frames = frames;
+      this._totalDuration = frames.reduce((sum, f) => sum + f.duration, 0);
+      this.frameStart = performance.now();
+    } catch (e) {
+      // Not decodable as an animated image at all (corrupt file, or a
+      // format ImageDecoder just doesn't handle) - <img>'s own onload
+      // above already has the plain-image case covered either way.
+    } finally {
+      decoder?.close();
+    }
+  }
+
   dispose() {
     this.img.onload = null;
     this.img.src = '';
+    this.img.remove();
+    this.decodeToken++; // in case a decode is still in flight
+    this._clearFrames();
     if (this._blobUrl) URL.revokeObjectURL(this._blobUrl);
     this.gl.deleteTexture(this.texture);
   }

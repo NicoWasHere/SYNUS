@@ -101,6 +101,16 @@ const COMPOSE_AT_PATTERN = /\$compose_at\((\d+)\)\$/;
 // same as $draw$/$compose_at$ - not for `someKey: $feedback$`-style use.
 const FEEDBACK_PATTERN = /\$feedback\$/;
 
+// $switch(n)$ - a single node with `n` screen inputs (in1..inN, each the
+// usual 'other.screen' placeholder) plus an `index` input, whose code just
+// returns whichever inN the current (rounded, clamped) index picks out.
+// `index` is wired like any other input - in the plain case just a number
+// literal or a var, but it can just as well point at something dynamic
+// (e.g. a midi.pads-driven "last pad pressed" value) to flip between the
+// n sources live. Purely synchronous text, same as $feedback$ - not for
+// `someKey: $switch(n)$`-style use, it generates its own key.
+const SWITCH_PATTERN = /\$switch\((\d+)\)\$/;
+
 // $slider$/$button$/$input$ - inline snippets for lib/controls.js's
 // globals, each expanding to a call with an auto-numbered placeholder
 // name (e.g. "slider2" if one "slider(" call already exists) rather than
@@ -618,6 +628,47 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     replaceRange(insertAt, insertAt + match[0].length, buildFeedbackNodeEntry(nextFeedbackName()));
   }
 
+  // "switch1", "switch2", ... - same auto-numbering idea as
+  // nextFeedbackName() above, so triggering $switch(n)$ more than once
+  // doesn't produce colliding keys.
+  function nextSwitchName() {
+    const existing = textarea.value.match(/\bswitch\d*\s*:/g) || [];
+    return `switch${existing.length + 1}`;
+  }
+
+  // A complete `key: { ... },` node entry wired to pick one of `count`
+  // screen inputs by `index` - see SWITCH_PATTERN above. `index` is just
+  // another input port, so it can be wired to a literal, a var, or
+  // anything dynamic the same way in1..inN are.
+  function buildSwitchNodeEntry(name, count) {
+    const ins = [`      index: 0,`, ...Array.from({ length: count }, (_, i) => `      in${i + 1}: 'other.screen',`)].join(
+      '\n'
+    );
+    const opts = Array.from({ length: count }, (_, i) => `inputs.in${i + 1}`).join(', ');
+    return (
+      `${name}: {\n` +
+      `  in: {\n${ins}\n  },\n` +
+      `  code(inputs) {\n` +
+      `    const opts = [${opts}];\n` +
+      `    const i = Math.max(0, Math.min(opts.length - 1, Math.round(inputs.index)));\n` +
+      `    return { screen: opts[i] };\n` +
+      `  },\n` +
+      `},`
+    );
+  }
+
+  // A completed $switch(n)$ - see SWITCH_PATTERN above. Same "remove the
+  // trigger text, insert the real result" shape as $feedback$ - purely
+  // synchronous, no overlay/picker involved.
+  function tryExpandSwitch() {
+    const match = textarea.value.match(SWITCH_PATTERN);
+    if (!match) return;
+    const count = parseInt(match[1], 10);
+    if (!(count > 0)) return;
+    const insertAt = match.index;
+    replaceRange(insertAt, insertAt + match[0].length, buildSwitchNodeEntry(nextSwitchName(), count));
+  }
+
   // Separate from loadFileInput above - only video makes sense here,
   // and keeping them apart means picking a file for one never has to
   // reason about the other's onchange handler.
@@ -692,6 +743,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       tryExpandDraw(); // no file-picker/fullscreen gesture requirement, unlike Load/Downscale above
       tryExpandComposeAt(); // same reasoning as $draw$ above
       tryExpandFeedback(); // purely synchronous, no overlay/picker involved at all
+      tryExpandSwitch(); // same reasoning as $feedback$ above
     });
   }
 

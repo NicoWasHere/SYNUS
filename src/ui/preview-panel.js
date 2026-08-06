@@ -101,6 +101,13 @@ export class PreviewPanel {
     text.className = 'node-preview-text';
 
     row.append(label, canvas, text);
-    return { row, canvas, text };
+    // main.js rebuilds an object/array preview's json-tree DOM from
+    // scratch every tick (the value can change tick to tick), which would
+    // otherwise snap every <details> back open the instant after a user
+    // collapsed one - this set persists across those rebuilds so
+    // ui/json-tree.js can restore each node's open/closed state instead of
+    // always defaulting to open. Keyed by path (see json-tree.js), lives
+    // for as long as this card does.
+    return { row, canvas, text, collapsedPaths: new Set() };
   }
 }

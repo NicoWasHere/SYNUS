@@ -18,6 +18,8 @@ import { createEditor, lineTop } from './ui/editor.js';
 import { PreviewPanel } from './ui/preview-panel.js';
 import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
+import { renderJsonTree } from './ui/json-tree.js';
+import { getPatchFromUrl, setPatchInUrl } from './ui/patch-link.js';
 import { parseNodeBlocks, offsetToLine } from './ui/node-parser.js';
 
 const appEl = document.getElementById('app');
@@ -153,12 +155,19 @@ function flashSendResult(ok) {
 }
 
 async function send(text) {
-  flashSendResult(await reload(text));
+  const ok = await reload(text);
+  if (ok) setPatchInUrl(text); // keep the URL's own shareable copy in sync with whatever's actually running
+  flashSendResult(ok);
 }
+
+// A URL that already has a shared patch in it (see ui/patch-link.js)
+// loads THAT instead of the bundled default project - falls back to
+// defaultSource if there's no patch in the URL, or it fails to decode.
+const initialSource = getPatchFromUrl() ?? defaultSource;
 
 const view = createEditor({
   parent: editorMount,
-  doc: defaultSource,
+  doc: initialSource,
   renderPane,
   onDocChanged(text) {
     // Live and cosmetic only - where each node's preview card (or a
@@ -254,7 +263,7 @@ function updatePreviews() {
   const requests = getPreviewRequests();
   previewPanel.sync([...requests.keys()]);
 
-  for (const [nodeId, { row, canvas, text }] of previewPanel.entries) {
+  for (const [nodeId, { row, canvas, text, collapsedPaths }] of previewPanel.entries) {
     const req = requests.get(nodeId);
     let value = req && req.value;
     const isPattern = value instanceof Pattern;
@@ -294,15 +303,22 @@ function updatePreviews() {
     } else {
       canvas.hidden = true;
       text.hidden = false;
-      // A plain number's full float representation (e.g. floating-point
-      // noise like 0.30000000000000004) is rarely what you want to read
-      // at a glance - round it for display only, not the actual value.
-      text.textContent =
-        value === undefined
-          ? '(no output)'
-          : typeof value === 'number'
-            ? String(Math.round(value * 1e6) / 1e6)
-            : JSON.stringify(value);
+      text.textContent = '';
+      if (value === undefined) {
+        text.textContent = '(no output)';
+      } else if (typeof value === 'number') {
+        // A plain number's full float representation (e.g. floating-point
+        // noise like 0.30000000000000004) is rarely what you want to read
+        // at a glance - round it for display only, not the actual value.
+        text.textContent = String(Math.round(value * 1e6) / 1e6);
+      } else if (value !== null && typeof value === 'object') {
+        // Objects/arrays get a one-entry-per-line, expandable/collapsible
+        // tree instead of a single JSON.stringify() line - see
+        // ui/json-tree.js.
+        text.appendChild(renderJsonTree(value, collapsedPaths));
+      } else {
+        text.textContent = JSON.stringify(value);
+      }
     }
   }
 }
@@ -329,7 +345,7 @@ function updateTps() {
 }
 
 (async () => {
-  await reload(defaultSource);
+  await reload(initialSource);
   clock.onTick((t) => {
     graph.tick(t); // newPatch reads true for exactly this one tick, if a send just succeeded
     clearNewPatch();
