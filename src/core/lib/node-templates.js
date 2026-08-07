@@ -889,7 +889,7 @@ export const NODE_TEMPLATES = {
     "{",
     "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
-    "    const out = ascii2d(inputs.src, 60, 40);",
+    "    const out = ascii2d(inputs.src, 60, 40, { fontSize: 16 });",
     "    return { screen: out };",
     "  },",
     "},",

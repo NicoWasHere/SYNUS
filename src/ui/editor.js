@@ -52,10 +52,10 @@ const NODE_PATTERN = new RegExp(`\\$(${NODE_TEMPLATE_NAMES.join('|')})\\$`);
 // insert until a file is actually picked), so it's handled separately in
 // tryExpandLoad() rather than through NODE_PATTERN/nodeTemplateBody():
 // opens the browser's native file picker, and once a file is chosen,
-// inserts a complete, ready-to-use image or video node (whichever the
-// picked file's type is) wired to that file via files.get(...) - see
-// file-registry.js. Cancelling the picker just removes the `$load$` text
-// with nothing inserted.
+// inserts a complete, ready-to-use image, video, or 3D model (.glb/.gltf)
+// node (whichever the picked file's type is) wired to that file via
+// files.get(...) - see file-registry.js. Cancelling the picker just
+// removes the `$load$` text with nothing inserted.
 const LOAD_PATTERN = /\$load\$/;
 
 // $downscale$ - like $load$, but for a video that's laggy because its
@@ -420,7 +420,14 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // attached to the document.
   const loadFileInput = document.createElement('input');
   loadFileInput.type = 'file';
-  loadFileInput.accept = 'image/*,video/*';
+  loadFileInput.accept = 'image/*,video/*,.glb,.gltf';
+
+  // .glb/.gltf don't have a reliably-registered MIME type across
+  // browsers/OSes (file.type often comes back '' for them, unlike image/
+  // video), so this checks the extension instead of file.type.
+  function isModelFile(file) {
+    return /\.(glb|gltf)$/i.test(file.name);
+  }
 
   // A valid, reasonably-readable object key derived from the picked
   // file's own name (e.g. "portrait.jpg" -> "portrait") rather than a
@@ -435,14 +442,19 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   }
 
   // Builds a complete `key: { ... },` node entry for a just-picked file:
-  // whichever of the image/video templates matches its type, with the
-  // template's own placeholder URL swapped for files.get(theRealName).
-  // Also strips the template's own "or a local file - type $load$..."
-  // comment (redundant now, and its literal text would otherwise
-  // immediately re-match LOAD_PATTERN the moment it's inserted, re-
-  // triggering the picker over and over on the freshly-inserted copy).
+  // whichever of the image/video/three_model templates matches its type,
+  // with the template's own placeholder swapped for files.get(theRealName).
+  // Also strips the image/video templates' "or a local file - type
+  // $load$..." comment (redundant now, and its literal text would
+  // otherwise immediately re-match LOAD_PATTERN the moment it's inserted,
+  // re-triggering the picker over and over on the freshly-inserted copy) -
+  // three_model has no such comment to begin with, so nothing to strip.
   function buildLoadedNodeEntry(file) {
     addFile(file);
+    if (isModelFile(file)) {
+      const body = nodeTemplateBody('three_model').replace(/'your-model\.glb'/, JSON.stringify(file.name));
+      return `${keyFromFilename(file.name)}: ${body}`;
+    }
     const kind = file.type.startsWith('video/') ? 'video' : 'image';
     const body = nodeTemplateBody(kind)
       .replace(/\n\s*\/\/ or a local file[\s\S]*?files\.get\('your-file-name\.\w+'\)\);/, '')

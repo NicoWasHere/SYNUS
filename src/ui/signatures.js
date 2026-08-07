@@ -392,8 +392,10 @@ const GLOBALS = {
   dot: 'dot(size = 64)  // -> a cached white circle texture, transparent bg - use as particle2d()\'s stamp',
   pixel: 'pixel(size = 64)  // -> a cached white square texture, transparent bg - use as particle2d()\'s stamp',
   ascii2d:
-    "ascii2d(source, cols, rows, { channel = 'lightness', ramp = ' .:-=+*#%@', color = 'white' })\n" +
-    '// one character per cell (darkest -> lightest along `ramp`), no shake - a static text grid.',
+    "ascii2d(source, cols, rows, { channel = 'lightness', ramp = ' .:-=+*#%@', color = 'white', fontSize })\n" +
+    '// one character per cell (darkest -> lightest along `ramp`), no shake - a static text grid.\n' +
+    '// fontSize (px) defaults to ~90% of the cell size - set it explicitly for bigger text without\n' +
+    '// having to lower cols/rows (which would also coarsen the sampling grid)',
   explode: "explode(name)  // raw source for an effect or node template, e.g. explode('rotate')",
 };
 

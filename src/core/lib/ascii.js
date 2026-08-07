@@ -13,13 +13,23 @@ import { sampleTexture } from './texture-sample.js';
 // texture in this project - no separate transparency handling needed.
 //
 //   const out = ascii2d(inputs.src, 60, 40);
+//   const out = ascii2d(inputs.src, 60, 40, { fontSize: 24 }); // bigger text, same 60x40 sampling grid
 //
 // options:
-//   channel - 'lightness' (default), 'red', 'green', 'blue'.
-//   ramp    - the character gradient, darkest first. Default
-//             ' .:-=+*#%@' (10 steps; a plain space means "draw nothing"
-//             for the darkest cells rather than a visible dot).
-//   color   - fillStyle for the characters. Default 'white'.
+//   channel  - 'lightness' (default), 'red', 'green', 'blue'.
+//   ramp     - the character gradient, darkest first. Default
+//              ' .:-=+*#%@' (10 steps; a plain space means "draw nothing"
+//              for the darkest cells rather than a visible dot).
+//   color    - fillStyle for the characters. Default 'white'.
+//   fontSize - in pixels. Defaults to ~90% of the cell size (screen size /
+//              cols or rows, whichever's smaller) - on a big screen with a
+//              lot of cols/rows that auto size can come out tiny, so set
+//              this explicitly for bigger text instead of only being able
+//              to get it by lowering cols/rows (which also coarsens the
+//              sampling grid - this decouples "how detailed the sampling
+//              is" from "how big the text looks"). Larger than the cell
+//              size is fine - characters just overlap their neighbors,
+//              which reads as a bolder/denser look rather than breaking.
 const RAMP = ' .:-=+*#%@';
 
 const asciiCache = new Map(); // key (nodeId or "nodeId#n") -> Canvas2D
@@ -42,7 +52,7 @@ export function disposeAsciiForNode(nodeId) {
 }
 
 export function ascii2d(source, cols, rows, options = {}) {
-  const { channel = 'lightness', ramp = RAMP, color = 'white' } = options;
+  const { channel = 'lightness', ramp = RAMP, color = 'white', fontSize } = options;
 
   const key = nextCallKey(asciiCallCounts);
   if (key == null) return { texture: null, width: 0, height: 0 };
@@ -62,7 +72,7 @@ export function ascii2d(source, cols, rows, options = {}) {
     const cellW = width / cols;
     const cellH = height / rows;
     ctx.fillStyle = color;
-    ctx.font = `${Math.floor(Math.min(cellW, cellH) * 0.9)}px monospace`;
+    ctx.font = `${fontSize ?? Math.floor(Math.min(cellW, cellH) * 0.9)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let row = 0; row < rows; row++) {
