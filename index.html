@@ -9,7 +9,11 @@
       #editor-pane { flex: 1 1 55%; display: flex; flex-direction: column; border-right: 1px solid #333; min-width: 0; }
       #editor-mount { flex: 1; overflow: hidden; background: #1a1a1a; }
       #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
-                border-top: 1px solid #333; min-height: 1.2em; background: rgba(15, 15, 15, 0.9); }
+                border-top: 1px solid #333; min-height: 1.2em; }
+      /* Solid background only while there's actually something to show
+         (see main.js's showErrors(), which toggles this class) - an empty
+         errors strip shouldn't sit there as a visible dark bar. */
+      #errors.has-errors { background: rgba(15, 15, 15, 0.9); }
       /* Each per-node error line (see main.js's showErrors()) is clickable -
          jumps the editor's cursor straight to that node instead of making
          you scroll/search a big file to find which one an id belongs to. */

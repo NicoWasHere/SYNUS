@@ -126,6 +126,7 @@ function showErrors() {
   if (key === lastErrorsKey) return;
   lastErrorsKey = key;
 
+  errorsEl.classList.toggle('has-errors', entries.length > 0);
   errorsEl.textContent = '';
   for (const entry of entries) {
     const line = document.createElement('div');
