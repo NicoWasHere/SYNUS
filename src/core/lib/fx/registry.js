@@ -30,8 +30,10 @@ export const EFFECTS = {
 
   translate: {
     frag: shaders.TRANSLATE,
-    // translate(src, { x, y })  -  values in 0..1 uv units
-    toUniforms: ({ x = 0, y = 0 } = {}) => ({ uOffset: [x, y] }),
+    // translate(src, { x, y, wrap = false })  -  x/y in 0..1 uv units.
+    // wrap: true loops content back around the opposite edge as it slides
+    // off (a scrolling/tiling pan) instead of leaving transparent space.
+    toUniforms: ({ x = 0, y = 0, wrap = false } = {}) => ({ uOffset: [x, y], uWrap: wrap ? 1 : 0 }),
   },
 
   channelMix: {

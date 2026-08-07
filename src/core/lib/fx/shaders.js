@@ -81,9 +81,11 @@ void main() {
 export const TRANSLATE = `${HEADER}${SAMPLE_CLAMPED}
 uniform sampler2D uSrc;
 uniform vec2 uOffset; // in uv units, 0..1
+uniform float uWrap; // 0 = shifted-off content becomes transparent (default), 1 = it loops back around the opposite edge
 
 void main() {
-  outColor = sampleClamped(uSrc, vUv - uOffset);
+  vec2 uv = vUv - uOffset;
+  outColor = uWrap > 0.5 ? texture(uSrc, fract(uv)) : sampleClamped(uSrc, uv);
 }`;
 
 export const CHANNEL_MIX = `${HEADER}

@@ -93,7 +93,10 @@ export const SIGNATURES = {
     tick: 'scale.tick(src, { x = 1, y = 1 })\n// or scale.tick(src, factor) to scale both axes evenly',
   },
   Flip: { ctor: 'new Flip()', tick: 'flip.tick(src, { x = false, y = false })' },
-  Translate: { ctor: 'new Translate()', tick: 'translate.tick(src, { x = 0, y = 0 })  // 0..1 uv units' },
+  Translate: {
+    ctor: 'new Translate()',
+    tick: 'translate.tick(src, { x = 0, y = 0, wrap = false })  // 0..1 uv units; wrap: true loops content around instead of leaving it transparent',
+  },
   ChannelMix: {
     ctor: 'new ChannelMix()',
     tick: 'channelMix.tick(src, { r = [1,0,0], g = [0,1,0], b = [0,0,1] })',
@@ -363,7 +366,14 @@ const GLOBALS = {
   COLORMAPS:
     'COLORMAPS.viridis / plasma / inferno / magma / cividis / turbo / jet / rainbow / coolwarm / spectral / ...\n' +
     '// each is an array of hex stops - drop straight into Gradient/gradientMap: use(Gradient).tick(COLORMAPS.viridis)\n' +
-    '// tab10 / tab20 are qualitative (index them, e.g. COLORMAPS.tab10[i % 10]) - not a gradient',
+    '// tab10 / tab20 are qualitative (index them, e.g. COLORMAPS.tab10[i % 10]) - not a gradient\n' +
+    '// want a texture directly (optionally scrolling)? use Colormap instead - see below',
+  Colormap: {
+    ctor: 'new Colormap(width = 256, height = 8)',
+    tick:
+      "out = colormap.tick(name, scroll = 0)  // name: any COLORMAPS key, e.g. 'viridis'\n" +
+      '// scroll shifts it sideways, wrapping around - pass t * speed for a moving color band. use out, not colormap itself',
+  },
   colorPicker:
     "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
     '// floats a color-swatch widget next to this node, same as slider/button/input',

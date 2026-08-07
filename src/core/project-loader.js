@@ -12,7 +12,7 @@ import { Layer } from './lib/layer.js';
 import { ComposeAt } from './lib/compose-at.js';
 import { beatmatch, beatEnvelope } from './lib/beatmatch.js';
 import { COLORS } from './lib/colors.js';
-import { COLORMAPS } from './lib/colormaps.js';
+import { COLORMAPS, Colormap } from './lib/colormaps.js';
 import { Lag } from './lib/lag.js';
 import { Delay } from './lib/delay.js';
 import { Bloom } from './lib/bloom.js';
@@ -86,7 +86,7 @@ import { explode } from './lib/explode.js';
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
-// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
+// beatmatch / beatEnvelope / COLORS / COLORMAPS / Colormap / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / orbitCamera / THREE /
 // screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
@@ -117,6 +117,7 @@ export async function loadProject(gl, source) {
   window.beatEnvelope = beatEnvelope;
   window.COLORS = COLORS;
   window.COLORMAPS = COLORMAPS;
+  window.Colormap = Colormap;
   window.Lag = Lag;
   window.Delay = Delay;
   window.Bloom = Bloom;

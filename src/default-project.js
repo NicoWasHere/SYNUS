@@ -1,11 +1,10 @@
 // square1 -> rainbow1 -> transform1 -> comp <-> delay -> null1 -> render1
 // Edit anything below - it re-runs on every change. Each node's `state`
-// persists across edits (shader programs, canvases, and fx effect
-// instances don't get rebuilt unless their code actually changes).
+// persists across edits.
 
 export const nodes = {
 
-  // plain JS, no GLSL at all - draws a white square with Canvas2D
+  // plain JS, no GLSL - draws a white square with Canvas2D
   square1: {
     in: {},
     code(inputs, state, t) {
@@ -20,7 +19,7 @@ export const nodes = {
     },
   },
 
-  // GLSL - reads square1's texture, colors it with a moving rainbow hue
+  // GLSL - colors square1 with a moving rainbow hue
   rainbow1: {
     in: { src: 'square1.screen' },
     code(inputs, state, t) {
@@ -50,26 +49,21 @@ export const nodes = {
     },
   },
 
-  // effect classes, used directly through use() - no wrapper needed.
-  // preview(out) opts this node into a floating preview card next to its
-  // own block - previews are off by default, so square1 and rainbow1
-  // above show nothing unless you add a preview(...) call to them too.
+  // effect classes, used directly through use() - preview(out) shows this
+  // node's own floating preview card (off by default elsewhere).
   transform1: {
     in: { src: 'rainbow1.screen' },
     code(inputs, state, t) {
       const use = useInstances(state);
-      let out = use(Rotate).tick(inputs.src, t * 20);  // degrees, spins over time
-      out = use(Scale).tick(out, { x: 0.5, y: 0.5 });  // slightly squashed
+      let out = use(Rotate).tick(inputs.src, t * 20);
+      out = use(Scale).tick(out, { x: 0.5, y: 0.5 });
       preview(out);
       return { screen: out };
     },
   },
 
-  // A feedback loop: composites transform1's live output against delay's
-  // fed-back copy of this same loop's own recent history. Safe because
-  // `delay` (below) is what's actually wired into `b` here, not `comp`
-  // reading its own output directly - see delay's comment for why that
-  // distinction is what makes this legal on the GPU.
+  // Feedback loop: transform1's live output composited against delay's
+  // fed-back history (never comp's own output directly - see delay below).
   comp: {
     // modes: over, atop, xor, multiply, screen, darken, lighten, add,
     // difference, hardLight, softLight, lightest, darkest
@@ -81,27 +75,14 @@ export const nodes = {
     },
   },
 
-  // Delay owns its own separate texture (a ring buffer) that it copies
-  // into - reading `comp`'s output through here rather than directly is
-  // what lets `comp` feed back into itself without ever reading the
-  // exact texture it's currently rendering into (a WebGL feedback loop,
-  // which throws rather than silently freezing - see glsl.js).
-  //
-  // 'nearest' below (Delay/Translate/Scale's last constructor argument)
-  // is what keeps this loop from getting blurrier every iteration -
-  // Translate/Scale each resample their input at a fractional/scaled UV,
-  // and by default that resampling is bilinear (smooth), which softens
-  // the image a little on every single pass; over many ticks that
-  // compounds into visible blur. 'nearest' never blends between texels,
-  // so it can't accumulate that way - the trade is hard pixel-stepping
-  // instead of smoothness. Try switching any of these back to the
-  // default 'linear' (or just omit the argument) to see the difference.
+  // Delay owns its own separate texture - reading comp's output through
+  // here (not directly) is what makes the feedback loop legal on the GPU.
+  // 'nearest' below keeps it from getting blurrier every iteration.
   delay: {
     in: { src: 'comp.screen' },
     code(inputs, state, t) {
       const use = useInstances(state);
-      const ticks = 1; // <- change this; passed to tick()'s second
-      // argument (not the constructor) so editing it takes effect live
+      const ticks = 1; // <- change this
       let out = use(Delay, undefined, 'nearest').tick(inputs.src, ticks);
       out = use(Translate, 'nearest').tick(out, { x: 0.01 * ((5) % 2), y: 0.01 });
       out = use(Scale, 'nearest').tick(out, { x: 1.01, y: 1.00 });
@@ -116,9 +97,8 @@ export const nodes = {
     },
   },
 
-  // render(...) is what actually puts something on screen - move this
-  // call to a different node (e.g. render(inputs.src) inside transform1
-  // instead) to change what's shown without touching any `in` wiring.
+  // render(...) puts something on screen - move this call elsewhere to
+  // change what's shown without touching any `in` wiring.
   render1: {
     in: { src: 'null1.out' },
     code(inputs) {
