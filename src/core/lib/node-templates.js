@@ -566,6 +566,38 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // Loads a real glTF/GLB file (see lib/model-source.js) - swap the
+  // filename for your own, picked via the "Load file(s)" button (so
+  // files.get('your-model.glb') finds it) or a plain URL string instead.
+  // Loading is async, so the model doesn't exist for the first several
+  // ticks - guard adding it to the scene on it actually being ready.
+  three_model: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(ThreeSource, width, height);",
+    "    const model = use(ModelSource).tick(files.get('your-model.glb'));",
+    "    if (!state.scene || newPatch) {",
+    "      state.scene = new THREE.Scene();",
+    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
+    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
+    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
+    "      state.added = false;",
+    "    }",
+    "    if (model && !state.added) {",
+    "      state.scene.add(model);",
+    "      state.added = true;",
+    "    }",
+    "    if (state.added) model.rotation.y = t;",
+    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    const out = three.tick(state.scene, state.camera);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // True 3D-extruded text (THREE.TextGeometry) needs a font JSON loaded
   // over the network, which this project doesn't bundle - drawing the
   // label with Canvas2D (already built in) and mapping it onto a plane

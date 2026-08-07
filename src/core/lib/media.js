@@ -63,7 +63,7 @@ function drawLetterboxed(gl, ctx, canvas, texture, source, sourceW, sourceH, fit
 // object URL and cached on `instance` so a fresh one isn't leaked every
 // single tick for the same unchanged file. Revokes the previous object
 // URL when the source actually changes so these don't pile up either.
-function resolveSource(instance, source) {
+export function resolveSource(instance, source) {
   if (!(source instanceof Blob)) {
     if (instance._blobUrl) {
       URL.revokeObjectURL(instance._blobUrl);

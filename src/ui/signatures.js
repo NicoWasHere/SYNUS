@@ -80,6 +80,12 @@ export const SIGNATURES = {
       "three.toTexture(value, { width, height, key = 'default' })  // -> THREE.CanvasTexture\n" +
       "// projects one of this project's own texture-bearing values onto a mesh's material.map",
   },
+  ModelSource: {
+    ctor: 'new ModelSource()',
+    tick:
+      "model = modelSource.tick(source)  // source: URL string or files.get('name.glb')\n" +
+      '// loads a glTF/GLB file - returns the loaded THREE.Group once ready, null while still loading',
+  },
   ScreenOutput: {
     ctor: 'new ScreenOutput()',
     tick: 'screenOutput.tick({ uInput })  // render() does this for you',

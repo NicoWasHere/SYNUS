@@ -28,6 +28,7 @@ import { ImageSource, VideoSource, WebcamSource } from './lib/media.js';
 import { files } from './lib/file-registry.js';
 import { HydraSource } from './lib/hydra-source.js';
 import { ThreeSource } from './lib/three-source.js';
+import { ModelSource } from './lib/model-source.js';
 import { orbitCamera } from './lib/three-camera.js';
 import * as THREE from 'three';
 import { render } from './lib/render-sink.js';
@@ -87,7 +88,7 @@ import { explode } from './lib/explode.js';
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
 // beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
-// VideoSource / WebcamSource / HydraSource / ThreeSource / orbitCamera / THREE /
+// VideoSource / WebcamSource / HydraSource / ThreeSource / ModelSource / orbitCamera / THREE /
 // screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
@@ -133,6 +134,7 @@ export async function loadProject(gl, source) {
   window.WebcamSource = WebcamSource;
   window.HydraSource = HydraSource;
   window.ThreeSource = ThreeSource;
+  window.ModelSource = ModelSource;
   window.orbitCamera = orbitCamera;
   window.THREE = THREE;
   window.files = files;
