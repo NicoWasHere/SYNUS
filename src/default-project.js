@@ -75,13 +75,7 @@ export const nodes = {
     in: { a: 'transform1.screen', b: 'delay.screen' },
     code(inputs, state, t) {
       const use = useInstances(state);
-      // 'difference' is what draws the bright trailing ring around the
-      // spinning square (it's genuinely comparing against the shape's own
-      // recent history, not a rendering artifact) - toggle this off for a
-      // plain composite with no ring/outline at all.
-      const outline = true;
-      const mode = outline ? 'difference' : 'over';
-      const out = use(Composite).tick(inputs.b, inputs.a, mode, t % 100);
+      const out = use(Composite).tick(inputs.b, inputs.a, 'difference', t % 100);
       return { screen: out };
     },
   },

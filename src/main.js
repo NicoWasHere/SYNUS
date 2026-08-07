@@ -389,8 +389,8 @@ function updateTps() {
 
 (async () => {
   await reload(initialSource);
-  clock.onTick((t) => {
-    graph.tick(t); // newPatch reads true for exactly this one tick, if a send just succeeded
+  clock.onTick((t, tickCount) => {
+    graph.tick(t, tickCount); // newPatch reads true for exactly this one tick, if a send just succeeded
     clearNewPatch();
     showErrors();
     updatePreviews();

@@ -64,7 +64,14 @@ export class Graph {
     return order.map((id) => this.nodes.get(id));
   }
 
-  tick(t) {
+  // tickCount: integer frames elapsed since the clock started (see
+  // clock.js's own `frame`) - passed through as code()'s 4th argument so a
+  // node can do `if (tickCount % 4 === 0) { ...update... }` to only
+  // actually change every N ticks, e.g. to slow down a feedback loop that
+  // would otherwise update (and so visibly change) every single frame.
+  // `t` (seconds) can't do this on its own - dividing/flooring t gives you
+  // "every N seconds", not "every N ticks", and framerate can vary.
+  tick(t, tickCount) {
     beginPreviewTick(); // clears last tick's preview() requests - see lib/preview-sink.js
     beginControlsTick(); // clears last tick's slider()/button()/input() requests - see lib/controls.js
     beginParticleTick(); // clears last tick's particle2d() call-order counters - see lib/instance.js
@@ -76,7 +83,7 @@ export class Graph {
       }
       setCurrentNode(node.id); // so a preview() call inside code() knows whose row it's for
       try {
-        const outputs = node.code(inputs, node.state, t) || {};
+        const outputs = node.code(inputs, node.state, t, tickCount) || {};
         for (const [portName, value] of Object.entries(outputs)) {
           this.bus.publish(`${node.id}.${portName}`, value);
         }
