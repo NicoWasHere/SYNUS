@@ -365,15 +365,9 @@ const GLOBALS = {
     '// hex string constants - not a function call, e.g. colorize.tick(src, COLORS.RED)',
   COLORMAPS:
     'COLORMAPS.viridis / plasma / inferno / magma / cividis / turbo / jet / rainbow / coolwarm / spectral / ...\n' +
-    '// each is an array of hex stops - drop straight into Gradient/gradientMap: use(Gradient).tick(COLORMAPS.viridis)\n' +
-    '// tab10 / tab20 are qualitative (index them, e.g. COLORMAPS.tab10[i % 10]) - not a gradient\n' +
-    '// want a texture directly (optionally scrolling)? use Colormap instead - see below',
-  Colormap: {
-    ctor: 'new Colormap(width = 256, height = 8)',
-    tick:
-      "out = colormap.tick(name, scroll = 0)  // name: any COLORMAPS key, e.g. 'viridis'\n" +
-      '// scroll shifts it sideways, wrapping around - pass t * speed for a moving color band. use out, not colormap itself',
-  },
+    '// NOT function calls - each is already a texture, built once and cached: preview(COLORMAPS.viridis)\n' +
+    "// to scroll one, run it through Translate's wrap option: use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: true })\n" +
+    '// tab10 / tab20 are the exception - plain hex arrays to index (COLORMAPS.tab10[i % 10]), not a gradient',
   colorPicker:
     "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
     '// floats a color-swatch widget next to this node, same as slider/button/input',

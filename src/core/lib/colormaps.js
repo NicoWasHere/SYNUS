@@ -1,27 +1,21 @@
 import { Gradient } from './gradient.js';
-import { Translate } from './fx/effects.js';
 
-// COLORMAPS.viridis / .plasma / ... - arrays of hex color stops, ready to
-// drop straight into Gradient or gradientMap wherever they'd otherwise
-// take a hand-picked list of colors:
+// COLORMAPS.viridis / .plasma / ... - already textures (has .texture),
+// built once on first access and cached forever after - the colors never
+// change, so there's nothing to redo per tick:
 //
-//   const out = use(Gradient).tick(COLORMAPS.viridis);
-//   preview(out);
+//   preview(COLORMAPS.viridis);
+//   return { screen: COLORMAPS.viridis };
 //
-// Want a texture directly (not the raw stop array) - optionally scrolling
-// like the default project's rainbow1 - use the Colormap class below
-// instead: use(Colormap).tick('viridis', t * 0.1).
+// To scroll one (the same moving-color-band look as the default project's
+// rainbow1), run it through Translate's own wrap option:
 //
-// Each is a handful of representative stops (not a full 256-entry lookup
-// table) - Gradient/gradientMap already interpolate between stops with
-// real gradient math, so a short list reproduces the well-known original
-// closely enough to recognize, without needing the whole table. Sequential
-// maps (viridis..turbo) go dark->light and read well as a 0..1 ramp;
-// diverging maps (coolwarm, spectral) run low-mid-high through a neutral
-// midpoint; tab10/tab20 are qualitative/categorical (10 or 20 flatly
-// distinct colors, no implied order) - meant for coloring N discrete
-// groups (e.g. COLORMAPS.tab10[i % 10]), not as a gradient.
-export const COLORMAPS = {
+//   const out = use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: true });
+//
+// tab10/tab20 are the exception - qualitative/categorical (10 or 20
+// flatly distinct colors, no implied order), so those stay plain hex
+// arrays to index (COLORMAPS.tab10[i % 10]) rather than a gradient.
+const GRADIENT_STOPS = {
   // Sequential (perceptually-uniform, the matplotlib "viridis family")
   viridis: ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'],
   plasma: ['#0d0887', '#6a00a8', '#b12a90', '#e16462', '#fca636', '#f0f921'],
@@ -49,9 +43,9 @@ export const COLORMAPS = {
   // Diverging (low - neutral midpoint - high)
   coolwarm: ['#3b4cc0', '#88a6fc', '#dddddd', '#f7a889', '#b40426'],
   spectral: ['#9e0142', '#f46d43', '#fee08b', '#e6f598', '#66c2a5', '#5e4fa2'],
+};
 
-  // Qualitative/categorical - index into these (COLORMAPS.tab10[i % 10]),
-  // don't treat them as a gradient.
+const QUALITATIVE = {
   tab10: ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'],
   tab20: [
     '#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', '#d62728', '#ff9896',
@@ -60,33 +54,18 @@ export const COLORMAPS = {
   ],
 };
 
-// new Colormap() inside a node's code(), or use(Colormap) via
-// useInstances. tick(name, scroll) - a named COLORMAPS entry as a texture,
-// same as Gradient.tick() but you just name the map instead of pasting
-// its stop array:
-//
-//   const out = use(Colormap).tick('viridis');
-//
-// scroll (default 0) shifts it sideways, wrapping around - pass t * speed
-// for a moving band of color, the same look as the default project's
-// rainbow1 but from any named map:
-//
-//   const out = use(Colormap).tick('viridis', t * 0.1);
-export class Colormap {
-  constructor(width = 256, height = 8) {
-    this._gradient = new Gradient(width, height);
-    this._translate = new Translate();
+const textureCache = {};
+function buildTexture(name) {
+  if (!textureCache[name]) {
+    textureCache[name] = new Gradient(256, 8).tick(GRADIENT_STOPS[name]);
   }
+  return textureCache[name];
+}
 
-  tick(name, scroll = 0) {
-    const stops = COLORMAPS[name];
-    if (!stops) throw new Error(`Colormap: unknown colormap "${name}" - known: ${Object.keys(COLORMAPS).join(', ')}`);
-    const out = this._gradient.tick(stops);
-    if (!scroll) return out;
-    return this._translate.tick(out, { x: scroll, wrap: true });
-  }
-  dispose() {
-    this._gradient.dispose();
-    this._translate.dispose();
-  }
+export const COLORMAPS = { ...QUALITATIVE };
+for (const name of Object.keys(GRADIENT_STOPS)) {
+  Object.defineProperty(COLORMAPS, name, {
+    enumerable: true,
+    get: () => buildTexture(name),
+  });
 }
