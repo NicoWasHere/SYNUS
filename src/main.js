@@ -95,13 +95,53 @@ const clock = new Clock();
 // invisible, not the (already-working) fallback itself.
 let loadError = null;
 
+// nodeId -> character offset of its own block, from the same parse
+// updatePreviewPositions() below already does - lets a per-node error's
+// own id jump the editor straight to it (see jumpToNode()) instead of
+// making you scroll/search a big file to find which node an id belongs to.
+let nodeOffsets = new Map();
+
+function jumpToNode(nodeId) {
+  const offset = nodeOffsets.get(nodeId);
+  if (offset == null) return;
+  view.textarea.focus();
+  view.textarea.setSelectionRange(offset, offset);
+}
+
+// showErrors() runs every tick, but only actually touches the DOM when
+// the error set has genuinely changed - rebuilding unconditionally (as a
+// naive version of this would) tears down and recreates each .error-line
+// element ~every frame, which can make a real click race against its own
+// target getting replaced mid-click (the same class of bug the preview
+// panel's json-tree cards hit earlier - see ui/json-tree.js's own note).
+let lastErrorsKey = null;
+
 function showErrors() {
-  const lines = [];
-  if (loadError) lines.push(loadError);
+  const entries = [];
+  if (loadError) entries.push({ id: null, text: loadError });
   for (const node of graph.nodes.values()) {
-    if (node.error) lines.push(`${node.id}: ${node.error}`);
+    if (node.error) entries.push({ id: node.id, text: node.error });
   }
-  errorsEl.textContent = lines.join('\n');
+  const key = JSON.stringify(entries);
+  if (key === lastErrorsKey) return;
+  lastErrorsKey = key;
+
+  errorsEl.textContent = '';
+  for (const entry of entries) {
+    const line = document.createElement('div');
+    if (entry.id == null) {
+      line.textContent = entry.text;
+    } else {
+      line.className = 'error-line';
+      line.title = 'Click to jump to this node';
+      const id = document.createElement('span');
+      id.className = 'error-node-id';
+      id.textContent = entry.id;
+      line.append(id, document.createTextNode(`: ${entry.text}`));
+      line.addEventListener('click', () => jumpToNode(entry.id));
+    }
+    errorsEl.appendChild(line);
+  }
 }
 
 // Recomputes where each node's preview card should float, from the
@@ -111,8 +151,10 @@ function showErrors() {
 // node *lives in the file* only changes on edit.
 function updatePreviewPositions(source) {
   const positions = new Map();
+  nodeOffsets = new Map();
   for (const block of parseNodeBlocks(source)) {
     positions.set(block.id, lineTop(offsetToLine(source, block.start)));
+    nodeOffsets.set(block.id, block.start);
   }
   previewPanel.setPositions(positions);
   resetPanel.setPositions(positions); // same per-node positions - see ui/reset-panel.js

@@ -565,12 +565,13 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     });
   }
 
-  // "feedback1", "feedback2", ... - same auto-numbering idea as
-  // nextShapeName()/nextComposeAtName() above, so triggering $feedback$
-  // more than once doesn't produce colliding keys across its 4 nodes.
+  // "fb1", "fb2", ... - same auto-numbering idea as nextShapeName()/
+  // nextComposeAtName() above, so triggering $feedback$ more than once
+  // doesn't produce colliding keys across its 4 nodes (fb1In, fb1Comp,
+  // fb1Delay, fb1Effect, ...).
   function nextFeedbackName() {
-    const existing = textarea.value.match(/\bfeedbackIn\d*\s*:/g) || [];
-    return `feedback${existing.length + 1}`;
+    const existing = textarea.value.match(/\bfb\d*In\s*:/g) || [];
+    return `fb${existing.length + 1}`;
   }
 
   // A complete feedback-loop skeleton - see FEEDBACK_PATTERN above for

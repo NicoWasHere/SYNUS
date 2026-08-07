@@ -9,7 +9,13 @@
       #editor-pane { flex: 1 1 55%; display: flex; flex-direction: column; border-right: 1px solid #333; min-width: 0; }
       #editor-mount { flex: 1; overflow: hidden; background: #1a1a1a; }
       #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
-                border-top: 1px solid #333; min-height: 1.2em; }
+                border-top: 1px solid #333; min-height: 1.2em; background: rgba(15, 15, 15, 0.9); }
+      /* Each per-node error line (see main.js's showErrors()) is clickable -
+         jumps the editor's cursor straight to that node instead of making
+         you scroll/search a big file to find which one an id belongs to. */
+      .error-line { cursor: pointer; }
+      .error-line:hover { text-decoration: underline; }
+      .error-node-id { color: #ff9d5c; font-weight: bold; }
       /* The canvas (see main.js's resizeCanvas()) is a square sized to
          the LARGER of this box's width/height and displayed at that same
          size, so it fills the box edge to edge on the longer axis and
@@ -144,7 +150,7 @@
         border-right: none;
       }
       #app.perform-mode #editor-mount { background: transparent; }
-      #app.perform-mode #errors { background: transparent; border-top-color: transparent; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+      #app.perform-mode #errors { border-top-color: transparent; }
 
       /* the code editor: a plain textarea (real cursor/click/selection,
          native browser behavior - nothing to get out of sync) with a

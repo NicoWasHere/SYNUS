@@ -4,16 +4,21 @@
 
 export const nodes = {
 
-  // plain JS, no GLSL - draws a white square with Canvas2D
+  // plain JS, no GLSL - draws a white square with Canvas2D. Drawn at real
+  // output resolution (not a small fixed size) so its edge stays crisp -
+  // a smaller canvas stretched up to screen size would blur at the edge
+  // (bilinear upscaling), which reads as a soft "outline" once composited.
   square1: {
     in: {},
     code(inputs, state, t) {
       const use = useInstances(state);
-      const canvas = use(Canvas2D, 256, 256);
+      const { width, height } = screenSize();
+      const canvas = use(Canvas2D, width, height);
       const { ctx } = canvas;
-      ctx.clearRect(0, 0, 256, 256);
+      ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = 'white';
-      ctx.fillRect(88, 88, 80, 80);
+      const size = Math.min(width, height) * 0.3;
+      ctx.fillRect((width - size) / 2, (height - size) / 2, size, size);
       canvas.upload();
       return { screen: canvas };
     },
