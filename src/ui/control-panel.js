@@ -47,6 +47,16 @@ export class ControlPanel {
         entry = this._createRow(req);
         this.entries.set(key, entry);
         this.parent.appendChild(entry.row);
+      } else if (entry.name !== req.name) {
+        // Same call site (e.g. still the first slider() call in this
+        // node), but the name string itself changed - the row/DOM element
+        // is reused rather than recreated (entries is keyed by call site,
+        // not name), so without this its label AND its input listener
+        // (bound to the OLD name via closure) would silently keep
+        // reading/writing the old name's value forever, orphaning the new
+        // name at its untouched default.
+        entry.name = req.name;
+        entry.label.textContent = req.name;
       }
       this._syncValue(entry, req);
     }
@@ -64,14 +74,21 @@ export class ControlPanel {
   }
 
   _createRow(req) {
-    const { name } = req;
+    // entry.name is mutable (sync() above updates it if the same call
+    // site later reports a different name) - every listener below reads
+    // entry.name at fire time rather than closing over req.name directly,
+    // so a rename takes effect immediately without needing to recreate
+    // the DOM element.
+    const entry = { name: req.name };
     const row = document.createElement('div');
     row.className = 'control-widget';
+    entry.row = row;
 
     const label = document.createElement('span');
     label.className = 'control-widget-label';
-    label.textContent = name;
+    label.textContent = entry.name;
     row.appendChild(label);
+    entry.label = label;
 
     if (req.type === 'slider') {
       const rangeInput = document.createElement('input');
@@ -79,19 +96,22 @@ export class ControlPanel {
       rangeInput.min = req.opts.min;
       rangeInput.max = req.opts.max;
       rangeInput.step = req.opts.step;
-      rangeInput.addEventListener('input', () => setControlValue(name, parseFloat(rangeInput.value)));
+      rangeInput.addEventListener('input', () => setControlValue(entry.name, parseFloat(rangeInput.value)));
       const valueLabel = document.createElement('span');
       valueLabel.className = 'control-widget-value';
       row.append(rangeInput, valueLabel);
-      return { row, input: rangeInput, valueLabel };
+      entry.input = rangeInput;
+      entry.valueLabel = valueLabel;
+      return entry;
     }
 
     if (req.type === 'button') {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.addEventListener('click', () => setControlValue(name, !btn.classList.contains('active')));
+      btn.addEventListener('click', () => setControlValue(entry.name, !btn.classList.contains('active')));
       row.appendChild(btn);
-      return { row, input: btn };
+      entry.input = btn;
+      return entry;
     }
 
     if (req.type === 'colorPicker') {
@@ -106,21 +126,23 @@ export class ControlPanel {
       // focus left the input, opening _syncValue's activeElement guard)
       // forced the swatch back to the stale app-side value - "works for
       // a second, then resets" the moment you click elsewhere.
-      const onPick = () => setControlValue(name, colorInput.value);
+      const onPick = () => setControlValue(entry.name, colorInput.value);
       colorInput.addEventListener('input', onPick);
       colorInput.addEventListener('change', onPick);
       row.appendChild(colorInput);
-      return { row, input: colorInput };
+      entry.input = colorInput;
+      return entry;
     }
 
     // 'input'
     const textInput = document.createElement('input');
     textInput.type = req.opts.type === 'number' ? 'number' : 'text';
     textInput.addEventListener('input', () => {
-      setControlValue(name, req.opts.type === 'number' ? parseFloat(textInput.value) || 0 : textInput.value);
+      setControlValue(entry.name, req.opts.type === 'number' ? parseFloat(textInput.value) || 0 : textInput.value);
     });
     row.appendChild(textInput);
-    return { row, input: textInput };
+    entry.input = textInput;
+    return entry;
   }
 
   // Pulls the widget's displayed value in line with controls.js's actual
