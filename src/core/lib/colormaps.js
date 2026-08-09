@@ -12,6 +12,17 @@ import { Gradient } from './gradient.js';
 //
 //   const out = use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: true });
 //
+// That works, but most colormaps AREN'T cyclic (viridis's first stop is
+// dark purple, its last is yellow - nothing like rainbow1's hue(), whose
+// value at phase 0 and phase 1 are identically red) - scrolling one with
+// wrap therefore shows a visible seam/jump right where it wraps around.
+// COLORMAPS.loop.<name> is a palindrome version of the same stops
+// (forward then backward: c0..cN..c0) - still built once and cached the
+// same way, but genuinely seamless to scroll since its own start and end
+// already match:
+//
+//   const out = use(Translate).tick(COLORMAPS.loop.viridis, { x: t * 0.1, wrap: true });
+//
 // tab10/tab20 are the exception - qualitative/categorical (10 or 20
 // flatly distinct colors, no implied order), so those stay plain hex
 // arrays to index (COLORMAPS.tab10[i % 10]) rather than a gradient.
@@ -62,10 +73,24 @@ function buildTexture(name) {
   return textureCache[name];
 }
 
-export const COLORMAPS = { ...QUALITATIVE };
+const loopCache = {};
+function buildLoopTexture(name) {
+  if (!loopCache[name]) {
+    const stops = GRADIENT_STOPS[name];
+    const palindrome = [...stops, ...stops.slice(0, -1).reverse()];
+    loopCache[name] = new Gradient(256, 8).tick(palindrome);
+  }
+  return loopCache[name];
+}
+
+export const COLORMAPS = { ...QUALITATIVE, loop: {} };
 for (const name of Object.keys(GRADIENT_STOPS)) {
   Object.defineProperty(COLORMAPS, name, {
     enumerable: true,
     get: () => buildTexture(name),
+  });
+  Object.defineProperty(COLORMAPS.loop, name, {
+    enumerable: true,
+    get: () => buildLoopTexture(name),
   });
 }

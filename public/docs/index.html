@@ -623,6 +623,13 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         <code>Translate</code>'s <code>wrap</code> option:
       </p>
       <pre><code><span class="tag">const</span> out = use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: <span class="tag">true</span> });</code></pre>
+      <p>
+        Most colormaps aren't cyclic (viridis's first stop is dark purple, its last
+        is yellow), so scrolling one this way shows a visible seam where it wraps.
+        <code>COLORMAPS.loop.viridis</code> is a palindrome version of the same stops
+        (forward then backward) - same cost, genuinely seamless to scroll:
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Translate).tick(COLORMAPS.loop.viridis, { x: t * 0.1, wrap: <span class="tag">true</span> });</code></pre>
     </section>
 
     <section id="bloom">

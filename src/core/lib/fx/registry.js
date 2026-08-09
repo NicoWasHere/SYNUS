@@ -202,15 +202,17 @@ export const EFFECTS = {
 
   chromaKey: {
     frag: shaders.CHROMA_KEY,
-    // chromaKey(src, { color: [0,1,0], similarity: 0.4, smoothness: 0.1 })
-    // - keys out pixels near `color` (0..1 rgb, green-screen green by
-    // default). Raise `similarity` to key a wider range of colors, raise
-    // `smoothness` to feather the cutoff edge instead of a hard cut.
-    toUniforms: ({ color = [0, 1, 0], similarity = 0.4, smoothness = 0.1 } = {}) => ({
-      uKeyColor: color,
-      uSimilarity: similarity,
-      uSmoothness: smoothness,
-    }),
+    // chromaKey(src, color)  -  or chromaKey(src, { color, similarity: 0.4, smoothness: 0.1 })
+    // for the similarity/smoothness options too. `color` (hex string,
+    // COLORS.X, or [r,g,b] 0..1 array - green-screen green by default)
+    // is what gets keyed out. Raise `similarity` to key a wider range of
+    // colors, raise `smoothness` to feather the cutoff edge instead of a
+    // hard cut.
+    toUniforms: (arg = {}) => {
+      const isOptionsBag = arg && typeof arg === 'object' && !Array.isArray(arg);
+      const { color = '#00ff00', similarity = 0.4, smoothness = 0.1 } = isOptionsBag ? arg : { color: arg };
+      return { uKeyColor: toRgb(color), uSimilarity: similarity, uSmoothness: smoothness };
+    },
   },
 
   gradientMap: {

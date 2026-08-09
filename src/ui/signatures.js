@@ -180,8 +180,8 @@ export const SIGNATURES = {
   ChromaKey: {
     ctor: 'new ChromaKey()',
     tick:
-      'chromaKey.tick(src, { color = [0,1,0], similarity = 0.4, smoothness = 0.1 })\n' +
-      '// keys out pixels near `color` (green-screen green by default)',
+      "chromaKey.tick(src, color)  // or chromaKey.tick(src, { color = '#00ff00', similarity = 0.4, smoothness = 0.1 })\n" +
+      '// color: hex string, COLORS.X, or [r,g,b] 0..1 array - keys out pixels near it (green by default)',
   },
   GradientMap: {
     ctor: 'new GradientMap()',
@@ -375,6 +375,8 @@ const GLOBALS = {
     'COLORMAPS.viridis / plasma / inferno / magma / cividis / turbo / jet / rainbow / coolwarm / spectral / ...\n' +
     '// NOT function calls - each is already a texture, built once and cached: preview(COLORMAPS.viridis)\n' +
     "// to scroll one, run it through Translate's wrap option: use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: true })\n" +
+    '// most maps aren\'t cyclic though (visible seam where it wraps) - COLORMAPS.loop.<name> is a\n' +
+    '// palindrome version of the same stops, genuinely seamless to scroll the same way\n' +
     '// tab10 / tab20 are the exception - plain hex arrays to index (COLORMAPS.tab10[i % 10]), not a gradient',
   colorPicker:
     "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
@@ -506,27 +508,34 @@ export function findUseCompletions(text, pos) {
   return { matches: matches.slice(0, 4), typed };
 }
 
-// COLORMAPS_KEYS is just its own keys - Object.keys() doesn't invoke the
-// lazy per-map getters (see colormaps.js), so this can't accidentally
-// trigger a texture build (which needs a live GL context) just from
-// listing names for autocomplete.
-const COLORMAPS_KEYS = Object.keys(COLORMAPS);
+// COLORMAPS_KEYS/COLORMAPS_LOOP_KEYS are just their own keys -
+// Object.keys() doesn't invoke the lazy per-map getters (see colormaps.js),
+// so this can't accidentally trigger a texture build (which needs a live
+// GL context) just from listing names for autocomplete.
+const COLORMAPS_KEYS = Object.keys(COLORMAPS).filter((k) => k !== 'loop');
+const COLORMAPS_LOOP_KEYS = Object.keys(COLORMAPS.loop);
 
-// Same idea as findUseCompletions above, but for typing COLORMAPS.<name> -
-// live-suggests matching colormap keys (viridis, plasma, tab10, ...)
-// instead of requiring you to already know/remember the exact name.
-export function findColormapCompletions(text, pos) {
-  const before = text.slice(0, pos);
-  const m = before.match(/\bCOLORMAPS\.([A-Za-z_]\w*)?$/);
-  if (!m) return null;
-  const typed = m[1] || '';
-  if (COLORMAPS_KEYS.includes(typed)) return null;
+function matchNames(names, typed) {
+  if (names.includes(typed)) return null;
   const lower = typed.toLowerCase();
-  const starts = COLORMAPS_KEYS.filter((n) => n.toLowerCase().startsWith(lower));
-  const contains = COLORMAPS_KEYS.filter((n) => !starts.includes(n) && n.toLowerCase().includes(lower));
+  const starts = names.filter((n) => n.toLowerCase().startsWith(lower));
+  const contains = names.filter((n) => !starts.includes(n) && n.toLowerCase().includes(lower));
   const matches = [...starts, ...contains];
   if (matches.length === 0) return null;
   return { matches: matches.slice(0, 4), typed };
+}
+
+// Same idea as findUseCompletions above, but for typing COLORMAPS.<name>
+// or COLORMAPS.loop.<name> - live-suggests matching colormap keys
+// (viridis, plasma, tab10, ...) instead of requiring you to already know/
+// remember the exact name.
+export function findColormapCompletions(text, pos) {
+  const before = text.slice(0, pos);
+  const loopMatch = before.match(/\bCOLORMAPS\.loop\.([A-Za-z_]\w*)?$/);
+  if (loopMatch) return matchNames(COLORMAPS_LOOP_KEYS, loopMatch[1] || '');
+  const m = before.match(/\bCOLORMAPS\.([A-Za-z_]\w*)?$/);
+  if (!m) return null;
+  return matchNames(COLORMAPS_KEYS, m[1] || '');
 }
 
 // The one function editor.js calls: `null` if the caret isn't inside a
