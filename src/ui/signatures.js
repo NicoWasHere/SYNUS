@@ -1,3 +1,5 @@
+import { COLORMAPS } from '../core/lib/colormaps.js';
+
 // Lightweight signature-help: a static registry of every lib class's
 // constructor and tick() signature (hand-kept in sync with the real
 // code, not inferred), plus the small resolver editor.js calls to figure
@@ -501,6 +503,29 @@ export function findUseCompletions(text, pos) {
   const contains = names.filter((n) => !starts.includes(n) && n.toLowerCase().includes(lower));
   const matches = [...starts, ...contains];
   if (typed !== '' && matches.length === 0) return null;
+  return { matches: matches.slice(0, 4), typed };
+}
+
+// COLORMAPS_KEYS is just its own keys - Object.keys() doesn't invoke the
+// lazy per-map getters (see colormaps.js), so this can't accidentally
+// trigger a texture build (which needs a live GL context) just from
+// listing names for autocomplete.
+const COLORMAPS_KEYS = Object.keys(COLORMAPS);
+
+// Same idea as findUseCompletions above, but for typing COLORMAPS.<name> -
+// live-suggests matching colormap keys (viridis, plasma, tab10, ...)
+// instead of requiring you to already know/remember the exact name.
+export function findColormapCompletions(text, pos) {
+  const before = text.slice(0, pos);
+  const m = before.match(/\bCOLORMAPS\.([A-Za-z_]\w*)?$/);
+  if (!m) return null;
+  const typed = m[1] || '';
+  if (COLORMAPS_KEYS.includes(typed)) return null;
+  const lower = typed.toLowerCase();
+  const starts = COLORMAPS_KEYS.filter((n) => n.toLowerCase().startsWith(lower));
+  const contains = COLORMAPS_KEYS.filter((n) => !starts.includes(n) && n.toLowerCase().includes(lower));
+  const matches = [...starts, ...contains];
+  if (matches.length === 0) return null;
   return { matches: matches.slice(0, 4), typed };
 }
 

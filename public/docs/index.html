@@ -191,7 +191,8 @@
       <li><a href="#compositing">Composite / Matte</a></li>
       <li><a href="#feedback">Feedback: Lag / Delay</a></li>
       <li><a href="#filtering">Texture filtering (NEAREST)</a></li>
-      <li><a href="#generators">Generators: Ramp / Noise / Bloom</a></li>
+      <li><a href="#generators">Generators: Ramp / Noise / Colormap</a></li>
+      <li><a href="#bloom">Bloom</a></li>
     </ul>
 
     <div class="section-title">Data &amp; control</div>
@@ -597,20 +598,43 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
     </section>
 
     <section id="generators">
-      <h2>Generators: Ramp / Noise / Bloom</h2>
+      <h2>Generators: Ramp / Noise / Colormap</h2>
       <p>Generators don't take a <code>src</code> — they draw their own content from scratch every tick.</p>
       <pre><code><span class="tag">const</span> out = use(Ramp, width, height).tick({ angle: 0, from: [0,0,0], to: [1,1,1] });</code></pre>
       <p>A gradient. <code>angle</code> in degrees (0 = left-to-right), <code>from</code>/<code>to</code> are <code>[r,g,b]</code> in 0..1.</p>
-      <pre><code><span class="tag">const</span> out = use(Noise, width, height).tick({ scale: 4, seed: t, octaves: 4, type: <span class="str">'fbm'</span> });</code></pre>
+      <pre><code><span class="tag">const</span> out = use(Noise, width, height).tick({ scale: 4, seed: 0, z: t, octaves: 4, type: <span class="str">'value'</span>, mono: <span class="tag">true</span> });</code></pre>
       <p>
-        Grayscale. <code>type</code>: <code>'fbm'</code> (smooth/cloudy, multi-octave
-        value noise) or <code>'cellular'</code> (Voronoi/Worley distance field).
-        <code>seed</code> is just an offset into the noise field — pass <code>t</code>
-        for free animation. <code>octaves</code> only matters for <code>'fbm'</code>
-        (capped at 8).
+        <code>type</code>: <code>'value'</code>/<code>'perlin'</code> (smooth/cloudy — perlin is
+        genuine gradient noise, smoother and more directional than value noise),
+        <code>'voronoi'</code> (Worley/cellular distance field), or <code>'static'</code>
+        (flickering TV noise, no smoothing at all). Genuinely 3D — animate <code>z</code>
+        (not <code>seed</code>) to morph the field in place with no x/y panning; <code>seed</code>
+        is just a fixed per-instance offset. <code>octaves</code> only matters for
+        <code>'value'</code>/<code>'perlin'</code> (capped at 8). <code>mono: false</code> gives a
+        decorrelated-per-channel color version instead of grayscale.
       </p>
+      <pre><code><span class="tag">const</span> out = COLORMAPS.viridis;  <span class="com">// NOT a function call - already a texture, built once and cached</span></code></pre>
+      <p>
+        <code>COLORMAPS.viridis</code> / <code>plasma</code> / <code>inferno</code> / <code>magma</code> /
+        <code>cividis</code> / <code>turbo</code> / <code>jet</code> / <code>rainbow</code> / <code>coolwarm</code> /
+        <code>spectral</code> / ... — each a ready-made gradient texture, no <code>use()</code>/<code>tick()</code>
+        needed. <code>tab10</code>/<code>tab20</code> are the exception: plain hex arrays to index
+        (<code>COLORMAPS.tab10[i % 10]</code>), not a gradient. To scroll one, run it through
+        <code>Translate</code>'s <code>wrap</code> option:
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: <span class="tag">true</span> });</code></pre>
+    </section>
+
+    <section id="bloom">
+      <h2>Bloom</h2>
+      <p>Not a generator — it takes a <code>src</code> and brightens/glows its highlights.</p>
       <pre><code><span class="tag">const</span> out = use(Bloom).tick(src, { threshold: 0.6, blurAmount: 3, intensity: 1 });</code></pre>
-      <p>Genuinely a 3-pass effect (bright-pass extract → blur → additive combine), so it's a hand-written class rather than a single-shader FX entry.</p>
+      <p>
+        Genuinely a 3-pass effect (bright-pass extract → blur → additive combine), so
+        it's a hand-written class rather than a single-shader FX entry. A heavier
+        multi-level version with its own feedback wobble is available as <code>Flow</code>
+        (same call shape) if <code>Bloom</code>'s look isn't enough.
+      </p>
     </section>
 
     <section id="pattern">

@@ -8,7 +8,7 @@ import { addFile } from '../core/lib/file-registry.js';
 import { downscaleVideo } from '../core/lib/video-downscale.js';
 import { openDrawTool } from './draw-tool.js';
 import { openComposeAtTool } from './compose-at-tool.js';
-import { findSignatureAt, findUseCompletions } from './signatures.js';
+import { findSignatureAt, findUseCompletions, findColormapCompletions } from './signatures.js';
 
 // Every raw GLSL string in this codebase (see gl-context.js, screen-
 // output.js, fx/shaders.js, node-templates.js) is a template literal that
@@ -25,6 +25,55 @@ Prism.languages.insertBefore('javascript', 'template-string', {
     inside: {
       'template-punctuation': { pattern: /^`|`$/, alias: 'string' },
       rest: Prism.languages.glsl,
+    },
+  },
+});
+
+// Hydra DSL syntax highlighting (see lib/hydra-source.js) - best-effort,
+// since a hydra program is plain JS underneath (chained function calls),
+// not its own real language Prism has a grammar for. There's no single
+// required marker the way GLSL has `#version`, so this anchors on the
+// template literal's content STARTING with one of Hydra's own generator
+// functions - every real hydra program begins with one of these, and a
+// plain JS/GLSL backtick string starting with the exact text "osc(" (or
+// noise(/voronoi(/etc) immediately after the opening backtick is
+// vanishingly unlikely to mean anything else.
+const HYDRA_GENERATORS = ['osc', 'noise', 'voronoi', 'shape', 'gradient', 'solid', 'src', 's0', 's1', 's2', 's3'];
+// Every other hydra vocabulary word (transforms/modulators/combiners/
+// color functions/outputs) - given its own color (aliased to 'keyword',
+// the same token class GLSL/JS keywords already use) so a hydra chain's
+// OWN function names stand out from a generic `.token.function` call
+// instead of looking identical to it.
+const HYDRA_WORDS = [
+  ...HYDRA_GENERATORS,
+  'rotate', 'scale', 'pixelate', 'repeat', 'repeatX', 'repeatY', 'kaleid',
+  'scroll', 'scrollX', 'scrollY', 'posterize', 'shift', 'invert',
+  'contrast', 'brightness', 'luma', 'thresh', 'color', 'saturate', 'hue',
+  'colorama', 'sum', 'r', 'g', 'b', 'a',
+  'add', 'sub', 'mult', 'blend', 'diff', 'layer', 'mask',
+  'modulate', 'modulateScale', 'modulateRotate', 'modulatePixelate',
+  'modulateRepeat', 'modulateRepeatX', 'modulateRepeatY', 'modulateHue', 'modulateKaleid',
+  'out', 'render',
+];
+Prism.languages.insertBefore('javascript', 'template-string', {
+  'hydra-template': {
+    pattern: new RegExp(`\`\\s*(?:${HYDRA_GENERATORS.join('|')})\\s*\\([\\s\\S]*?\``),
+    greedy: true,
+    inside: {
+      'template-punctuation': { pattern: /^`|`$/, alias: 'string' },
+      // 'hydra-word' has to come FIRST in this object - Prism.languages.extend()
+      // would append it after javascript's own already-registered 'function'
+      // rule (\w+(?=\()), which claims "osc(" etc first and leaves nothing
+      // for a later rule to match. A fresh object (not a mutated shared
+      // 'javascript') also keeps this scoped to just inside hydra template
+      // strings - it doesn't affect normal JS elsewhere in the file.
+      rest: {
+        'hydra-word': {
+          pattern: new RegExp(`\\b(?:${HYDRA_WORDS.join('|')})\\b(?=\\s*[(.])`),
+          alias: 'keyword',
+        },
+        ...Prism.languages.javascript,
+      },
     },
   },
 });
@@ -280,11 +329,12 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   }
 
   // Shows/hides whichever popup (if either) applies at the caret -
-  // findUseCompletions() (a live class-name autocomplete while typing
-  // use(...)'s first argument) takes priority over findSignatureAt()'s
-  // signature tip, since the two are mutually exclusive by construction
-  // (see signatures.js: a fully-typed, real class name stops matching as
-  // a completion and starts resolving as a signature instead).
+  // findUseCompletions()/findColormapCompletions() (live autocomplete
+  // while typing use(...)'s first argument, or COLORMAPS.<name>) take
+  // priority over findSignatureAt()'s signature tip, since they're
+  // mutually exclusive by construction (see signatures.js: a fully-typed,
+  // real class/colormap name stops matching as a completion and starts
+  // resolving as a signature instead).
   function updateSignatureTip() {
     if (textarea.selectionStart !== textarea.selectionEnd) {
       signatureTip.hidden = true;
@@ -295,7 +345,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     const pos = textarea.selectionStart;
     const text = textarea.value;
 
-    const completion = findUseCompletions(text, pos);
+    const completion = findUseCompletions(text, pos) || findColormapCompletions(text, pos);
     if (completion) {
       signatureTip.hidden = true;
       useAutocomplete.innerHTML = '';

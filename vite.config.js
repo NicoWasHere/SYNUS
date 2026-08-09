@@ -39,6 +39,19 @@ export default defineConfig({
       name: 'docs-index-fallback',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
+          // GitHub Pages 301s a bare /SYNUS (no trailing slash) to /SYNUS/
+          // on its own - the dev server doesn't, so a URL that works in
+          // production 404s here instead. Matching that redirect keeps
+          // dev and prod behaving the same for anyone who bookmarks/types
+          // the base path without its trailing slash.
+          const bareBase = BASE.slice(0, -1);
+          const [reqPath] = req.url.split(/[?#]/);
+          if (reqPath === bareBase) {
+            res.statusCode = 302;
+            res.setHeader('Location', BASE);
+            res.end();
+            return;
+          }
           const path = req.url.startsWith(BASE) ? req.url.slice(BASE.length - 1) : req.url;
           if (path === '/docs' || path === '/docs/') {
             req.url = `${BASE}docs/index.html`;
