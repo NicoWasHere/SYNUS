@@ -882,6 +882,62 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // PhysicsWorld wraps matter-js (a real 2D physics engine) - this one
+  // drops a ball roughly once a second onto a 45deg platform with
+  // restitution cranked way up ("super bouncy"). gravity/restitution/
+  // spawn rate are all plain top-of-function numbers - change and see the
+  // difference immediately. See lib/physics-world.js.
+  physics: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const gravity = 1;",
+    "    const bounciness = 1.1; // > 1 gains energy each bounce instead of settling",
+    "    const spawnEvery = 1; // seconds",
+    "    const { width, height } = screenSize();",
+    "    const use = useInstances(state);",
+    "    const canvas = use(Canvas2D);",
+    "    const { ctx } = canvas;",
+    "",
+    "    if (!state.world) {",
+    "      state.world = new PhysicsWorld({ gravity });",
+    "      state.world.addPlatform({",
+    "        x: width / 2,",
+    "        y: height * 0.7,",
+    "        width: width * 0.6,",
+    "        angle: 45,",
+    "        restitution: bounciness,",
+    "      });",
+    "      state.lastSpawn = -spawnEvery;",
+    "    }",
+    "    if (t - state.lastSpawn >= spawnEvery) {",
+    "      state.world.addBall({ x: width / 2, y: 0, radius: 20 });",
+    "      state.lastSpawn = t;",
+    "    }",
+    "    state.world.tick();",
+    "",
+    "    ctx.fillStyle = '#000';",
+    "    ctx.fillRect(0, 0, width, height);",
+    "    for (const body of state.world.all()) {",
+    "      ctx.save();",
+    "      ctx.translate(body.x, body.y);",
+    "      ctx.rotate((body.angle * Math.PI) / 180);",
+    "      ctx.fillStyle = body.kind === 'ball' ? '#4ae' : '#888';",
+    "      if (body.kind === 'ball') {",
+    "        ctx.beginPath();",
+    "        ctx.arc(0, 0, body.radius, 0, Math.PI * 2);",
+    "        ctx.fill();",
+    "      } else {",
+    "        ctx.fillRect(-body.width / 2, -body.height / 2, body.width, body.height);",
+    "      }",
+    "      ctx.restore();",
+    "    }",
+    "    canvas.upload();",
+    "    return { screen: canvas };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // ascii2d() is like particle2d() but draws a character per cell instead
   // of a stamped texture, and never shakes - a static text-art grid, ' '
   // for the darkest cells up to '@' for the brightest. See lib/ascii.js.

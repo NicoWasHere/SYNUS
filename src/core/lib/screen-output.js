@@ -8,7 +8,19 @@ out vec4 outColor;
 uniform sampler2D uInput;
 
 void main() {
-  outColor = texture(uInput, vUv);
+  vec4 src = texture(uInput, vUv);
+  // Always flatten onto an opaque black backdrop before this hits the
+  // actual screen - same 'over' formula Composite's own 'over' mode uses
+  // (mix(backdrop.rgb, src.rgb, src.a), backdrop here being solid black),
+  // and forced fully opaque output. Without this, whatever alpha the
+  // stack happens to still have when it reaches render() shows straight
+  // through the canvas's own alpha channel to the PAGE behind it (the
+  // canvas element itself defaults to alpha:true) - any leftover partial
+  // transparency (an imperfectly-keyed edge, a stray un-composited layer)
+  // reads as a visible fringe/outline instead of just quietly disappearing
+  // the way "nothing there" should look.
+  vec3 rgb = mix(vec3(0.0), src.rgb, src.a);
+  outColor = vec4(rgb, 1.0);
 }`;
 
 // new ScreenOutput() inside a "render" node's code(). tick({ uInput })

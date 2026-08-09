@@ -210,6 +210,7 @@
       <li><a href="#media">Image / Video / Webcam</a></li>
       <li><a href="#hydra">Hydra</a></li>
       <li><a href="#three">Three.js</a></li>
+      <li><a href="#physics">Physics (matter-js)</a></li>
     </ul>
 
     <div class="section-title">Editor</div>
@@ -959,6 +960,84 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       </div>
     </section>
 
+    <section id="physics">
+      <h2>Physics (matter-js)</h2>
+      <pre><code>ball: {
+  in: {},
+  code(inputs, state, t) {
+    <span class="tag">const</span> gravity = 1;
+    <span class="tag">const</span> bounciness = 1.1; <span class="com">// &gt; 1 gains energy each bounce instead of settling</span>
+    <span class="tag">const</span> spawnEvery = 1; <span class="com">// seconds</span>
+    <span class="tag">const</span> { width, height } = screenSize();
+    <span class="tag">const</span> use = useInstances(state);
+    <span class="tag">const</span> canvas = use(Canvas2D);
+    <span class="tag">const</span> { ctx } = canvas;
+
+    <span class="tag">if</span> (!state.world) {
+      state.world = <span class="tag">new</span> PhysicsWorld({ gravity });
+      state.world.addPlatform({ x: width / 2, y: height * 0.7, width: width * 0.6, angle: 45, restitution: bounciness });
+      state.lastSpawn = -spawnEvery;
+    }
+    <span class="tag">if</span> (t - state.lastSpawn &gt;= spawnEvery) {
+      state.world.addBall({ x: width / 2, y: 0, radius: 20 });
+      state.lastSpawn = t;
+    }
+    state.world.tick();
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, width, height);
+    <span class="tag">for</span> (<span class="tag">const</span> body <span class="tag">of</span> state.world.all()) {
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.rotate((body.angle * Math.PI) / 180);
+      ctx.fillStyle = body.kind === 'ball' ? '#4ae' : '#888';
+      <span class="tag">if</span> (body.kind === 'ball') {
+        ctx.beginPath();
+        ctx.arc(0, 0, body.radius, 0, Math.PI * 2);
+        ctx.fill();
+      } <span class="tag">else</span> {
+        ctx.fillRect(-body.width / 2, -body.height / 2, body.width, body.height);
+      }
+      ctx.restore();
+    }
+    canvas.upload();
+    <span class="tag">return</span> { screen: canvas };
+  },
+},</code></pre>
+      <p>
+        <code>PhysicsWorld</code> wraps <a href="https://brm.io/matter-js/">matter-js</a>,
+        a real 2D physics engine — gravity, collision, and
+        restitution/bounciness are all handled for you. It only simulates;
+        it doesn't render anything itself, so pull body positions back out
+        with <code>world.all()</code> (or <code>world.get(id)</code>) and
+        draw them yourself, same "just simulation, you draw it however you
+        like" split as everything else here — <code>Canvas2D</code> above,
+        or feed positions into <code>GLSL</code>/<code>Instance</code>
+        instead if you'd rather.
+      </p>
+      <p>
+        <code>world.addBall({ x, y, radius, restitution, friction })</code> and
+        <code>world.addPlatform({ x, y, width, height, angle, restitution })</code>
+        (the latter <code>isStatic</code> — it never falls, but still
+        collides) both return an id for <code>world.get(id)</code> /
+        <code>world.remove(id)</code> later. Positions are plain
+        <b>pixels</b> (matching <code>screenSize()</code>), not the 0..1 uv
+        space <code>Warp</code>/<code>Ripple</code>/<code>Instance</code>
+        use elsewhere — divide by width/height yourself if you need 0..1.
+        <code>angle</code> is in <b>degrees</b>, matching
+        <code>Rotate</code>'s own convention. matter-js uses the higher of
+        the two colliding bodies' own <code>restitution</code>, so a bouncy
+        platform alone is enough to make any ball bounce hard off it —
+        values above 1 gain energy each bounce instead of settling.
+      </p>
+      <p>
+        Call <code>world.tick()</code> once per <code>code()</code> call to
+        advance the simulation — this project drives the clock itself
+        rather than letting matter-js run its own internal loop, same
+        convention as <code>ThreeSource</code>/<code>HydraSource</code>.
+      </p>
+    </section>
+
     <section id="shortcuts">
       <h2>Editor shortcuts</h2>
       <h3><code>$name$</code> — a node template's bare body</h3>
@@ -1068,6 +1147,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         <code>Delay</code>, <code>Bloom</code>, <code>Ramp</code>, <code>Noise</code>,
         <code>Pattern</code>, <code>ImageSource</code>, <code>VideoSource</code>,
         <code>WebcamSource</code>, <code>HydraSource</code>, <code>ThreeSource</code>,
+        <code>ModelSource</code>, <code>PhysicsWorld</code>,
         <code>THREE</code>, <code>files</code>, <code>screenSize</code>,
         <code>viewportSize</code>, <code>mouse</code>, <code>keyPulse</code>,
         <code>newPatch</code>, <code>sampleTexture</code>, <code>render</code>,

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "hydra-synth": "^1.4.0",
+    "matter-js": "^0.20.0",
     "prismjs": "^1.30.0",
     "three": "^0.185.1"
   }
