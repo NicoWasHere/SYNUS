@@ -387,7 +387,8 @@ const GLOBALS = {
     "// to scroll one, run it through Translate's wrap option: use(Translate).tick(COLORMAPS.viridis, { x: t * 0.1, wrap: true })\n" +
     '// most maps aren\'t cyclic though (visible seam where it wraps) - COLORMAPS.loop.<name> is a\n' +
     '// palindrome version of the same stops, genuinely seamless to scroll the same way\n' +
-    '// tab10 / tab20 are the exception - plain hex arrays to index (COLORMAPS.tab10[i % 10]), not a gradient',
+    '// tab10 / tab20 are the exception - plain hex arrays to index (COLORMAPS.tab10[i % 10]), not a gradient\n' +
+    '// COLORMAPS.viridis.read(t)  // t: 0..1 -> [r,g,b] 0..1 at that point, e.g. use(Colorize).tick(src, COLORMAPS.viridis.read(x))',
   colorPicker:
     "colorPicker(name, { default = '#ffffff' })  // -> current hex string, from $color_picker$\n" +
     '// floats a color-swatch widget next to this node, same as slider/button/input',

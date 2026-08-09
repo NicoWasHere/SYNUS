@@ -26,6 +26,20 @@ import { Gradient } from './gradient.js';
 // tab10/tab20 are the exception - qualitative/categorical (10 or 20
 // flatly distinct colors, no implied order), so those stay plain hex
 // arrays to index (COLORMAPS.tab10[i % 10]) rather than a gradient.
+//
+// COLORMAPS.viridis.read(t) reads the actual color at position t (0..1)
+// back out as a plain [r,g,b] 0..1 array - not GLSL, just a CPU-side
+// color lookup for whenever you want the colormap's color to drive
+// something other than a texture, e.g. use(Colorize).tick(src,
+// COLORMAPS.viridis.read(x)), or a Canvas2D fillStyle, or a per-instance
+// color in an Instance/particle2d callback. Reads straight off the same
+// canvas the texture itself was drawn from, so it always matches exactly
+// what's on screen.
+const readColor = (tex) => (t) => {
+  const x = Math.max(0, Math.min(tex.width - 1, Math.round(t * (tex.width - 1))));
+  const [r, g, b] = tex.ctx.getImageData(x, 0, 1, 1).data;
+  return [r / 255, g / 255, b / 255];
+};
 const GRADIENT_STOPS = {
   // Sequential (perceptually-uniform, the matplotlib "viridis family")
   viridis: ['#440154', '#414487', '#2a788e', '#22a884', '#7ad151', '#fde725'],
@@ -68,7 +82,9 @@ const QUALITATIVE = {
 const textureCache = {};
 function buildTexture(name) {
   if (!textureCache[name]) {
-    textureCache[name] = new Gradient(256, 8).tick(GRADIENT_STOPS[name]);
+    const tex = new Gradient(256, 8).tick(GRADIENT_STOPS[name]);
+    tex.read = readColor(tex);
+    textureCache[name] = tex;
   }
   return textureCache[name];
 }
@@ -78,7 +94,9 @@ function buildLoopTexture(name) {
   if (!loopCache[name]) {
     const stops = GRADIENT_STOPS[name];
     const palindrome = [...stops, ...stops.slice(0, -1).reverse()];
-    loopCache[name] = new Gradient(256, 8).tick(palindrome);
+    const tex = new Gradient(256, 8).tick(palindrome);
+    tex.read = readColor(tex);
+    loopCache[name] = tex;
   }
   return loopCache[name];
 }

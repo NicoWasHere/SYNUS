@@ -631,6 +631,17 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         (forward then backward) - same cost, genuinely seamless to scroll:
       </p>
       <pre><code><span class="tag">const</span> out = use(Translate).tick(COLORMAPS.loop.viridis, { x: t * 0.1, wrap: <span class="tag">true</span> });</code></pre>
+      <p>
+        Every colormap also has <code>.read(t)</code> — a CPU-side lookup
+        (<code>t</code>: 0..1) returning the color at that point as a plain
+        <code>[r,g,b]</code> 0..1 array, read straight off the same canvas
+        the texture itself was drawn from. For whenever you want the
+        colormap's color driving something other than a texture — feeding
+        <code>Colorize</code>, a <code>Canvas2D</code> fillStyle, a
+        per-instance color in an <code>Instance</code>/<code>particle2d</code>
+        callback:
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Colorize).tick(src, COLORMAPS.viridis.read(x));  <span class="com">// x: 0..1</span></code></pre>
     </section>
 
     <section id="bloom">
