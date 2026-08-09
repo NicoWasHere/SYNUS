@@ -975,9 +975,12 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
 
     <span class="tag">if</span> (!state.world) {
       state.world = <span class="tag">new</span> PhysicsWorld({ gravity });
-      state.world.addPlatform({ x: width / 2, y: height * 0.7, width: width * 0.6, angle: 45, restitution: bounciness });
+      state.platformId = state.world.addPlatform({ x: width / 2, y: height * 0.7, width: width * 0.6, angle: 45, restitution: bounciness });
       state.lastSpawn = -spawnEvery;
     }
+    <span class="com">// static bodies don't rotate on their own - set the angle yourself</span>
+    <span class="com">// every tick if you want it moving (here, oscillating +/- 20deg).</span>
+    state.world.setAngle(state.platformId, 45 + Math.sin(t) * 20);
     <span class="tag">if</span> (t - state.lastSpawn &gt;= spawnEvery) {
       state.world.addBall({ x: width / 2, y: 0, radius: 20 });
       state.lastSpawn = t;
@@ -1035,6 +1038,14 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         advance the simulation — this project drives the clock itself
         rather than letting matter-js run its own internal loop, same
         convention as <code>ThreeSource</code>/<code>HydraSource</code>.
+      </p>
+      <p>
+        A static body (like the platform above) never moves from physics
+        alone — call <code>world.setAngle(id, degrees)</code> every tick if
+        you want it rotating (a moving platform, a spinning obstacle); the
+        example above oscillates it with <code>Math.sin(t)</code>. Bodies
+        still collide correctly wherever they currently are, so a ball mid-
+        flight will bounce off the platform's up-to-date angle.
       </p>
     </section>
 

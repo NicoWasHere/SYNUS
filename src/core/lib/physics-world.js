@@ -69,6 +69,17 @@ export class PhysicsWorld {
     return id;
   }
 
+  // Manually rotates any body (static platforms included) to a new angle in
+  // degrees - static bodies don't move on their own from physics forces,
+  // but setting this every tick (e.g. `angle: 45 + Math.sin(t) * 20`) still
+  // correctly updates its collision shape, so balls bounce off wherever it
+  // currently is.
+  setAngle(id, angleDegrees) {
+    const entry = this._bodies.get(id);
+    if (!entry) return;
+    Matter.Body.setAngle(entry.body, (angleDegrees * Math.PI) / 180);
+  }
+
   remove(id) {
     const entry = this._bodies.get(id);
     if (!entry) return;

@@ -97,6 +97,7 @@ export const SIGNATURES = {
     tick:
       'world.addBall({ x, y, radius = 20, restitution = 0.8, friction = 0.05 })  // -> id\n' +
       'world.addPlatform({ x, y, width, height = 20, angle = 0, restitution = 0.8 })  // static, -> id\n' +
+      'world.setAngle(id, degrees)  // rotates any body, e.g. a static platform, on demand each tick\n' +
       'world.remove(id) / world.get(id)  // get -> { id, kind, x, y, angle, vx, vy, radius|width/height }\n' +
       'world.all()  // -> array of every body, same shape as get()\n' +
       'world.tick(dtMs = 1000/60)  // call once per code() tick, advances the simulation',
