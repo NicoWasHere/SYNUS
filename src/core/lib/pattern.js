@@ -241,4 +241,35 @@ export class Pattern {
   static random(freq = 1, phase = 0) {
     return new Pattern((x) => hash(Math.floor(x * freq + phase)));
   }
+
+  // Cycles through a plain array of values over one unit of x (scaled by
+  // freq, same convention as every shape above) - Hydra's own array-as-
+  // pattern trick ([0,1].smooth(), [0,1,2].fast(2)), just spelled as a
+  // Pattern instead of monkey-patching Array.prototype (this project
+  // never mutates JS's own built-ins).
+  //
+  //   Pattern.sequence([0, 1], 'smooth').read(t)  // breathes 0 -> 1 -> 0 once per second
+  //   Pattern.sequence([1, 4, 2, 8], 'step', 2).read(t)  // holds each value for 1/8s, two full passes per second
+  //
+  // mode: 'step' (default) holds each value flat for its own slice of the
+  // cycle, like Hydra's plain (unmodified) array - a discrete jump cutting
+  // straight to the next value. 'smooth' linearly interpolates toward the
+  // NEXT value across that same slice instead, wrapping from the last
+  // value back to the first to close the loop (so a 2-value array reads
+  // as a smooth back-and-forth, not a sawtooth).
+  static sequence(values, mode = 'step', freq = 1, phase = 0) {
+    const n = values.length;
+    return new Pattern((x) => {
+      if (n === 0) return 0;
+      if (n === 1) return values[0];
+      const p = x * freq + phase;
+      const cycle = ((p % 1) + 1) % 1; // 0..1 position within one full pass through the whole array
+      const scaled = cycle * n;
+      const i0 = Math.floor(scaled) % n;
+      if (mode !== 'smooth') return values[i0];
+      const i1 = (i0 + 1) % n;
+      const frac = scaled - Math.floor(scaled);
+      return values[i0] * (1 - frac) + values[i1] * frac;
+    });
+  }
 }

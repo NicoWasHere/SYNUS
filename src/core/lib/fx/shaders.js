@@ -347,6 +347,45 @@ void main() {
   outColor = texture(uSrc, clamp(vUv + offset, 0.0, 1.0));
 }`;
 
+// Hydra's own modulateScale: uMap's r/g channels push uSrc's scale
+// (zoom) independently per axis around the frame's center, instead of
+// offsetting uv position the way MODULATE/DISPLACE above do. Ported
+// straight from hydra-synth's glsl-functions.js (same formula, same
+// uniform names renamed to this project's own uAmount-family convention).
+export const MODULATE_SCALE = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uMap;
+uniform float uMultiple;
+uniform float uOffset;
+
+void main() {
+  vec4 c = texture(uMap, vUv);
+  vec2 xy = vUv - 0.5;
+  xy *= 1.0 / vec2(uOffset + uMultiple * c.r, uOffset + uMultiple * c.g);
+  xy += 0.5;
+  outColor = texture(uSrc, clamp(xy, 0.0, 1.0));
+}`;
+
+// Hydra's own modulateRotate: uMap's red channel pushes uSrc's rotation
+// angle around the frame's center. Ported straight from hydra-synth's
+// glsl-functions.js.
+export const MODULATE_ROTATE = `${HEADER}
+uniform sampler2D uSrc;
+uniform sampler2D uMap;
+uniform float uMultiple;
+uniform float uOffset;
+
+void main() {
+  vec4 c = texture(uMap, vUv);
+  vec2 xy = vUv - 0.5;
+  float angle = uOffset + c.r * uMultiple;
+  float s = sin(angle);
+  float co = cos(angle);
+  xy = mat2(co, -s, s, co) * xy;
+  xy += 0.5;
+  outColor = texture(uSrc, clamp(xy, 0.0, 1.0));
+}`;
+
 export const VIGNETTE = `${HEADER}
 uniform sampler2D uSrc;
 uniform float uAmount; // 0 = none, 1 = fully dark at the edges

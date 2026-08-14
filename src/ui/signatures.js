@@ -154,6 +154,18 @@ export const SIGNATURES = {
       "displace.tick(src, mapTexture, amount = 0.1)  // map's r/g push uv.x/uv.y independently\n" +
       '// green is sampled from an offset uv too, so even a grayscale map (r == g) still gives real 2-axis motion',
   },
+  ModulateScale: {
+    ctor: 'new ModulateScale()',
+    tick:
+      'modulateScale.tick(src, mapTexture, multiple = 1, offset = 1)\n' +
+      "// map's r/g channels push src's own scale (zoom) independently per axis, around center - ported from Hydra",
+  },
+  ModulateRotate: {
+    ctor: 'new ModulateRotate()',
+    tick:
+      'modulateRotate.tick(src, mapTexture, multiple = 1, offset = 0)\n' +
+      "// map's red channel pushes src's own rotation angle around center - ported from Hydra",
+  },
   Vignette: {
     ctor: 'new Vignette()',
     tick: 'vignette.tick(src, { amount = 0.5, radius = 0.3 })',
@@ -302,10 +314,10 @@ export const SIGNATURES = {
   },
   Pattern: {
     ctor:
-      'new Pattern(x => number)  // or Pattern.sin/.ramp/.square/.triangle/.random/.pulse(freq, phase)\n' +
+      'new Pattern(x => number)  // or Pattern.sin/.ramp/.square/.triangle/.random/.pulse/.sequence(...)\n' +
       '// pat.set(fn) mutates this SAME instance in place (keeps .plot()\'s cache) - use it for a\n' +
       '// pattern that needs to change on every tick, or across a patch send without losing state.',
-    set: 'pat.set(fn)  // fn: x => number, or Pattern.sin/.ramp/.square/.triangle/.random/.pulse(...)',
+    set: 'pat.set(fn)  // fn: x => number, or Pattern.sin/.ramp/.square/.triangle/.random/.pulse/.sequence(...)',
   },
   Scope: {
     ctor: 'new Scope(length = 128)  // ring-buffer size, in samples',
@@ -327,6 +339,10 @@ const PATTERN_SHAPES = {
   triangle: 'Pattern.triangle(freq = 1, phase = 0)  // linear up then linear down',
   random: 'Pattern.random(freq = 1, phase = 0)  // a new random 0..1 value each integer step (stepped hold)',
   pulse: 'Pattern.pulse(freq = 1, width = 0.1, phase = 0)  // like square, but width sets the duty cycle',
+  sequence:
+    "Pattern.sequence(values, mode = 'step', freq = 1, phase = 0)  // cycles through a plain array\n" +
+    "// mode: 'step' jumps between values, 'smooth' interpolates toward the next (wraps last -> first)\n" +
+    "// Hydra's [0,1].smooth() array trick, as a Pattern instead of monkey-patching Array.prototype",
 };
 
 // Plain function calls, not tied to any class - shown the moment the

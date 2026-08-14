@@ -151,6 +151,25 @@ export const EFFECTS = {
     toUniforms: (map, amount = 0.1) => ({ uMap: map, uAmount: amount }),
   },
 
+  modulateScale: {
+    frag: shaders.MODULATE_SCALE,
+    // modulateScale(src, mapTexture, multiple = 1, offset = 1)  -  map's
+    // r/g channels push src's own scale (zoom) independently per axis,
+    // around the frame's center - a straight port of Hydra's own
+    // modulateScale. offset is the baseline divisor when the map reads 0
+    // (offset = 1 means "no scale change" there); multiple controls how
+    // strongly the map's brightness pushes it away from that baseline.
+    toUniforms: (map, multiple = 1, offset = 1) => ({ uMap: map, uMultiple: multiple, uOffset: offset }),
+  },
+
+  modulateRotate: {
+    frag: shaders.MODULATE_ROTATE,
+    // modulateRotate(src, mapTexture, multiple = 1, offset = 0)  -  map's
+    // red channel pushes src's own rotation angle (radians) around the
+    // frame's center - a straight port of Hydra's own modulateRotate.
+    toUniforms: (map, multiple = 1, offset = 0) => ({ uMap: map, uMultiple: multiple, uOffset: offset }),
+  },
+
   vignette: {
     frag: shaders.VIGNETTE,
     // vignette(src, { amount: 0.5, radius: 0.3 })

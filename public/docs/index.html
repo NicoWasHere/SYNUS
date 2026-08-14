@@ -188,34 +188,45 @@
       <li><a href="#primitives">GLSL / Canvas2D / Html</a></li>
       <li><a href="#render-preview">render() &amp; preview()</a></li>
       <li><a href="#effects">Effects (FX)</a></li>
-      <li><a href="#compositing">Composite / Matte</a></li>
+      <li><a href="#distortion">Warp / Ripple</a></li>
+      <li><a href="#compositing">Composite / Matte / Layer</a></li>
+      <li><a href="#composeat">ComposeAt (picture-in-picture)</a></li>
       <li><a href="#feedback">Feedback: Lag / Delay</a></li>
       <li><a href="#filtering">Texture filtering (NEAREST)</a></li>
-      <li><a href="#generators">Generators: Ramp / Noise / Colormap</a></li>
-      <li><a href="#bloom">Bloom</a></li>
+      <li><a href="#generators">Generators: Ramp / Gradient / Noise / Colors / Colormap</a></li>
+      <li><a href="#bloom">Bloom / Flow</a></li>
     </ul>
 
     <div class="section-title">Data &amp; control</div>
     <ul>
       <li><a href="#pattern">Pattern</a></li>
+      <li><a href="#scope">Scope</a></li>
       <li><a href="#instancing">Instancing &amp; particles</a></li>
       <li><a href="#sampletexture">sampleTexture</a></li>
       <li><a href="#globals">Global values</a></li>
-      <li><a href="#controls">slider / button / input</a></li>
+      <li><a href="#controls">slider / button / input / colorPicker</a></li>
       <li><a href="#nodefunction">nodeFunction</a></li>
+      <li><a href="#tempo">Tempo: beatmatch / beatEnvelope</a></li>
+    </ul>
+
+    <div class="section-title">Audio &amp; MIDI</div>
+    <ul>
+      <li><a href="#audio">AudioSource</a></li>
+      <li><a href="#midi">MIDI: midi / midiKnob / midiPad / LPD8</a></li>
     </ul>
 
     <div class="section-title">Sources</div>
     <ul>
       <li><a href="#media">Image / Video / Webcam</a></li>
       <li><a href="#hydra">Hydra</a></li>
-      <li><a href="#three">Three.js</a></li>
+      <li><a href="#three">Three.js / ModelSource</a></li>
       <li><a href="#physics">Physics (matter-js)</a></li>
     </ul>
 
     <div class="section-title">Editor</div>
     <ul>
       <li><a href="#shortcuts">$name$ / $explode(name)$</a></li>
+      <li><a href="#templates">Every node template</a></li>
       <li><a href="#reset-button">Per-node reset button</a></li>
     </ul>
 
@@ -515,12 +526,73 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>Pixelate.tick(src, size)</code></td><td>Block size in texels.</td></tr>
         <tr><td><code>Posterize.tick(src, levels)</code></td><td>Color levels per channel.</td></tr>
         <tr><td><code>ColorLookup.tick(src, lutTexture, {size,amount})</code></td><td>LUT strip: <code>size</code> square blocks side by side. Load the LUT with <code>img.tick(url, {fit:'stretch'})</code>, not the default <code>'contain'</code>.</td></tr>
+        <tr><td><code>Mask.tick(src, maskTexture, {mode,invert})</code></td><td>Cuts a hole in <code>src</code>'s alpha using <code>maskTexture</code>'s shape; rgb untouched. <code>mode</code>: <code>'lightness'</code> (default) or <code>'alpha'</code>.</td></tr>
+        <tr><td><code>ChromaKey.tick(src, color)</code> or <code>(src, {color,similarity,smoothness})</code></td><td>Keys out <code>color</code> (hex/<code>COLORS.X</code>/<code>[r,g,b]</code>, green-screen green by default). Raise <code>similarity</code> for a wider color range, <code>smoothness</code> to feather the cutoff.</td></tr>
+        <tr><td><code>GradientMap.tick(src, rampTexture, {channel})</code></td><td>Repaints <code>src</code> entirely from a 1D gradient, sampled at each pixel's <code>channel</code> (default <code>'lightness'</code>) value. The "Ramp → Lookup" palette trick — NOT the same as ColorLookup (a full 3D LUT).</td></tr>
+        <tr><td><code>Fisheye.tick(src, amount)</code></td><td>Positive bulges outward, negative pinches inward (pincushion).</td></tr>
+        <tr><td><code>Invert.tick(src, amount)</code></td><td>0 = original, 1 = fully inverted.</td></tr>
+        <tr><td><code>Colorize.tick(src, color)</code></td><td>Recolors <code>src</code>'s own lightness into a black → <code>color</code> duotone.</td></tr>
+        <tr><td><code>CRT.tick(src, {amount,t,bars,barSize})</code></td><td>Chromatic aberration + scanlines + vignette + <code>bars</code> horizontal tear bars (0 for none, capped at 8). Needs <code>t</code> for the tears to animate.</td></tr>
+        <tr><td><code>FilmGrain.tick(src, {amount,t})</code></td><td>Animated noise added to rgb — <code>t</code> keeps it moving instead of static.</td></tr>
+        <tr><td><code>Bitmap.tick(src, {scale,colorA,colorB})</code></td><td>1-bit ordered (Bayer) dither — the "old Mac bitmap" look. <code>scale</code> is one dither cell's size in texels.</td></tr>
+        <tr><td><code>ChannelThreshold.tick(src, {r,g,b})</code></td><td>Thresholds each channel independently (up to 8 distinct output colors) instead of one shared luma cutoff — see Threshold for the grayscale version.</td></tr>
+        <tr><td><code>ScanLines.tick(src, {spacing,thickness,maxWobble,wobbleFreq,vertical,color,darkCutoff,t,seed})</code></td><td>Always-oscillating wavy lines; a point's own brightness drives how far ITS wave swings. Output is transparent except where a line is drawn.</td></tr>
+        <tr><td><code>Crop.tick(src, {x,y,w,h})</code></td><td>Extracts <code>src</code>'s <code>[x,y,w,h]</code> sub-rectangle (top-left origin) and stretches it to fill the frame. NOT the same as Mask (that cuts a hole in place, doesn't move/rescale).</td></tr>
+        <tr><td><code>Modulate.tick(src, mapTexture, amount)</code></td><td>Map's luma pushes uv uniformly (same offset for x and y) — a softer, "flowing" distortion.</td></tr>
+        <tr><td><code>Displace.tick(src, mapTexture, amount)</code></td><td>Map's r/g push uv.x/uv.y independently — a real 2-channel map (e.g. <code>Noise</code> with <code>mono:false</code>) gives fully independent x/y motion.</td></tr>
+        <tr><td><code>ModulateScale.tick(src, mapTexture, multiple, offset)</code></td><td>Map's r/g channels push <code>src</code>'s own scale (zoom) independently per axis, around center. Ported from Hydra.</td></tr>
+        <tr><td><code>ModulateRotate.tick(src, mapTexture, multiple, offset)</code></td><td>Map's red channel pushes <code>src</code>'s own rotation angle around center. Ported from Hydra.</td></tr>
       </table>
       <p><code>FX</code> also exposes the whole table generically: <code>FX.rotate === Rotate</code>, etc.</p>
+      <div class="note">
+        <b>Coming from Hydra?</b> <code>Modulate</code>/<code>Displace</code>/<code>ModulateScale</code>/
+        <code>ModulateRotate</code> are straight ports of Hydra's own
+        <code>modulate</code>/<code>modulate</code>-family functions, same formulas —
+        the second argument is any texture-bearing value (another effect's output, a
+        <code>Noise</code>, a whole other node's <code>screen</code>), not a plain number.
+      </div>
+      <pre><code><span class="com">// a circle's edge, pushed into an organic wobble by a noise field</span>
+<span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> map = use(Noise).tick({ scale: 4, seed: 1 });
+<span class="tag">const</span> scaled = use(ModulateScale).tick(inputs.src, map, 0.8, 1);
+<span class="tag">const</span> out = use(ModulateRotate).tick(scaled, map, 2, 0);</code></pre>
+    </section>
+
+    <section id="distortion">
+      <h2>Warp / Ripple</h2>
+      <p>
+        Unlike the single-shader effects above, these two take an ARRAY of points and
+        build their shader fresh only when the point COUNT changes — each point
+        contributes its own localized distortion, and overlapping points compose rather
+        than one replacing another.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Warp).tick(inputs.src, [
+  { x: 0.5, y: 0.5, radius: 0.4, amount: 0.8 },
+]);</code></pre>
+      <p>
+        A localized bulge/pinch per point, not a full-frame distortion.
+        <code>x</code>/<code>y</code>: 0..1 uv space. <code>radius</code> (default 0.3):
+        how far it reaches before fading out. <code>amount</code> (default 0.5): positive
+        magnifies outward (a lens held over that point), negative pinches inward.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Ripple).tick(inputs.src, [
+  { x: 0.3, y: 0.5, frequency: 40, amplitude: 0.02, speed: 4 },
+  { x: 0.7, y: 0.5, frequency: 20, amplitude: 0.03, speed: 2 },
+], t);</code></pre>
+      <p>
+        Each point radiates its own outward-moving wave; where two points' waves reach
+        the same pixel they blend (inverse-square-distance weighted) rather than one
+        replacing the other — right next to a point its own wave dominates, roughly
+        equidistant between two is where you see a genuine blend. <code>frequency</code>
+        (default 40): ripples per unit distance, higher = tighter rings.
+        <code>amplitude</code> (default 0.02): how far pixels get pushed.
+        <code>speed</code> (default 4): how fast the rings travel outward. Needs
+        <code>t</code> — the third argument — for the rings to actually animate.
+      </p>
     </section>
 
     <section id="compositing">
-      <h2>Compositing: Composite / Matte</h2>
+      <h2>Compositing: Composite / Matte / Layer</h2>
       <pre><code><span class="tag">const</span> out = use(Composite).tick(a, b, mode, opacity);</code></pre>
       <p>
         Layers <code>b</code> onto <code>a</code>. <code>mode</code>: Porter-Duff
@@ -541,6 +613,39 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         Mixes <code>a</code>/<code>b</code> per-pixel using a third source's own
         luminance as the mix factor (0 = all a, 1 = all b) — a luma matte/mask.
       </p>
+      <pre><code><span class="tag">const</span> out = use(Layer).tick([layerA, layerB, layerC], <span class="str">'over'</span>, 1);</code></pre>
+      <p>
+        Reduces a whole ARRAY of texture-bearing values down to one by repeatedly
+        compositing each on top of the previous — <code>textures[0]</code> on the
+        bottom, the last entry on top. Just <code>Composite</code> driven in a loop
+        (any of its modes work here too) — for when the number of layers is itself
+        dynamic, instead of a fixed handful of separate <code>use(Composite)</code>
+        calls chained by hand.
+      </p>
+    </section>
+
+    <section id="composeat">
+      <h2>ComposeAt (picture-in-picture)</h2>
+      <pre><code><span class="tag">const</span> out = use(ComposeAt).tick([
+  { value: inputs.a, x: 0,   y: 0,   w: 0.5, h: 0.5 },
+  { value: inputs.b, x: 0.5, y: 0,   w: 0.5, h: 0.5 },
+  { value: inputs.c, x: 0,   y: 0.5, w: 1.0, h: 0.5 },
+]);</code></pre>
+      <p>
+        Composites each rect's own texture into its own rectangle of the frame — a
+        lightweight multi-viewport/picture-in-picture layout tool, built fresh only when
+        the rect COUNT changes (same pattern as <code>Warp</code>/<code>Ripple</code>
+        above). <code>x</code>/<code>y</code> are each rect's TOP-LEFT corner (0..1,
+        y=0 at the top — matching how you'd place it on screen); <code>w</code>/<code>h</code>
+        are its size (0..1). Rects draw in array order, so a later entry overlaps an
+        earlier one where they intersect. A rect with a missing/unwired <code>value</code>
+        doesn't throw, but won't reliably stay blank either — wire every rect's input if
+        you don't want stale content showing through.
+      </p>
+      <div class="note">
+        Type <code>$compose_at(n)$</code> in the editor for a click-to-place UI that
+        generates a node's rects for you, rather than hand-typing coordinates.
+      </div>
     </section>
 
     <section id="feedback">
@@ -599,10 +704,24 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
     </section>
 
     <section id="generators">
-      <h2>Generators: Ramp / Noise / Colormap</h2>
+      <h2>Generators: Ramp / Gradient / Noise / Colors / Colormap</h2>
       <p>Generators don't take a <code>src</code> — they draw their own content from scratch every tick.</p>
       <pre><code><span class="tag">const</span> out = use(Ramp, width, height).tick({ angle: 0, from: [0,0,0], to: [1,1,1] });</code></pre>
-      <p>A gradient. <code>angle</code> in degrees (0 = left-to-right), <code>from</code>/<code>to</code> are <code>[r,g,b]</code> in 0..1.</p>
+      <p>A 2-color gradient. <code>angle</code> in degrees (0 = left-to-right), <code>from</code>/<code>to</code> are <code>[r,g,b]</code> in 0..1.</p>
+      <pre><code><span class="tag">const</span> out = use(Gradient, width, height).tick([COLORS.RED, <span class="str">'#00ff00'</span>, COLORS.BLUE], [0, 0.3, 1]);</code></pre>
+      <p>
+        A multi-stop gradient — any number of colors (hex string, <code>COLORS.X</code>,
+        or <code>[r,g,b]</code> 0..1 array), using the browser's own real gradient
+        interpolation (drawn via <code>Canvas2D</code>, not reimplemented in GLSL).
+        <code>stops</code> (the second array, 0..1, same length as colors) is optional —
+        omit it and colors space evenly. Only actually redraws when
+        colors/stops CHANGE from the last tick, so it's safe to call every tick with
+        live values (a <code>colorPicker()</code>, say) without a <code>newPatch</code>
+        guard. This is the "hand-drawn ramp" half of the Ramp → <code>GradientMap</code>
+        palette-mapping trick (see the Effects table above) — build an arbitrary-stop
+        gradient here, then <code>GradientMap.tick(src, thisGradient)</code> repaints
+        <code>src</code> entirely from it.
+      </p>
       <pre><code><span class="tag">const</span> out = use(Noise, width, height).tick({ scale: 4, seed: 0, z: t, octaves: 4, type: <span class="str">'value'</span>, mono: <span class="tag">true</span> });</code></pre>
       <p>
         <code>type</code>: <code>'value'</code>/<code>'perlin'</code> (smooth/cloudy — perlin is
@@ -613,6 +732,15 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         is just a fixed per-instance offset. <code>octaves</code> only matters for
         <code>'value'</code>/<code>'perlin'</code> (capped at 8). <code>mono: false</code> gives a
         decorrelated-per-channel color version instead of grayscale.
+      </p>
+      <pre><code>COLORS.RED / ORANGE / YELLOW / GREEN / CYAN / BLUE / PURPLE / PINK / WHITE / BLACK</code></pre>
+      <p>
+        Plain hex string constants — not a function call, just handy names for anywhere
+        a project wants a color (<code>Colorize.tick(src, COLORS.RED)</code>,
+        <code>ChromaKey.tick(src, COLORS.BLACK)</code>, a <code>Gradient</code> stop, a
+        <code>Canvas2D</code> <code>ctx.fillStyle</code>). Every color argument in this
+        project accepts a bare hex string just as well — these just save typing/typos
+        for the common ones.
       </p>
       <pre><code><span class="tag">const</span> out = COLORMAPS.viridis;  <span class="com">// NOT a function call - already a texture, built once and cached</span></code></pre>
       <p>
@@ -645,14 +773,25 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
     </section>
 
     <section id="bloom">
-      <h2>Bloom</h2>
-      <p>Not a generator — it takes a <code>src</code> and brightens/glows its highlights.</p>
+      <h2>Bloom / Flow</h2>
+      <p>Not generators — they take a <code>src</code> and brighten/glow its highlights.</p>
       <pre><code><span class="tag">const</span> out = use(Bloom).tick(src, { threshold: 0.6, blurAmount: 3, intensity: 1 });</code></pre>
       <p>
         Genuinely a 3-pass effect (bright-pass extract → blur → additive combine), so
-        it's a hand-written class rather than a single-shader FX entry. A heavier
-        multi-level version with its own feedback wobble is available as <code>Flow</code>
-        (same call shape) if <code>Bloom</code>'s look isn't enough.
+        it's a hand-written class rather than a single-shader FX entry.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Flow).tick(src, {
+  threshold: 0.6, softness: 0.2, wideBaseRadius: 4, wideGain: 1.5,
+  wobbleAmount: 0.015, wobbleSpeed: 0.15, feedback: 0.85,
+  tightBaseRadius: 1, tightGain: 2, t,
+});</code></pre>
+      <p>
+        A heavier, full-detail glow — a multi-level weighted blur pyramid plus
+        noise-driven wobble plus its own internal feedback loop, roughly 30 draw calls a
+        tick (needs <code>t</code> for the wobble to animate). Reach for <code>Bloom</code>
+        first (same 4-layer composite idea, one blur pass per direction, no wobble/
+        feedback, a fraction of the cost) and only reach for <code>Flow</code> when the
+        liquid/plasma wobble is specifically the look you're after and can afford it.
       </p>
     </section>
 
@@ -676,7 +815,10 @@ pat.read(3);                        <span class="com">// -&gt; 6</span></code></
         <tr><td><code>Pattern.triangle(freq, phase)</code></td><td>Linear up then linear down.</td></tr>
         <tr><td><code>Pattern.random(freq, phase)</code></td><td>A new random value (0..1) each integer step of <code>x*freq</code> — a stepped hold, not smooth noise.</td></tr>
         <tr><td><code>Pattern.pulse(freq, width, phase)</code></td><td>Like square, but with a controllable duty cycle — <code>width</code> (default 0.1) is the fraction of each cycle that reads 1. <code>pulse(freq, 1)</code> ≡ <code>square(freq)</code>.</td></tr>
+        <tr><td><code>Pattern.sequence(values, mode, freq, phase)</code></td><td>Cycles through a plain array. <code>mode</code>: <code>'step'</code> (default, jumps) or <code>'smooth'</code> (interpolates toward the next value, wrapping last → first). Hydra's <code>[0,1].smooth()</code> array trick, without monkey-patching <code>Array.prototype</code>.</td></tr>
       </table>
+      <pre><code>Pattern.sequence([0, 1], <span class="str">'smooth'</span>).read(t);   <span class="com">// breathes 0 -> 1 -> 0, once per second</span>
+Pattern.sequence([1, 4, 2, 8], <span class="str">'step'</span>, 2).read(t);  <span class="com">// holds each value 1/8s, two passes/sec</span></code></pre>
       <h4>Reading</h4>
       <table>
         <tr><th>Call</th><th>What it does</th></tr>
@@ -725,6 +867,26 @@ lfo.set(Pattern.ramp(1, t % 100));  <span class="com">// a truly dynamic pattern
       <p>
         A bare Pattern passed to <code>preview()</code> auto-plots — see
         <a href="#render-preview">render() &amp; preview()</a>.
+      </p>
+    </section>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> scope = use(Scope, 128);  <span class="com">// ring-buffer length, in samples</span>
+<span class="tag">const</span> trace = scope.tick(someLiveValue, { width: 512, height: 192, color: <span class="str">'rgb(140,217,140)'</span> });
+preview(trace);  <span class="com">// or return { screen: trace }</span></code></pre>
+      <p>
+        Unlike <code>Pattern.plot()</code> (which plots a mathematical function over a
+        domain — stateless, nothing to do with time passing), <code>Scope</code> keeps
+        its OWN rolling history of whatever value you feed it each tick and draws that
+        scrolling by, like a real oscilloscope — newest sample at the right edge, oldest
+        drops off once the buffer fills. Same visual conventions as
+        <code>Pattern.plot()</code> (auto-scaled y-axis unless you pass a fixed
+        <code>range: [min, max]</code>, a zero-crossing reference line, labeled min/max)
+        so the two read as one family. Good for watching a raw exported number you don't
+        already know the range of — <code>midiKnob()</code>, an <code>AudioSource</code>
+        band, a physics body's velocity.
       </p>
     </section>
 
@@ -827,20 +989,33 @@ pixel(size = 64);  <span class="com">// cached white square, transparent bg</spa
     </section>
 
     <section id="controls">
-      <h2>slider / button / input</h2>
+      <h2>slider / button / input / colorPicker</h2>
       <pre><code>slider(<span class="str">'freq'</span>, { min: 0, max: 1, step: 0.01, default: 0.5 });  <span class="com">// -&gt; current numeric value</span>
 button(<span class="str">'go'</span>, { default: <span class="tag">false</span> });                             <span class="com">// -&gt; current boolean value</span>
-input(<span class="str">'label'</span>, { default: 0, type: <span class="str">'number'</span> });                  <span class="com">// -&gt; current value</span></code></pre>
+input(<span class="str">'label'</span>, { default: 0, type: <span class="str">'number'</span> });                  <span class="com">// -&gt; current value</span>
+colorPicker(<span class="str">'tint'</span>, { default: <span class="str">'#ffffff'</span> });                      <span class="com">// -&gt; current hex string</span></code></pre>
       <p>
         Each call renders a floating widget next to the line it's declared on and
-        returns its current live value — dragging the slider (or clicking the button, or
-        typing into the input) updates what the NEXT call to that same name returns.
-        Values are keyed by name and held OUTSIDE any node's <code>state</code>, so they
-        survive patch sends untouched (editing unrelated code doesn't reset a slider back
-        to its default — only a real page reload does). Type <code>$slider$</code>,
-        <code>$button$</code>, or <code>$input$</code> in the editor for an
-        auto-numbered starter snippet.
+        returns its current live value — dragging the slider (or clicking the button,
+        typing into the input, or picking a color) updates what the NEXT call to that
+        same name returns. Values are keyed by name and held OUTSIDE any node's
+        <code>state</code>, so they survive patch sends untouched (editing unrelated code
+        doesn't reset a slider back to its default — only a real page reload does). Type
+        <code>$slider$</code>, <code>$button$</code>, <code>$input$</code>, or
+        <code>$color_picker$</code> in the editor for an auto-numbered starter snippet.
       </p>
+      <p>
+        <code>colorPicker()</code>'s return value is a plain hex string — feed it
+        straight into anything that takes a color: <code>Colorize.tick(src, tint)</code>,
+        a <code>Gradient</code> stop, <code>ChromaKey</code>'s key color.
+      </p>
+      <div class="warn">
+        Renaming a <code>slider</code>/<code>button</code>/<code>input</code>/
+        <code>colorPicker</code> call's NAME (not moving it) reuses that same widget
+        row rather than creating a new one — this is handled correctly (the label and
+        value both retarget to the new name immediately), but the OLD name's value stays
+        parked at whatever it was, orphaned, since nothing reads it anymore.
+      </div>
     </section>
 
     <section id="nodefunction">
@@ -863,6 +1038,117 @@ input(<span class="str">'label'</span>, { default: 0, type: <span class="str">'n
         changes tick to tick has to be an argument to the RETURNED function's call, not
         read from outside — the builder callback only ever runs once.
       </p>
+    </section>
+
+    <section id="tempo">
+      <h2>Tempo: beatmatch / beatEnvelope</h2>
+      <pre><code><span class="tag">const</span> { beat, phase, pulse, value } = beatmatch(120, t);
+<span class="tag">const</span> out = use(Rotate).tick(inputs.src, 20 * value);</code></pre>
+      <p>
+        Given a tempo (bpm) and the project clock's elapsed seconds, returns which beat
+        "now" falls on and how far through it we are — properly timed off a real bpm
+        number instead of a hand-tuned <code>Math.round(t / someSecondsPerBeat)</code>.
+      </p>
+      <table>
+        <tr><th>Field</th><th>Meaning</th></tr>
+        <tr><td><code>beat</code></td><td>Integer count of whole beats since t=0 — increments exactly on the beat.</td></tr>
+        <tr><td><code>phase</code></td><td>0..1 progress through the current beat (0 = right on the beat) — for smooth per-beat interpolation instead of a hard step.</td></tr>
+        <tr><td><code>pulse</code></td><td><code>true</code> for the brief window (<code>pulseWidth</code>, default 0.08) right around the beat — handy for triggering a hit once per beat.</td></tr>
+        <tr><td><code>value</code></td><td><code>phase</code> reshaped by <code>shape</code> (see <code>beatEnvelope</code> below) — usually what you actually want driving brightness/scale/etc, not the raw linear <code>phase</code>.</td></tr>
+        <tr><td><code>step</code>, <code>stepPhase</code>, <code>stepPulse</code></td><td>Same three ideas as <code>beat</code>/<code>phase</code>/<code>pulse</code>, but at <code>subdivide</code> steps per beat (default 1 — a step IS a beat) — pass <code>{ subdivide: 4 }</code> for a trigger every quarter-beat, <code>3</code> for triplets, etc.</td></tr>
+      </table>
+      <pre><code><span class="tag">const</span> { step, stepPulse } = beatmatch(120, t, { subdivide: 4 });
+<span class="tag">if</span> (stepPulse) out = use(Rotate).tick(out, step * 15);  <span class="com">// fires every 1/4 beat</span></code></pre>
+      <pre><code>beatEnvelope(phase, <span class="str">'triangle'</span>, { peak: 0.5 });  <span class="com">// -&gt; 0..1, reshaped</span></code></pre>
+      <p>
+        Reshapes a 0..1 phase (from <code>beatmatch</code> above, or any other 0..1
+        progress value, e.g. a <code>Pattern</code>) into one of several named envelope
+        curves — standalone/exported separately so it's usable against a phase from
+        anywhere.
+      </p>
+      <table>
+        <tr><th>Shape</th><th>Curve</th></tr>
+        <tr><td><code>'pulse'</code></td><td>Quick spike right on the beat, fast exponential decay (<code>decay</code>, default 12).</td></tr>
+        <tr><td><code>'build'</code></td><td>Smooth (sine-shaped) symmetric build-and-fall.</td></tr>
+        <tr><td><code>'triangle'</code></td><td>The default. Same build-and-fall, but a straight-line ramp — <code>peak</code> (0..1, default 0.5) moves the corner.</td></tr>
+        <tr><td><code>'adsr'</code></td><td>Full attack/decay/sustain/release envelope — each phase's length as a fraction of the beat (<code>attack</code>/<code>decay</code>/<code>sustain</code>/<code>release</code>, must sum to ≤ 1; leftover holds at <code>sustainLevel</code>).</td></tr>
+        <tr><td><code>'sawJump'</code></td><td>Ramps -1..1 across the beat, then jumps back to -1.</td></tr>
+        <tr><td><code>'inverse'</code></td><td>1/x-style falloff — spikes at the beat, falls off fast (<code>falloff</code>, default 8).</td></tr>
+      </table>
+    </section>
+
+    <section id="audio">
+      <h2>AudioSource</h2>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> audio = use(AudioSource, 2048);  <span class="com">// fftSize - must be a power of 2</span>
+audio.tick();  <span class="com">// asks for mic permission on first call - check audio.error</span>
+
+<span class="tag">const</span> bass = audio.band(20, 250);       <span class="com">// 0..1 average magnitude in that Hz range</span>
+<span class="tag">const</span> bars = audio.spectrum(32);        <span class="com">// 0..1 array, 32 bins across the frequency range</span>
+<span class="tag">const</span> wave = audio.waveform(128);       <span class="com">// -1..1 array, raw oscilloscope-style trace</span></code></pre>
+      <p>
+        Not a texture-bearing class — this produces plain numbers/arrays, for driving
+        OTHER things (a <code>Pattern</code>, an <code>Instance</code>/
+        <code>particle2d</code> grid, an effect's parameter) with live microphone input,
+        the same "just data, you draw it however you like" split as
+        <code>PhysicsWorld</code>.
+      </p>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>audio.spectrum(cols)</code></td><td>Flat 0..1 array, <code>cols</code> bins evenly spaced across the FFT's own frequency bins (linear, not log/perceptual spacing).</td></tr>
+        <tr><td><code>audio.band(loHz, hiHz)</code></td><td>Average magnitude (0..1) in that Hz range — the "EQ" half: call it a few times with different ranges (bass/mid/treble) to pull out just those bands.</td></tr>
+        <tr><td><code>audio.waveform(samples)</code></td><td>Flat -1..1 array, the raw time-domain signal — the actual waveform shape, not frequency content (for a scope trace rather than a spectrum bar graph).</td></tr>
+      </table>
+      <pre><code><span class="com">// bass level driving a circle's scale, watched on a Scope</span>
+<span class="tag">const</span> level = audio.band(20, 250);
+<span class="tag">const</span> out = use(Instance).tick(dot(), 1, () =&gt; ({ scale: 0.2 + level * 0.6 }));
+preview(use(Scope).tick(level));</code></pre>
+      <div class="note">
+        <code>audio.spectrum()</code>/<code>.band()</code> read as flat 0 until the mic
+        permission prompt resolves — <code>tick()</code>'s first call kicks off that
+        request asynchronously, same convention as <code>WebcamSource</code>.
+      </div>
+    </section>
+
+    <section id="midi">
+      <h2>MIDI: midi / midiKnob / midiPad / LPD8</h2>
+      <p>
+        Reading <code>midi.knobs</code>/<code>midi.pads</code> (or calling
+        <code>midiKnob()</code>/<code>midiPad()</code>) triggers a lazy connect — the
+        browser's own Web MIDI permission prompt, same convention as
+        <code>WebcamSource</code>/<code>AudioSource</code>. Check <code>midiError()</code>
+        if it was denied or isn't supported (Safari doesn't implement Web MIDI as of this
+        writing; Chrome/Edge are the safe choice).
+      </p>
+      <pre><code>preview(midi.knobs);  <span class="com">// { knob_20: 0.5, knob_21: 0.12, ... } - grows as you touch each control</span>
+preview(midi.pads);   <span class="com">// { pad_60: true, pad_62: false, ... }</span></code></pre>
+      <p>
+        <code>midi.knobs</code>/<code>midi.pads</code> are plain key-value stores that
+        grow automatically the moment a new CC/note number is actually seen, keyed by a
+        readable <code>"knob_N"</code>/<code>"pad_N"</code> string — no hardcoded
+        per-device mapping needed, since different controllers (even the same model's
+        mk1 vs mk2) send wildly different numbers. Every new CC/note is also logged to
+        the console (prefixed <code>[midi]</code>) the first time it's seen, so you can
+        watch which physical knob/pad maps to which number as you touch each one. Type
+        <code>$midi$</code> in the editor for a ready-made "watch everything" starter node.
+      </p>
+      <p>Once you know the number you want, the direct-read helpers are usually nicer than indexing the store yourself:</p>
+      <table>
+        <tr><th>Call</th><th>What it does</th></tr>
+        <tr><td><code>midiKnob(cc, {min,max,default})</code></td><td>Last CC value, scaled to <code>[min,max]</code>. Unknown/untouched CC → <code>default</code> (which defaults to <code>min</code>) rather than silently reading 0.</td></tr>
+        <tr><td><code>midiPad(note, {mode})</code></td><td><code>mode: 'momentary'</code> (default) → true while held. <code>'toggle'</code> → flips once per press, like <code>button()</code>.</td></tr>
+        <tr><td><code>midiVelocity(note)</code></td><td>0..1 from the most recent press — holds its last value after release rather than resetting to 0.</td></tr>
+        <tr><td><code>midiError()</code></td><td>Error string if Web MIDI is unsupported/denied, <code>null</code> otherwise.</td></tr>
+      </table>
+      <pre><code><span class="tag">const</span> hue = midiKnob(20, { min: 0, max: 360 });
+<span class="tag">const</span> pressed = midiPad(60, { mode: <span class="str">'toggle'</span> });</code></pre>
+      <p>
+        <code>LPD8</code>/<code>LPD8_MK2</code> are ready-made factory CC/note mappings
+        for the Akai LPD8 (the mk2 ships DIFFERENT numbers than the original — knobs on
+        CC 20..27, pads on a C-major scale rather than chromatic):
+      </p>
+      <pre><code><span class="tag">const</span> hue = midiKnob(LPD8_MK2.knobs[0], { min: 0, max: 360 });
+<span class="tag">const</span> hit = midiPad(LPD8_MK2.padsA[0]);</code></pre>
     </section>
 
     <section id="media">
@@ -969,6 +1255,33 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         that block and hitting Send again has no effect, because the block that would
         apply your edit never runs again once <code>state.scene</code> already exists.
       </div>
+
+      <h3>orbitCamera</h3>
+      <pre><code>orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.15, radius: 3, target: [0,0,0] });</code></pre>
+      <p>
+        Positions a real <code>THREE.Camera</code> on a sphere around <code>target</code>
+        and points it there — nothing but the camera's own ordinary
+        <code>position</code>/<code>lookAt</code> calls under the hood, just the
+        spherical-coordinates trig spelled out once. Call it every tick with a changing
+        <code>azimuth</code>/<code>elevation</code> to orbit around a mesh.
+      </p>
+
+      <h3>ModelSource</h3>
+      <pre><code><span class="tag">const</span> use = useInstances(state);
+<span class="tag">const</span> model = use(ModelSource).tick(files.get(<span class="str">'chair.glb'</span>));  <span class="com">// or a plain URL string</span>
+<span class="tag">if</span> (model &amp;&amp; !state.added) {
+  state.scene.add(model);
+  state.added = <span class="tag">true</span>;
+}</code></pre>
+      <p>
+        Loads a glTF/GLB model — <code>source</code> is a plain URL string, or a File/Blob
+        from <code>files.get('name.glb')</code> (the same <code>$load$</code> file-picker
+        <code>Image</code>/<code>Video</code> use, see <a href="#media">Media</a>).
+        Loading is asynchronous — <code>tick()</code> returns <code>null</code> until it
+        resolves, then the loaded <code>THREE.Group</code> from then on, so guard adding
+        it to the scene on it actually being truthy. Re-loads automatically if you pass a
+        different source.
+      </p>
     </section>
 
     <section id="physics">
@@ -1094,6 +1407,67 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       </p>
     </section>
 
+    <section id="templates">
+      <h2>Every node template</h2>
+      <p>
+        Every name below works with both shortcuts — <code>someKey: $name$</code> (bare
+        body, your own key) and <code>$explode(name)$</code> (full
+        <code>generatedKeyNode: { ... },</code> entry, ready to paste in).
+      </p>
+      <table>
+        <tr><th>Name</th><th>What it starts you with</th></tr>
+        <tr><td><code>glsl</code></td><td>Bare GLSL passthrough — <code>uSrc</code> in, <code>outColor</code> out.</td></tr>
+        <tr><td><code>canvas</code></td><td>Bare Canvas2D drawing starter.</td></tr>
+        <tr><td><code>node</code></td><td>Blank generic node — no lib class committed to yet.</td></tr>
+        <tr><td><code>screen</code></td><td>A terminal <code>render(inputs.src)</code> node — the "final output" shape.</td></tr>
+        <tr><td><code>null</code></td><td>Passthrough that republishes <code>inputs.src</code> under a differently-named port (<code>out</code>).</td></tr>
+        <tr><td><code>square</code>, <code>circle</code>, <code>shape</code></td><td>A static white shape (square/circle/triangle-ish polygon) on transparent, drawn ONCE at full <code>screenSize()</code> resolution — hand-edit the <code>ctx.*</code> calls for any other shape.</td></tr>
+        <tr><td><code>text</code></td><td>Static <code>ctx.fillText</code> label, same one-time-draw pattern as <code>square</code>.</td></tr>
+        <tr><td><code>html</code></td><td>Rasterized HTML/CSS via <code>Html</code> — richer text layout than <code>ctx.font</code>.</td></tr>
+        <tr><td><code>lag</code></td><td><code>use(Lag, n)</code> frequency-divider starter.</td></tr>
+        <tr><td><code>delay</code></td><td><code>use(Delay, ticks)</code> sliding delay-line starter.</td></tr>
+        <tr><td><code>composite</code></td><td><code>use(Composite).tick(a, b, mode, opacity)</code> starter.</td></tr>
+        <tr><td><code>mask</code></td><td>Cuts a hole in <code>src</code> using a second shape's alpha.</td></tr>
+        <tr><td><code>chroma_key</code></td><td>Green-screen style keying starter.</td></tr>
+        <tr><td><code>gradient_map</code></td><td>The Ramp → Lookup palette-recolor starter (<code>GradientMap</code>).</td></tr>
+        <tr><td><code>kaleidoscope</code></td><td><code>Kaleidoscope</code> effect starter.</td></tr>
+        <tr><td><code>spiral</code></td><td>A working feedback loop — rotates/shrinks/drifts its own previous frame through <code>Lag</code>, compositing fresh content on top each tick, building a spiral/tunnel over time.</td></tr>
+        <tr><td><code>effect</code></td><td>Blank starter for writing a NEW GLSL-backed effect class (the <code>useInstances</code>/base boilerplate, nothing committed to what it does yet).</td></tr>
+        <tr><td><code>ramp</code></td><td><code>Ramp</code> 2-color gradient generator starter.</td></tr>
+        <tr><td><code>gradient</code></td><td><code>Gradient</code> multi-stop generator, live-editable via two <code>colorPicker()</code>s.</td></tr>
+        <tr><td><code>noise</code></td><td><code>Noise</code> field generator starter (perlin, animated via <code>z: t</code>).</td></tr>
+        <tr><td><code>warp</code></td><td><code>Warp</code> localized bulge/pinch starter.</td></tr>
+        <tr><td><code>ripple</code></td><td><code>Ripple</code> wave-ripple starter.</td></tr>
+        <tr><td><code>image</code>, <code>video</code>, <code>webcam</code></td><td><code>ImageSource</code>/<code>VideoSource</code>/<code>WebcamSource</code> loader starters (URL or <code>$load$</code>-picked file).</td></tr>
+        <tr><td><code>hydra</code></td><td><code>HydraSource</code> DSL starter (<code>osc/shape/noise/out</code>...).</td></tr>
+        <tr><td><code>three</code></td><td>Real three.js scene/camera/rotating-mesh starter, with <code>orbitCamera</code>.</td></tr>
+        <tr><td><code>three_rect</code></td><td>A flat, double-sided plane in a 3D scene.</td></tr>
+        <tr><td><code>three_sphere</code></td><td>Projects one of THIS project's own texture-bearing values onto a sphere via <code>three.toTexture()</code>.</td></tr>
+        <tr><td><code>three_model</code></td><td>Loads a real glTF/GLB file via <code>ModelSource</code>.</td></tr>
+        <tr><td><code>three_text</code></td><td>Text mapped onto a 3D plane via a <code>Canvas2D</code>-drawn <code>THREE.CanvasTexture</code> — no external font asset needed, unlike true extruded <code>TextGeometry</code>.</td></tr>
+        <tr><td><code>physics</code></td><td><code>PhysicsWorld</code> demo — a ball spawns onto a bouncy 45° platform once a second.</td></tr>
+        <tr><td><code>pattern</code></td><td>A <code>Pattern</code> driving a plain value (a circle's radius here) — swap the shape freely.</td></tr>
+        <tr><td><code>pattern_plot</code></td><td>A <code>Pattern.plot()</code> rendered full-screen (real resolution + margin), not just a small <code>preview()</code> card.</td></tr>
+        <tr><td><code>lfo</code></td><td>Exports a <code>Pattern</code>-driven value on the bus for other nodes to read via <code>in</code>.</td></tr>
+        <tr><td><code>sine</code></td><td>The plainest <code>Pattern.sin()</code> use — a slow brightness pulse.</td></tr>
+        <tr><td><code>instance</code></td><td><code>Instance</code> starter with a custom per-instance placement callback.</td></tr>
+        <tr><td><code>particle2d</code></td><td><code>particle2d()</code> batteries-included grid-of-stamps starter.</td></tr>
+        <tr><td><code>ascii</code></td><td><code>ascii2d()</code> text-grid renderer starter.</td></tr>
+        <tr><td><code>node_function</code></td><td><code>nodeFunction()</code> reusable-pipeline starter.</td></tr>
+        <tr><td><code>audio</code></td><td><code>AudioSource</code> mic spectrum starter.</td></tr>
+        <tr><td><code>midi</code></td><td>A "watch everything" node — previews <code>midi.knobs</code>/<code>midi.pads</code> so you can see what your controller actually sends.</td></tr>
+        <tr><td><code>bpm</code></td><td>A MIDI-knob-driven tempo node, feeding <code>beatmatch()</code>.</td></tr>
+        <tr><td><code>pad_index</code></td><td>"Which pad was pressed most recently" → an integer index, for driving a <code>$switch(n)$</code> node.</td></tr>
+      </table>
+      <p>
+        Also covered elsewhere: <code>$load$</code>/<code>$downscale$</code> (file
+        pickers, see <a href="#media">Media</a>), <code>$slider$</code>/
+        <code>$button$</code>/<code>$input$</code>/<code>$color_picker$</code> (control
+        snippets, see <a href="#controls">Controls</a>), and
+        <code>$compose_at(n)$</code> (see <a href="#composeat">ComposeAt</a>).
+      </p>
+    </section>
+
     <section id="reset-button">
       <h2>Per-node reset button</h2>
       <p>
@@ -1162,29 +1536,89 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
 
     <section id="global-index">
       <h2>Full global index</h2>
-      <p>Everything below is available directly in project code, no import needed.</p>
+      <p>
+        Everything below is available directly in project code, no import needed — every
+        entry is a real, currently-wired-up global (see <code>core/project-loader.js</code>
+        if you ever want to check against the actual source of truth).
+      </p>
+
+      <h4>Rendering primitives</h4>
       <p style="color:#aac">
-        <code>GLSL</code>, <code>Canvas2D</code>, <code>ScreenOutput</code>,
-        <code>Html</code>, <code>Composite</code>, <code>Matte</code>, <code>Lag</code>,
-        <code>Delay</code>, <code>Bloom</code>, <code>Ramp</code>, <code>Noise</code>,
-        <code>Pattern</code>, <code>ImageSource</code>, <code>VideoSource</code>,
-        <code>WebcamSource</code>, <code>HydraSource</code>, <code>ThreeSource</code>,
-        <code>ModelSource</code>, <code>PhysicsWorld</code>,
-        <code>THREE</code>, <code>files</code>, <code>screenSize</code>,
-        <code>viewportSize</code>, <code>mouse</code>, <code>keyPulse</code>,
-        <code>newPatch</code>, <code>sampleTexture</code>, <code>render</code>,
-        <code>preview</code>, <code>slider</code>, <code>button</code>,
-        <code>input</code>, <code>useInstances</code>, <code>nodeFunction</code>,
-        <code>Instance</code>, <code>particle2d</code>, <code>ascii2d</code>,
-        <code>dot</code>, <code>pixel</code>, <code>explode</code>, <code>FX</code>,
-        <code>Rotate</code>, <code>Scale</code>, <code>Flip</code>,
+        <code>GLSL</code>, <code>Canvas2D</code>, <code>Html</code>, <code>ScreenOutput</code>
+      </p>
+
+      <h4>Effects (FX) — use(Name).tick(src, ...)</h4>
+      <p style="color:#aac">
+        <code>FX</code>, <code>Rotate</code>, <code>Scale</code>, <code>Flip</code>,
         <code>Translate</code>, <code>ChannelMix</code>, <code>Brightness</code>,
         <code>Contrast</code>, <code>Saturation</code>, <code>HueShift</code>,
         <code>Grade</code>, <code>Blur</code>, <code>LensBlur</code>,
         <code>Threshold</code>, <code>Edge</code>, <code>Emboss</code>,
         <code>Mirror</code>, <code>Tile</code>, <code>Kaleidoscope</code>,
-        <code>Modulate</code>, <code>Displace</code>, <code>Vignette</code>,
-        <code>Pixelate</code>, <code>Posterize</code>, <code>ColorLookup</code>
+        <code>Modulate</code>, <code>Displace</code>, <code>ModulateScale</code>,
+        <code>ModulateRotate</code>, <code>Vignette</code>, <code>Pixelate</code>,
+        <code>Posterize</code>, <code>ColorLookup</code>, <code>Mask</code>,
+        <code>ChromaKey</code>, <code>GradientMap</code>, <code>Fisheye</code>,
+        <code>Invert</code>, <code>Colorize</code>, <code>CRT</code>,
+        <code>FilmGrain</code>, <code>Bitmap</code>, <code>ChannelThreshold</code>,
+        <code>ScanLines</code>, <code>Crop</code>
+      </p>
+
+      <h4>Localized distortion (point arrays)</h4>
+      <p style="color:#aac"><code>Warp</code>, <code>Ripple</code></p>
+
+      <h4>Compositing &amp; layout</h4>
+      <p style="color:#aac">
+        <code>Composite</code>, <code>Matte</code>, <code>Layer</code>, <code>ComposeAt</code>
+      </p>
+
+      <h4>Feedback &amp; glow</h4>
+      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code></p>
+
+      <h4>Generators &amp; color</h4>
+      <p style="color:#aac">
+        <code>Ramp</code>, <code>Gradient</code>, <code>Noise</code>, <code>COLORS</code>,
+        <code>COLORMAPS</code>
+      </p>
+
+      <h4>Data &amp; math</h4>
+      <p style="color:#aac"><code>Pattern</code>, <code>Scope</code>, <code>sampleTexture</code></p>
+
+      <h4>Instancing &amp; particles</h4>
+      <p style="color:#aac">
+        <code>Instance</code>, <code>particle2d</code>, <code>ascii2d</code>,
+        <code>dot</code>, <code>pixel</code>
+      </p>
+
+      <h4>Sources</h4>
+      <p style="color:#aac">
+        <code>ImageSource</code>, <code>VideoSource</code>, <code>WebcamSource</code>,
+        <code>HydraSource</code>, <code>ThreeSource</code>, <code>ModelSource</code>,
+        <code>THREE</code>, <code>orbitCamera</code>, <code>PhysicsWorld</code>,
+        <code>files</code>
+      </p>
+
+      <h4>Audio &amp; MIDI</h4>
+      <p style="color:#aac">
+        <code>AudioSource</code>, <code>midi</code>, <code>midiKnob</code>,
+        <code>midiPad</code>, <code>midiVelocity</code>, <code>midiError</code>,
+        <code>LPD8</code>, <code>LPD8_MK2</code>
+      </p>
+
+      <h4>Tempo</h4>
+      <p style="color:#aac"><code>beatmatch</code>, <code>beatEnvelope</code></p>
+
+      <h4>Controls</h4>
+      <p style="color:#aac">
+        <code>slider</code>, <code>button</code>, <code>input</code>, <code>colorPicker</code>
+      </p>
+
+      <h4>Environment &amp; core</h4>
+      <p style="color:#aac">
+        <code>screenSize</code>, <code>viewportSize</code>, <code>mouse</code>,
+        <code>keyPulse</code>, <code>newPatch</code>, <code>render</code>,
+        <code>preview</code>, <code>useInstances</code>, <code>nodeFunction</code>,
+        <code>explode</code>
       </p>
     </section>
 

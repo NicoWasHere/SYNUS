@@ -63,6 +63,8 @@ import {
   Kaleidoscope,
   Modulate,
   Displace,
+  ModulateScale,
+  ModulateRotate,
   Vignette,
   Pixelate,
   Posterize,
@@ -98,7 +100,7 @@ import { explode } from './lib/explode.js';
 // class (Rotate, Scale, Flip, Translate, ChannelMix, Brightness,
 // Contrast, Saturation, HueShift, Grade, Blur, LensBlur, Threshold,
 // Edge, Emboss, Mirror, Tile, Kaleidoscope, Modulate, Displace,
-// Vignette, Pixelate, Posterize, ColorLookup, Mask, ChromaKey,
+// ModulateScale, ModulateRotate, Vignette, Pixelate, Posterize, ColorLookup, Mask, ChromaKey,
 // GradientMap, Fisheye, Invert, Colorize, CRT, FilmGrain, Bitmap,
 // ChannelThreshold, ScanLines, Crop), are exposed as plain
 // globals so project code can write `new GLSL()`, `use(Rotate).tick(...)`,
@@ -193,6 +195,8 @@ export async function loadProject(gl, source) {
   window.Kaleidoscope = Kaleidoscope;
   window.Modulate = Modulate;
   window.Displace = Displace;
+  window.ModulateScale = ModulateScale;
+  window.ModulateRotate = ModulateRotate;
   window.Vignette = Vignette;
   window.Pixelate = Pixelate;
   window.Posterize = Posterize;
