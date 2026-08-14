@@ -298,6 +298,8 @@
           <td>Side by side shows the editor and the render output next to each other. Perform mode makes the render output fill the whole window with the editor floating semi-transparently on top.</td></tr>
         <tr><td><b>⛶ Fullscreen</b></td>
           <td>Real OS-level fullscreen (hides the browser chrome too), independent of Perform/Side-by-side.</td></tr>
+        <tr><td><b>⌂</b></td>
+          <td>Drops any shared/saved patch from the URL and reloads back to the bundled default project - a real page reload (not just clearing the editor text), so slider/button/colorPicker values, MIDI/audio connections, and all running node state reset too.</td></tr>
         <tr><td>tps / t counters</td>
           <td>Ticks-per-second (should track your monitor's refresh rate minus whatever your graph actually costs per frame) and the running clock time passed into every node's <code>code(inputs, state, t)</code> as <code>t</code>.</td></tr>
         <tr><td>Error panel</td>
@@ -517,11 +519,9 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>Threshold.tick(src, {level,softness})</code></td><td></td></tr>
         <tr><td><code>Edge.tick(src, amount)</code></td><td>Sobel gradient magnitude.</td></tr>
         <tr><td><code>Emboss.tick(src, amount)</code></td><td></td></tr>
-        <tr><td><code>Mirror.tick(src, {x,y})</code></td><td>Folds that axis onto itself.</td></tr>
+        <tr><td><code>Mirror.tick(src, half)</code></td><td><code>half</code>: <code>'left'</code> (default) | <code>'right'</code> | <code>'top'</code> | <code>'bottom'</code> — that half keeps its own content, the OTHER half becomes a mirrored copy of it.</td></tr>
         <tr><td><code>Tile.tick(src, {x,y})</code> or <code>(src, n)</code></td><td>Repeat count per axis.</td></tr>
         <tr><td><code>Kaleidoscope.tick(src, segments)</code></td><td>Number of mirrored wedges.</td></tr>
-        <tr><td><code>Modulate.tick(src, mapTexture, amount)</code></td><td>Map's luma pushes uv uniformly.</td></tr>
-        <tr><td><code>Displace.tick(src, mapTexture, amount)</code></td><td>Map's r/g push uv.x/uv.y independently.</td></tr>
         <tr><td><code>Vignette.tick(src, {amount,radius})</code></td><td></td></tr>
         <tr><td><code>Pixelate.tick(src, size)</code></td><td>Block size in texels.</td></tr>
         <tr><td><code>Posterize.tick(src, levels)</code></td><td>Color levels per channel.</td></tr>
@@ -536,12 +536,12 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>FilmGrain.tick(src, {amount,t})</code></td><td>Animated noise added to rgb — <code>t</code> keeps it moving instead of static.</td></tr>
         <tr><td><code>Bitmap.tick(src, {scale,colorA,colorB})</code></td><td>1-bit ordered (Bayer) dither — the "old Mac bitmap" look. <code>scale</code> is one dither cell's size in texels.</td></tr>
         <tr><td><code>ChannelThreshold.tick(src, {r,g,b})</code></td><td>Thresholds each channel independently (up to 8 distinct output colors) instead of one shared luma cutoff — see Threshold for the grayscale version.</td></tr>
-        <tr><td><code>ScanLines.tick(src, {spacing,thickness,maxWobble,wobbleFreq,vertical,color,darkCutoff,t,seed})</code></td><td>Always-oscillating wavy lines; a point's own brightness drives how far ITS wave swings. Output is transparent except where a line is drawn.</td></tr>
+        <tr><td><code>ScanLines.tick(src, {spacing,thickness,thicknessAmount,maxWobble,wobbleFreq,vertical,color,threshold,thresholdMode,t,seed})</code></td><td>Always-oscillating wavy lines; a point's own brightness drives how far ITS wave swings AND how much extra thickness it gets. <code>threshold</code>/<code>thresholdMode</code> exclude one side of src's luma from ever drawing a line.</td></tr>
         <tr><td><code>Crop.tick(src, {x,y,w,h})</code></td><td>Extracts <code>src</code>'s <code>[x,y,w,h]</code> sub-rectangle (top-left origin) and stretches it to fill the frame. NOT the same as Mask (that cuts a hole in place, doesn't move/rescale).</td></tr>
-        <tr><td><code>Modulate.tick(src, mapTexture, amount)</code></td><td>Map's luma pushes uv uniformly (same offset for x and y) — a softer, "flowing" distortion.</td></tr>
-        <tr><td><code>Displace.tick(src, mapTexture, amount)</code></td><td>Map's r/g push uv.x/uv.y independently — a real 2-channel map (e.g. <code>Noise</code> with <code>mono:false</code>) gives fully independent x/y motion.</td></tr>
-        <tr><td><code>ModulateScale.tick(src, mapTexture, multiple, offset)</code></td><td>Map's r/g channels push <code>src</code>'s own scale (zoom) independently per axis, around center. Ported from Hydra.</td></tr>
-        <tr><td><code>ModulateRotate.tick(src, mapTexture, multiple, offset)</code></td><td>Map's red channel pushes <code>src</code>'s own rotation angle around center. Ported from Hydra.</td></tr>
+        <tr><td><code>Modulate.tick(src, mapTexture, amount, fill)</code></td><td>Map's luma pushes uv uniformly (same offset for x and y) — a softer, "flowing" distortion.</td></tr>
+        <tr><td><code>Displace.tick(src, mapTexture, amount, fill)</code></td><td>Map's r/g push uv.x/uv.y independently — a real 2-channel map (e.g. <code>Noise</code> with <code>mono:false</code>) gives fully independent x/y motion.</td></tr>
+        <tr><td><code>ModulateScale.tick(src, mapTexture, multiple, offset, fill)</code></td><td>Map's r/g channels push <code>src</code>'s own scale (zoom) independently per axis, around center. Ported from Hydra.</td></tr>
+        <tr><td><code>ModulateRotate.tick(src, mapTexture, multiple, offset, fill)</code></td><td>Map's red channel pushes <code>src</code>'s own rotation angle around center. Ported from Hydra.</td></tr>
       </table>
       <p><code>FX</code> also exposes the whole table generically: <code>FX.rotate === Rotate</code>, etc.</p>
       <div class="note">
@@ -556,6 +556,18 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
 <span class="tag">const</span> map = use(Noise).tick({ scale: 4, seed: 1 });
 <span class="tag">const</span> scaled = use(ModulateScale).tick(inputs.src, map, 0.8, 1);
 <span class="tag">const</span> out = use(ModulateRotate).tick(scaled, map, 2, 0);</code></pre>
+      <p>
+        All four take a trailing <code>fill</code> argument (default <code>'clamp'</code>)
+        controlling what happens where the modulation pushes the sample coordinate
+        outside 0..1:
+      </p>
+      <table>
+        <tr><th><code>fill</code></th><th>Look</th></tr>
+        <tr><td><code>'clamp'</code></td><td>Default. Repeats the nearest edge pixel outward — smooth, but can smear if that edge is a hard color boundary.</td></tr>
+        <tr><td><code>'transparent'</code></td><td>0 alpha outside 0..1 instead — no smear, a clean cutoff. Same convention <code>Rotate</code>/<code>Scale</code> already use.</td></tr>
+        <tr><td><code>'wrap'</code></td><td>Tiles the source. Real Hydra never sets an explicit texture wrap mode, so it inherits WebGL's own REPEAT default — this is what gives a large <code>modulateScale</code> amount that "folds into a 3D plane" look some Hydra patches have. Try it at extreme <code>multiple</code> values for the same effect here.</td></tr>
+      </table>
+      <pre><code><span class="tag">const</span> out = use(ModulateScale).tick(inputs.src, map, -1.4, 1, <span class="str">'wrap'</span>);  <span class="com">// the Hydra "3D plane" look</span></code></pre>
     </section>
 
     <section id="distortion">

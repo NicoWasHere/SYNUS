@@ -138,7 +138,12 @@ export const SIGNATURES = {
   },
   Edge: { ctor: 'new Edge()', tick: 'edge.tick(src, amount = 1)  // Sobel gradient magnitude' },
   Emboss: { ctor: 'new Emboss()', tick: 'emboss.tick(src, amount = 1)' },
-  Mirror: { ctor: 'new Mirror()', tick: 'mirror.tick(src, { x = true, y = false })  // folds that axis' },
+  Mirror: {
+    ctor: 'new Mirror()',
+    tick:
+      "mirror.tick(src, half = 'left')  // half: 'left' | 'right' | 'top' | 'bottom'\n" +
+      "// THAT half keeps its own content; the OTHER half becomes a mirrored copy of it",
+  },
   Tile: {
     ctor: 'new Tile()',
     tick: 'tile.tick(src, { x = 2, y = 2 })\n// or tile.tick(src, n) for both axes evenly',
@@ -146,25 +151,30 @@ export const SIGNATURES = {
   Kaleidoscope: { ctor: 'new Kaleidoscope()', tick: 'kaleidoscope.tick(src, segments = 6)' },
   Modulate: {
     ctor: 'new Modulate()',
-    tick: "modulate.tick(src, mapTexture, amount = 0.1)  // map's luma pushes uv uniformly",
+    tick:
+      "modulate.tick(src, mapTexture, amount = 0.1, fill = 'clamp')  // map's luma pushes uv uniformly\n" +
+      "// fill: 'clamp' (stretch edge) | 'transparent' (0 alpha outside) | 'wrap' (tile - Hydra's own default)",
   },
   Displace: {
     ctor: 'new Displace()',
     tick:
-      "displace.tick(src, mapTexture, amount = 0.1)  // map's r/g push uv.x/uv.y independently\n" +
-      '// green is sampled from an offset uv too, so even a grayscale map (r == g) still gives real 2-axis motion',
+      "displace.tick(src, mapTexture, amount = 0.1, fill = 'clamp')  // map's r/g push uv.x/uv.y independently\n" +
+      '// green is sampled from an offset uv too, so even a grayscale map (r == g) still gives real 2-axis motion\n' +
+      "// fill: 'clamp' (stretch edge) | 'transparent' (0 alpha outside) | 'wrap' (tile - Hydra's own default)",
   },
   ModulateScale: {
     ctor: 'new ModulateScale()',
     tick:
-      'modulateScale.tick(src, mapTexture, multiple = 1, offset = 1)\n' +
-      "// map's r/g channels push src's own scale (zoom) independently per axis, around center - ported from Hydra",
+      "modulateScale.tick(src, mapTexture, multiple = 1, offset = 1, fill = 'clamp')\n" +
+      "// map's r/g channels push src's own scale (zoom) independently per axis, around center - ported from Hydra\n" +
+      "// fill: 'clamp' (stretch edge) | 'transparent' (0 alpha outside) | 'wrap' (tile - the \"folds into a 3D plane\" look)",
   },
   ModulateRotate: {
     ctor: 'new ModulateRotate()',
     tick:
-      'modulateRotate.tick(src, mapTexture, multiple = 1, offset = 0)\n' +
-      "// map's red channel pushes src's own rotation angle around center - ported from Hydra",
+      "modulateRotate.tick(src, mapTexture, multiple = 1, offset = 0, fill = 'clamp')\n" +
+      "// map's red channel pushes src's own rotation angle around center - ported from Hydra\n" +
+      "// fill: 'clamp' (stretch edge) | 'transparent' (0 alpha outside) | 'wrap' (tile - Hydra's own default)",
   },
   Vignette: {
     ctor: 'new Vignette()',
@@ -253,11 +263,14 @@ export const SIGNATURES = {
   ScanLines: {
     ctor: 'new ScanLines()',
     tick:
-      'scanLines.tick(src, { spacing = 25, thickness = 2, maxWobble = 10 wobbleFreq = 0.05,\n' +
-      "                       vertical = false, color = '#ffffff', darkCutoff = 0.08, t = 0, seed = 0 })\n" +
-      '// lines always oscillate up/down - src lightness drives wave SWING (maxWobble), not thickness\n' +
-      '// (its own fixed param now). t animates it; seed reshuffles the per-line random phase/frequency\n' +
-      '// jitter (each line wobbles independently, not as identical copies). Never draws over dark pixels.',
+      'scanLines.tick(src, { spacing = 20, thickness = 2, thicknessAmount = 0, maxWobble = 10,\n' +
+      "                       wobbleFreq = 0.05, vertical = false, color = '#ffffff', threshold = 0.05,\n" +
+      "                       thresholdMode = 'below', t = 0, seed = 0 })\n" +
+      '// lines always oscillate up/down - src lightness drives wave SWING (maxWobble) AND extra\n' +
+      '// thickness (thicknessAmount, added on top of the flat thickness base - 0 keeps it fixed-width).\n' +
+      '// t animates it; seed reshuffles the per-line random phase/frequency jitter (each line wobbles\n' +
+      "// independently). threshold+thresholdMode exclude one side of src's luma from ever drawing a\n" +
+      "// line - 'below' (default) skips dark areas, 'above' skips bright ones instead.",
   },
   Crop: {
     ctor: 'new Crop()',

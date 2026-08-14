@@ -115,8 +115,11 @@ export const EFFECTS = {
 
   mirror: {
     frag: shaders.MIRROR,
-    // mirror(src, { x: true, y: false })  -  folds that axis onto itself
-    toUniforms: ({ x = true, y = false } = {}) => ({ uAxis: [x ? 1 : 0, y ? 1 : 0] }),
+    // mirror(src, half)  -  half: 'left' (default) | 'right' | 'top' | 'bottom'.
+    // THAT half keeps its own original content; the OTHER half is
+    // overwritten with a mirrored copy of it - e.g. 'right' clones the
+    // right half onto the left, it does NOT fold both halves toward center.
+    toUniforms: (half = 'left') => ({ uHalf: { left: 0, right: 1, top: 2, bottom: 3 }[half] ?? 0 }),
   },
 
   tile: {
@@ -139,35 +142,58 @@ export const EFFECTS = {
   // passes it straight through keyed as a uniform; GLSL.tick() already
   // knows to bind anything with a .texture property as a sampler2D, the
   // same as uSrc itself, so no special-casing was needed here at all.
+  //
+  // Every modulate-family effect (these two, plus modulateScale/
+  // modulateRotate below) shares the same `fill` option: what happens
+  // where the modulation pushes the sample coordinate outside 0..1.
+  // 'clamp' (default) repeats the nearest edge pixel outward. 'transparent'
+  // goes to 0 alpha out there instead - no smear, same convention Rotate/
+  // Scale already use. 'wrap' tiles the source, matching what real Hydra
+  // does (it never sets an explicit texture wrap mode, so it inherits
+  // WebGL's own REPEAT default) - this is what gives a large modulateScale
+  // amount that "folds into a 3D plane" look some Hydra patches have.
   modulate: {
     frag: shaders.MODULATE,
-    // modulate(src, mapTexture, 0.1)  -  map's luma pushes uv uniformly
-    toUniforms: (map, amount = 0.1) => ({ uMap: map, uAmount: amount }),
+    // modulate(src, mapTexture, 0.1, fill)  -  map's luma pushes uv uniformly
+    toUniforms: (map, amount = 0.1, fill = 'clamp') => ({ uMap: map, uAmount: amount, uFillMode: fillMode(fill) }),
   },
 
   displace: {
     frag: shaders.DISPLACE,
-    // displace(src, mapTexture, 0.1)  -  map's r/g push uv.x/uv.y independently
-    toUniforms: (map, amount = 0.1) => ({ uMap: map, uAmount: amount }),
+    // displace(src, mapTexture, 0.1, fill)  -  map's r/g push uv.x/uv.y independently
+    toUniforms: (map, amount = 0.1, fill = 'clamp') => ({ uMap: map, uAmount: amount, uFillMode: fillMode(fill) }),
   },
 
   modulateScale: {
     frag: shaders.MODULATE_SCALE,
-    // modulateScale(src, mapTexture, multiple = 1, offset = 1)  -  map's
+    // modulateScale(src, mapTexture, multiple = 1, offset = 1, fill)  -  map's
     // r/g channels push src's own scale (zoom) independently per axis,
     // around the frame's center - a straight port of Hydra's own
     // modulateScale. offset is the baseline divisor when the map reads 0
     // (offset = 1 means "no scale change" there); multiple controls how
     // strongly the map's brightness pushes it away from that baseline.
-    toUniforms: (map, multiple = 1, offset = 1) => ({ uMap: map, uMultiple: multiple, uOffset: offset }),
+    // See `fill` above (the modulate/displace comment) - try 'wrap' for
+    // Hydra's own "folds into a 3D plane" look at extreme multiple values.
+    toUniforms: (map, multiple = 1, offset = 1, fill = 'clamp') => ({
+      uMap: map,
+      uMultiple: multiple,
+      uOffset: offset,
+      uFillMode: fillMode(fill),
+    }),
   },
 
   modulateRotate: {
     frag: shaders.MODULATE_ROTATE,
-    // modulateRotate(src, mapTexture, multiple = 1, offset = 0)  -  map's
+    // modulateRotate(src, mapTexture, multiple = 1, offset = 0, fill)  -  map's
     // red channel pushes src's own rotation angle (radians) around the
-    // frame's center - a straight port of Hydra's own modulateRotate.
-    toUniforms: (map, multiple = 1, offset = 0) => ({ uMap: map, uMultiple: multiple, uOffset: offset }),
+    // frame's center - a straight port of Hydra's own modulateRotate. See
+    // `fill` above (the modulate/displace comment).
+    toUniforms: (map, multiple = 1, offset = 0, fill = 'clamp') => ({
+      uMap: map,
+      uMultiple: multiple,
+      uOffset: offset,
+      uFillMode: fillMode(fill),
+    }),
   },
 
   vignette: {
@@ -315,39 +341,48 @@ export const EFFECTS = {
 
   scanLines: {
     frag: shaders.SCAN_LINES,
-    // scanLines(src, { spacing = 22, thickness = 2, maxWobble = 50,
-    //                   wobbleFreq = 0.05, vertical = false,
-    //                   color = '#ffffff', darkCutoff = 0.08, t = 0,
-    //                   seed = 0 })
+    // scanLines(src, { spacing = 20, thickness = 2, thicknessAmount = 0,
+    //                   maxWobble = 10, wobbleFreq = 0.05, vertical = false,
+    //                   color = '#ffffff', threshold = 0.05,
+    //                   thresholdMode = 'below', t = 0, seed = 0 })
     // Always-oscillating wavy lines - src's own lightness at a point
-    // drives how far THAT point's wave swings (maxWobble), not the
-    // line's thickness anymore (thickness is its own fixed parameter).
+    // drives how far THAT point's wave swings (maxWobble) AND, now, how
+    // much extra thickness that line gets (thicknessAmount, added on top
+    // of the flat `thickness` base - 0 keeps it a fixed width like before).
     // Each line gets its own random phase/frequency jitter (see `seed` -
     // change it for a different random pattern) so neighboring lines
     // don't wobble as identical copies of each other. `t` is needed for
     // the oscillation to actually animate - pass the node's own `t`.
-    // Never draws over src pixels darker than darkCutoff, so the pattern
-    // traces bright content instead of covering the whole frame. Output
-    // is transparent wherever no line is drawn - Composite it over a
-    // background rather than expecting solid black there.
+    // `threshold` excludes src pixels on one side of that luma value from
+    // ever drawing a line at all - `thresholdMode: 'below'` (default,
+    // same as the old darkCutoff) excludes darker areas, so the pattern
+    // traces bright content instead of covering the whole frame;
+    // `'above'` excludes BRIGHTER areas instead, e.g. to keep lines off
+    // an already-blown-out sky/highlight. Output is transparent wherever
+    // no line is drawn - Composite it over a background rather than
+    // expecting solid black there.
     toUniforms: ({
       spacing = 20,
       thickness = 2,
+      thicknessAmount = 0,
       maxWobble = 10,
       wobbleFreq = 0.05,
       vertical = false,
       color = '#ffffff',
-      darkCutoff = 0.05,
+      threshold = 0.05,
+      thresholdMode = 'below',
       t = 0,
       seed = 0,
     } = {}) => ({
       uSpacing: spacing,
       uThickness: thickness,
+      uThicknessAmount: thicknessAmount,
       uMaxWobble: maxWobble,
       uWobbleFreq: wobbleFreq,
       uVertical: vertical ? 1 : 0,
       uColor: toRgb(color),
-      uDarkCutoff: darkCutoff,
+      uThreshold: threshold,
+      uThresholdMode: thresholdMode === 'above' ? 1 : 0,
       uTime: t,
       uSeed: seed,
     }),
@@ -363,6 +398,11 @@ export const EFFECTS = {
     toUniforms: ({ x = 0, y = 0, w = 1, h = 1 } = {}) => ({ uRect: [x, y, w, h] }),
   },
 };
+
+const FILL_MODES = { clamp: 0, transparent: 1, wrap: 2 };
+function fillMode(fill) {
+  return FILL_MODES[fill] ?? 0;
+}
 
 function toRgb(color) {
   if (Array.isArray(color)) return color;

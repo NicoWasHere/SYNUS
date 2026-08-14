@@ -25,6 +25,29 @@ vec4 sampleClamped(sampler2D tex, vec2 uv) {
 }
 `;
 
+// Shared helper for the modulate-family effects below (modulate,
+// displace, modulateScale, modulateRotate): how to sample a uv/xy
+// coordinate that's been pushed outside 0..1 by the modulation.
+// uFillMode: 0 = 'clamp' (repeats the nearest edge pixel outward - can
+// smear if that edge is a hard color boundary), 1 = 'transparent' (0
+// alpha outside 0..1, same convention Rotate/Scale already use via
+// sampleClamped above - no smear, but a visible cutoff), 2 = 'wrap'
+// (tiles the source - real Hydra never sets an explicit texture wrap
+// mode, so it inherits WebGL's own default of REPEAT; the "folds into a
+// 3D-plane" look a big modulateScale amount gets in Hydra comes from
+// repeatedly tiling near where the scale divisor crosses zero, not from
+// anything scale-specific - 'wrap' here reproduces that same look).
+const FILL_HELPER = `
+vec4 sampleFill(sampler2D tex, vec2 uv, float fillMode) {
+  if (fillMode > 1.5) return texture(tex, fract(uv));
+  if (fillMode > 0.5) {
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
+    return texture(tex, uv);
+  }
+  return texture(tex, clamp(uv, 0.0, 1.0));
+}
+`;
+
 // Shared helper: RGB <-> HSV, needed only by hueShift.
 const HSV_HELPERS = `
 vec3 rgb2hsv(vec3 c) {
@@ -272,16 +295,26 @@ void main() {
 // it back out to fill the whole thing - the result only ever shows
 // content from one half, mirrored about center. Distinct from Flip
 // (which flips the WHOLE image, showing everything, just reversed).
+// uHalf: 0 = left, 1 = right, 2 = top, 3 = bottom - THAT half keeps its
+// own original content; the OTHER half is overwritten with a mirrored
+// copy of it (not a symmetric "fold both halves toward center" - the
+// named half is always the source, never the one that gets replaced).
+// vUv.y = 1 is visual top (see HEADER's own convention).
 export const MIRROR = `${HEADER}
 uniform sampler2D uSrc;
-uniform vec2 uAxis; // 1.0 = mirror-fold that axis, 0.0 = leave it
+uniform float uHalf;
 
 void main() {
-  vec2 folded = vec2(
-    (vUv.x < 0.5 ? vUv.x : 1.0 - vUv.x) * 2.0,
-    (vUv.y < 0.5 ? vUv.y : 1.0 - vUv.y) * 2.0
-  );
-  vec2 uv = mix(vUv, folded, uAxis);
+  vec2 uv = vUv;
+  if (uHalf < 0.5) { // left -> cloned onto right
+    uv.x = uv.x < 0.5 ? uv.x : 1.0 - uv.x;
+  } else if (uHalf < 1.5) { // right -> cloned onto left
+    uv.x = uv.x > 0.5 ? uv.x : 1.0 - uv.x;
+  } else if (uHalf < 2.5) { // top -> cloned onto bottom
+    uv.y = uv.y > 0.5 ? uv.y : 1.0 - uv.y;
+  } else { // bottom -> cloned onto top
+    uv.y = uv.y < 0.5 ? uv.y : 1.0 - uv.y;
+  }
   outColor = texture(uSrc, uv);
 }`;
 
@@ -314,15 +347,16 @@ void main() {
 // sample coordinate uniformly (same offset for x and y) - a softer,
 // more "flowing" distortion than DISPLACE below, which pushes x/y
 // independently from the map's separate r/g channels.
-export const MODULATE = `${HEADER}
+export const MODULATE = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform sampler2D uMap;
 uniform float uAmount;
+uniform float uFillMode;
 
 void main() {
   float m = dot(texture(uMap, vUv).rgb, vec3(0.299, 0.587, 0.114)) - 0.5;
   vec2 uv = vUv + vec2(m) * uAmount;
-  outColor = texture(uSrc, clamp(uv, 0.0, 1.0));
+  outColor = sampleFill(uSrc, uv, uFillMode);
 }`;
 
 // uMap's red channel pushes uSrc's sample coordinate on x; green pushes
@@ -335,16 +369,17 @@ void main() {
 // offset.y would always be equal, which is what made this feel like it
 // "wasn't doing anything" distinctive (a uniform diagonal push reads as
 // barely different from no displacement at all on most content).
-export const DISPLACE = `${HEADER}
+export const DISPLACE = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform sampler2D uMap;
 uniform float uAmount;
+uniform float uFillMode;
 
 void main() {
   float dx = texture(uMap, vUv).r - 0.5;
   float dy = texture(uMap, vUv + vec2(0.13, 0.29)).g - 0.5;
   vec2 offset = vec2(dx, dy) * 2.0 * uAmount;
-  outColor = texture(uSrc, clamp(vUv + offset, 0.0, 1.0));
+  outColor = sampleFill(uSrc, vUv + offset, uFillMode);
 }`;
 
 // Hydra's own modulateScale: uMap's r/g channels push uSrc's scale
@@ -352,28 +387,30 @@ void main() {
 // offsetting uv position the way MODULATE/DISPLACE above do. Ported
 // straight from hydra-synth's glsl-functions.js (same formula, same
 // uniform names renamed to this project's own uAmount-family convention).
-export const MODULATE_SCALE = `${HEADER}
+export const MODULATE_SCALE = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform sampler2D uMap;
 uniform float uMultiple;
 uniform float uOffset;
+uniform float uFillMode;
 
 void main() {
   vec4 c = texture(uMap, vUv);
   vec2 xy = vUv - 0.5;
   xy *= 1.0 / vec2(uOffset + uMultiple * c.r, uOffset + uMultiple * c.g);
   xy += 0.5;
-  outColor = texture(uSrc, clamp(xy, 0.0, 1.0));
+  outColor = sampleFill(uSrc, xy, uFillMode);
 }`;
 
 // Hydra's own modulateRotate: uMap's red channel pushes uSrc's rotation
 // angle around the frame's center. Ported straight from hydra-synth's
 // glsl-functions.js.
-export const MODULATE_ROTATE = `${HEADER}
+export const MODULATE_ROTATE = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform sampler2D uMap;
 uniform float uMultiple;
 uniform float uOffset;
+uniform float uFillMode;
 
 void main() {
   vec4 c = texture(uMap, vUv);
@@ -383,7 +420,7 @@ void main() {
   float co = cos(angle);
   xy = mat2(co, -s, s, co) * xy;
   xy += 0.5;
-  outColor = texture(uSrc, clamp(xy, 0.0, 1.0));
+  outColor = sampleFill(uSrc, xy, uFillMode);
 }`;
 
 export const VIGNETTE = `${HEADER}
@@ -693,15 +730,17 @@ void main() {
 // silhouette" - not a literal per-row edge scan.
 export const SCAN_LINES = `${HEADER}${HASH}
 uniform sampler2D uSrc;
-uniform float uSpacing;    // texels between adjacent line centers
-uniform float uThickness;  // line thickness, in texels - fixed, not luma-driven
-uniform float uMaxWobble;  // max wave swing, in texels, at luma = 1
-uniform float uWobbleFreq; // spatial frequency of the wave along the line's own length
-uniform float uVertical;   // 0 = horizontal lines, 1 = vertical
+uniform float uSpacing;         // texels between adjacent line centers
+uniform float uThickness;       // BASE line thickness, in texels, at luma = 0
+uniform float uThicknessAmount; // extra thickness, in texels, added at luma = 1 (0 = flat, not luma-driven)
+uniform float uMaxWobble;       // max wave swing, in texels, at luma = 1
+uniform float uWobbleFreq;      // spatial frequency of the wave along the line's own length
+uniform float uVertical;        // 0 = horizontal lines, 1 = vertical
 uniform vec3 uColor;
-uniform float uDarkCutoff; // src luma below this never draws a line at all
-uniform float uTime;       // keeps the oscillation moving
-uniform float uSeed;       // reshuffles the per-line random phase/frequency jitter
+uniform float uThreshold;       // luma cutoff - which side depends on uThresholdMode
+uniform float uThresholdMode;   // 0 = exclude src darker than uThreshold, 1 = exclude src brighter than it
+uniform float uTime;            // keeps the oscillation moving
+uniform float uSeed;            // reshuffles the per-line random phase/frequency jitter
 
 void main() {
   vec4 src = texture(uSrc, vUv);
@@ -722,10 +761,11 @@ void main() {
 
   float wave = sin(alongPx * uWobbleFreq * freqJitter + uTime + phaseJitter) * (luma * uMaxWobble);
   float linePos = mod(acrossPx - wave, cellSize);
-  float halfThickness = max(uThickness, 0.0) * 0.5;
+  float halfThickness = max(uThickness + uThicknessAmount * luma, 0.0) * 0.5;
 
   float within = step(abs(linePos - center), halfThickness);
-  float visible = within * step(uDarkCutoff, luma);
+  float passesThreshold = uThresholdMode > 0.5 ? step(luma, uThreshold) : step(uThreshold, luma);
+  float visible = within * passesThreshold;
 
   outColor = vec4(uColor * visible, src.a * visible);
 }`;

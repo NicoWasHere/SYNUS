@@ -31,6 +31,7 @@ const tpsEl = document.getElementById('tps-counter');
 const tEl = document.getElementById('t-counter');
 const sendBtn = document.getElementById('send-btn');
 const fullscreenBtn = document.getElementById('fullscreen-btn');
+const resetPatchBtn = document.getElementById('reset-patch-btn');
 
 // Perform mode by default - set before resizeCanvas() below runs, so the
 // very first size computation already reflects the fullscreen layout
@@ -288,6 +289,18 @@ fullscreenBtn.addEventListener('click', () => {
 document.addEventListener('fullscreenchange', () => {
   fullscreenBtn.textContent = document.fullscreenElement ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
   resizeCanvas();
+});
+
+// Drops any #patch=... hash (see ui/patch-link.js) and does a REAL reload -
+// a plain hash change alone is a same-document navigation, which wouldn't
+// re-run this whole module and reset all the in-memory state a patch can
+// touch (slider/button/colorPicker values, MIDI/audio connections, running
+// node state, ...) the way actually landing back on the bundled default
+// project should. replaceState first (not just reload()) so the reload
+// itself has nothing left in the URL to read back.
+resetPatchBtn.addEventListener('click', () => {
+  history.replaceState(null, '', location.pathname + location.search);
+  location.reload();
 });
 
 // Backing resolution for a Pattern's auto-plotted preview card - see

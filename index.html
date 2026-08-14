@@ -73,6 +73,30 @@
         transition: background-color 0.15s ease, border-color 0.15s ease;
       }
       #send-btn:hover { background: #2c2c2c; }
+
+      /* Stacked directly under send-btn, same left column - a plain page
+         navigation (see main.js), not a patch-send action, so it gets its
+         own distinct spot rather than living among the mode/fullscreen
+         buttons on the right. Icon-only (a house glyph - "back to
+         default") with a title tooltip instead of a text label, since
+         "reset" here could otherwise be misread as the per-node ↺ reset
+         button (a completely different, node-scoped action). */
+      #reset-patch-btn {
+        position: fixed;
+        top: 46px;
+        left: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1;
+      }
+      #reset-patch-btn:hover { background: #2c2c2c; }
       #send-btn.flash-ok { background: #1f5c2e; border-color: #2fae52; }
       #send-btn.flash-error { background: #5c1f1f; border-color: #ae2f2f; }
       #tps-counter {
@@ -464,6 +488,7 @@
   <body>
     <button id="mode-toggle" type="button">Perform mode</button>
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
+    <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>
