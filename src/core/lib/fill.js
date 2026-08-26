@@ -127,6 +127,7 @@ export class Fill {
     this._blurA = null;
     this._blurB = null;
     this._blurC = null;
+    this._blurD = null;
     this._size = { width: -1, height: -1 };
   }
 
@@ -170,18 +171,28 @@ export class Fill {
     this._blurA?.dispose();
     this._blurB?.dispose();
     this._blurC?.dispose();
+    this._blurD?.dispose();
     this._cover = new GLSL({ width, height, filter: this.filter });
     this._blurA = new GLSL({ width, height, filter: this.filter });
     this._blurB = new GLSL({ width, height, filter: this.filter });
     this._blurC = new GLSL({ width, height, filter: this.filter });
+    this._blurD = new GLSL({ width, height, filter: this.filter });
     this._size = { width, height };
   }
 
-  tick(src, mode = 'blur', { width, height, blurAmount = 20 } = {}) {
+  tick(src, mode = 'blur', { width, height, blurAmount } = {}) {
     if (!src || !src.texture) return src;
     const target = screenSize();
     const w = width ?? target.width;
     const h = height ?? target.height;
+    // Default scales with the target frame instead of a fixed number -
+    // wider spacing between the SAME 5 taps costs nothing extra, so
+    // there's no reason the default shouldn't just always reach far
+    // enough to cover the whole frame regardless of how small, off-
+    // center, or oddly-shaped (a thin rotating rectangle, say) the real
+    // content is. /14 keeps the 4-pass 1x/2x/4x/8x pyramid below's total
+    // reach (~15x this number) comfortably past the frame's own size.
+    blurAmount ??= Math.max(w, h) / 14;
     const srcW = src.width || w;
     const srcH = src.height || h;
 
@@ -214,16 +225,18 @@ void main() {
 }`,
         { uSrc: src, uRectCenter: rectCenter, uCoverMapScale: coverMapScale }
       );
-      // Each pass reaches further than the last (1x, 2x, 4x) instead of
-      // three equal small passes - a small/off-center shape can leave a
-      // gap far bigger than any single pass's own 5-tap radius covers,
-      // and this reaches ~7x further for the same 3 passes (same
-      // "blur pyramid" idea Bloom/Flow already use elsewhere here).
+      // Each pass reaches further than the last (1x, 2x, 4x, 8x) instead
+      // of four equal small passes - a small/off-center/oddly-shaped
+      // (e.g. a thin rotated rectangle) piece of content can leave a gap
+      // far bigger than any single pass's own 5-tap radius covers, and
+      // this reaches ~15x further for the same 4 passes (same "blur
+      // pyramid" idea Bloom/Flow already use elsewhere here).
       const texel = [1 / w, 1 / h];
       this._blurA.tick(FILL_BLUR, { uSrc: this._cover, uTexel: texel, uAmount: blurAmount });
       this._blurB.tick(FILL_BLUR, { uSrc: this._blurA, uTexel: texel, uAmount: blurAmount * 2 });
       this._blurC.tick(FILL_BLUR, { uSrc: this._blurB, uTexel: texel, uAmount: blurAmount * 4 });
-      blurredTex = this._blurC;
+      this._blurD.tick(FILL_BLUR, { uSrc: this._blurC, uTexel: texel, uAmount: blurAmount * 8 });
+      blurredTex = this._blurD;
     }
 
     this._composite.tick(COMPOSITE_FRAG, {
@@ -246,5 +259,6 @@ void main() {
     this._blurA?.dispose();
     this._blurB?.dispose();
     this._blurC?.dispose();
+    this._blurD?.dispose();
   }
 }
