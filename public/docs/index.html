@@ -147,6 +147,18 @@
     color: #f0d8b8;
   }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .cm-gallery { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 20px; }
+  .cm-row { display: flex; align-items: center; gap: 10px; }
+  .cm-name { width: 76px; flex: 0 0 76px; font-size: 12px; color: #cde8a0; }
+  .cm-bar {
+    flex: 1;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+  }
+  .cm-swatches { flex: 1; display: flex; height: 20px; border-radius: 3px; overflow: hidden; border: 1px solid var(--border2); }
+  .cm-swatches i { flex: 1; font-style: normal; }
   @media (max-width: 900px) {
     .layout { flex-direction: column; }
     nav { position: static; width: auto; height: auto; }
@@ -195,6 +207,7 @@
       <li><a href="#filtering">Texture filtering (NEAREST)</a></li>
       <li><a href="#generators">Generators: Ramp / Gradient / Noise / Colors / Colormap</a></li>
       <li><a href="#bloom">Bloom / Flow</a></li>
+      <li><a href="#fill">Fill</a></li>
     </ul>
 
     <div class="section-title">Data &amp; control</div>
@@ -506,7 +519,7 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><th>Call</th><th>What it does</th></tr>
         <tr><td><code>Rotate.tick(src, degrees)</code></td><td>Rotates around center.</td></tr>
         <tr><td><code>Scale.tick(src, {x,y})</code> or <code>(src, factor)</code></td><td>1.0 = no change per axis.</td></tr>
-        <tr><td><code>Flip.tick(src, {x,y})</code></td><td>Booleans, mirror that axis.</td></tr>
+        <tr><td><code>Flip.tick(src, {x,y,point,fill})</code></td><td>Booleans, mirror that axis around <code>point</code> (default center). An off-center point can push content outside 0..1 — <code>fill</code> decides what shows there.</td></tr>
         <tr><td><code>Translate.tick(src, {x,y})</code></td><td>Offset in 0..1 uv units.</td></tr>
         <tr><td><code>ChannelMix.tick(src, {r,g,b})</code></td><td>Each a <code>[r,g,b]</code> mix vector for that output channel.</td></tr>
         <tr><td><code>Brightness.tick(src, amount)</code></td><td>Additive, -1..1.</td></tr>
@@ -519,7 +532,7 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>Threshold.tick(src, {level,softness})</code></td><td></td></tr>
         <tr><td><code>Edge.tick(src, amount)</code></td><td>Sobel gradient magnitude.</td></tr>
         <tr><td><code>Emboss.tick(src, amount)</code></td><td></td></tr>
-        <tr><td><code>Mirror.tick(src, half)</code></td><td><code>half</code>: <code>'left'</code> (default) | <code>'right'</code> | <code>'top'</code> | <code>'bottom'</code> — that half keeps its own content, the OTHER half becomes a mirrored copy of it.</td></tr>
+        <tr><td><code>Mirror.tick(src, half, point, fill)</code></td><td><code>half</code>: <code>'left'</code> (default) | <code>'right'</code> | <code>'top'</code> | <code>'bottom'</code> — that half keeps its own content, the OTHER half becomes a mirrored copy of it. <code>point</code> (default 0.5) moves the split off-center.</td></tr>
         <tr><td><code>Tile.tick(src, {x,y})</code> or <code>(src, n)</code></td><td>Repeat count per axis.</td></tr>
         <tr><td><code>Kaleidoscope.tick(src, segments)</code></td><td>Number of mirrored wedges.</td></tr>
         <tr><td><code>Vignette.tick(src, {amount,radius})</code></td><td></td></tr>
@@ -536,8 +549,8 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>FilmGrain.tick(src, {amount,t})</code></td><td>Animated noise added to rgb — <code>t</code> keeps it moving instead of static.</td></tr>
         <tr><td><code>Bitmap.tick(src, {scale,colorA,colorB})</code></td><td>1-bit ordered (Bayer) dither — the "old Mac bitmap" look. <code>scale</code> is one dither cell's size in texels.</td></tr>
         <tr><td><code>ChannelThreshold.tick(src, {r,g,b})</code></td><td>Thresholds each channel independently (up to 8 distinct output colors) instead of one shared luma cutoff — see Threshold for the grayscale version.</td></tr>
-        <tr><td><code>ScanLines.tick(src, {spacing,thickness,thicknessAmount,maxWobble,wobbleFreq,vertical,color,threshold,thresholdMode,t,seed})</code></td><td>Always-oscillating wavy lines; a point's own brightness drives how far ITS wave swings AND how much extra thickness it gets. <code>threshold</code>/<code>thresholdMode</code> exclude one side of src's luma from ever drawing a line.</td></tr>
-        <tr><td><code>Crop.tick(src, {x,y,w,h})</code></td><td>Extracts <code>src</code>'s <code>[x,y,w,h]</code> sub-rectangle (top-left origin) and stretches it to fill the frame. NOT the same as Mask (that cuts a hole in place, doesn't move/rescale).</td></tr>
+        <tr><td><code>ScanLines.tick(src, {spacing,thickness,thicknessAmount,maxWobble,wobbleFreq,vertical,color,threshold,thresholdMode,t,seed})</code></td><td>Always-oscillating wavy lines; a point's own brightness drives how far ITS wave swings AND how much extra thickness it gets. Neighboring lines can overlap/blend into each other (each checks its own thickness AND its immediate neighbors', not a hard per-band clip) when thick or wobbly enough to reach one another. <code>threshold</code>/<code>thresholdMode</code> exclude one side of src's luma from ever drawing a line.</td></tr>
+        <tr><td><code>Crop.tick(src, {x1,y1,x2,y2})</code></td><td>Extracts the rectangle BETWEEN two corner points (either order) and stretches it to fill the frame. NOT the same as Mask (that cuts a hole in place, doesn't move/rescale).</td></tr>
         <tr><td><code>Modulate.tick(src, mapTexture, amount, fill)</code></td><td>Map's luma pushes uv uniformly (same offset for x and y) — a softer, "flowing" distortion.</td></tr>
         <tr><td><code>Displace.tick(src, mapTexture, amount, fill)</code></td><td>Map's r/g push uv.x/uv.y independently — a real 2-channel map (e.g. <code>Noise</code> with <code>mono:false</code>) gives fully independent x/y motion.</td></tr>
         <tr><td><code>ModulateScale.tick(src, mapTexture, multiple, offset, fill)</code></td><td>Map's r/g channels push <code>src</code>'s own scale (zoom) independently per axis, around center. Ported from Hydra.</td></tr>
@@ -782,6 +795,62 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         callback:
       </p>
       <pre><code><span class="tag">const</span> out = use(Colorize).tick(src, COLORMAPS.viridis.read(x));  <span class="com">// x: 0..1</span></code></pre>
+
+      <h3>Every colormap</h3>
+      <p>
+        The actual stops, rendered — not a stand-in, these are the same hex values
+        <code>GRADIENT_STOPS</code> in <code>lib/colormaps.js</code> builds each texture
+        from. <code>tab10</code>/<code>tab20</code> are drawn as discrete swatches
+        instead of a smooth bar, since — unlike every other name here — they're plain
+        hex arrays to <em>index</em>, not a gradient: there's no in-between color to
+        show, just those N flat, unordered ones.
+      </p>
+
+      <h4>Sequential (perceptually-uniform)</h4>
+      <div class="cm-gallery">
+        <div class="cm-row"><span class="cm-name">viridis</span><span class="cm-bar" style="background:linear-gradient(to right,#440154,#414487,#2a788e,#22a884,#7ad151,#fde725)"></span></div>
+        <div class="cm-row"><span class="cm-name">plasma</span><span class="cm-bar" style="background:linear-gradient(to right,#0d0887,#6a00a8,#b12a90,#e16462,#fca636,#f0f921)"></span></div>
+        <div class="cm-row"><span class="cm-name">inferno</span><span class="cm-bar" style="background:linear-gradient(to right,#000004,#420a68,#932667,#dd513a,#fca50a,#fcffa4)"></span></div>
+        <div class="cm-row"><span class="cm-name">magma</span><span class="cm-bar" style="background:linear-gradient(to right,#000004,#3b0f70,#8c2981,#de4968,#fe9f6d,#fcfdbf)"></span></div>
+        <div class="cm-row"><span class="cm-name">cividis</span><span class="cm-bar" style="background:linear-gradient(to right,#00204d,#00336f,#39486b,#575d6d,#7b7a77,#a59c74,#d3c164,#ffe945)"></span></div>
+      </div>
+
+      <h4>Sequential (classic)</h4>
+      <div class="cm-gallery">
+        <div class="cm-row"><span class="cm-name">cool</span><span class="cm-bar" style="background:linear-gradient(to right,#00ffff,#ff00ff)"></span></div>
+        <div class="cm-row"><span class="cm-name">hot</span><span class="cm-bar" style="background:linear-gradient(to right,#0b0000,#ff0000,#ffff00,#ffffff)"></span></div>
+        <div class="cm-row"><span class="cm-name">spring</span><span class="cm-bar" style="background:linear-gradient(to right,#ff00ff,#ffff00)"></span></div>
+        <div class="cm-row"><span class="cm-name">summer</span><span class="cm-bar" style="background:linear-gradient(to right,#008066,#ffff66)"></span></div>
+        <div class="cm-row"><span class="cm-name">autumn</span><span class="cm-bar" style="background:linear-gradient(to right,#ff0000,#ffff00)"></span></div>
+        <div class="cm-row"><span class="cm-name">winter</span><span class="cm-bar" style="background:linear-gradient(to right,#0000ff,#00ff80)"></span></div>
+        <div class="cm-row"><span class="cm-name">bone</span><span class="cm-bar" style="background:linear-gradient(to right,#000000,#546c7a,#a8d4d8,#ffffff)"></span></div>
+        <div class="cm-row"><span class="cm-name">copper</span><span class="cm-bar" style="background:linear-gradient(to right,#000000,#7f4f2c,#ffa066)"></span></div>
+        <div class="cm-row"><span class="cm-name">ocean</span><span class="cm-bar" style="background:linear-gradient(to right,#004000,#005f80,#0000ff,#ffffff)"></span></div>
+        <div class="cm-row"><span class="cm-name">earth</span><span class="cm-bar" style="background:linear-gradient(to right,#0000a0,#00a050,#a08000,#603000,#ffffff)"></span></div>
+      </div>
+
+      <h4>Rainbow / full-spectrum</h4>
+      <div class="cm-gallery">
+        <div class="cm-row"><span class="cm-name">turbo</span><span class="cm-bar" style="background:linear-gradient(to right,#30123b,#4145ab,#26bce1,#1ae4b6,#a2fc3c,#f9c53d,#f56918,#c22a06,#7a0403)"></span></div>
+        <div class="cm-row"><span class="cm-name">jet</span><span class="cm-bar" style="background:linear-gradient(to right,#000080,#0000ff,#00ffff,#00ff00,#ffff00,#ff0000,#800000)"></span></div>
+        <div class="cm-row"><span class="cm-name">rainbow</span><span class="cm-bar" style="background:linear-gradient(to right,#6b00b3,#0000ff,#00ffff,#00ff00,#ffff00,#ff7f00,#ff0000)"></span></div>
+      </div>
+
+      <h4>Diverging (low → neutral → high)</h4>
+      <div class="cm-gallery">
+        <div class="cm-row"><span class="cm-name">coolwarm</span><span class="cm-bar" style="background:linear-gradient(to right,#3b4cc0,#88a6fc,#dddddd,#f7a889,#b40426)"></span></div>
+        <div class="cm-row"><span class="cm-name">spectral</span><span class="cm-bar" style="background:linear-gradient(to right,#9e0142,#f46d43,#fee08b,#e6f598,#66c2a5,#5e4fa2)"></span></div>
+      </div>
+
+      <h4>Qualitative (discrete swatches to index, not a gradient)</h4>
+      <div class="cm-gallery">
+        <div class="cm-row"><span class="cm-name">tab10</span><span class="cm-swatches">
+          <i style="background:#1f77b4"></i><i style="background:#ff7f0e"></i><i style="background:#2ca02c"></i><i style="background:#d62728"></i><i style="background:#9467bd"></i><i style="background:#8c564b"></i><i style="background:#e377c2"></i><i style="background:#7f7f7f"></i><i style="background:#bcbd22"></i><i style="background:#17becf"></i>
+        </span></div>
+        <div class="cm-row"><span class="cm-name">tab20</span><span class="cm-swatches">
+          <i style="background:#1f77b4"></i><i style="background:#aec7e8"></i><i style="background:#ff7f0e"></i><i style="background:#ffbb78"></i><i style="background:#2ca02c"></i><i style="background:#98df8a"></i><i style="background:#d62728"></i><i style="background:#ff9896"></i><i style="background:#9467bd"></i><i style="background:#c5b0d5"></i><i style="background:#8c564b"></i><i style="background:#c49c94"></i><i style="background:#e377c2"></i><i style="background:#f7b6d2"></i><i style="background:#7f7f7f"></i><i style="background:#c7c7c7"></i><i style="background:#bcbd22"></i><i style="background:#dbdb8d"></i><i style="background:#17becf"></i><i style="background:#9edae5"></i>
+        </span></div>
+      </div>
     </section>
 
     <section id="bloom">
@@ -804,6 +873,37 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         first (same 4-layer composite idea, one blur pass per direction, no wobble/
         feedback, a fraction of the cost) and only reach for <code>Flow</code> when the
         liquid/plasma wobble is specifically the look you're after and can afford it.
+      </p>
+    </section>
+
+    <section id="fill">
+      <h2>Fill</h2>
+      <p>
+        Scales <code>src</code> (using ITS OWN <code>width</code>/<code>height</code>,
+        same as every other texture-bearing value here) up to fill a target frame
+        without ever distorting the crisp foreground copy — only the BACKGROUND (the
+        letterbox margin around it, or any hole already in <code>src</code>, e.g. a
+        webcam's own cropped edge or a chroma-keyed hole) uses <code>mode</code>. This
+        is the fix for "why is the edge of my thing just black" — a transparent area
+        reaching <code>render()</code> shows the page through as black by design (see
+        <a href="#render-preview">render() &amp; preview()</a>); <code>Fill</code> gives
+        it something real to show instead.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Fill).tick(inputs.webcam, <span class="str">'blur'</span>);
+<span class="tag">const</span> out2 = use(Fill).tick(inputs.src, <span class="str">'mirror'</span>, { width: 1080, height: 1920 });</code></pre>
+      <table>
+        <tr><th><code>mode</code></th><th>Background strategy</th></tr>
+        <tr><td><code>'stretch'</code></td><td><code>src</code> distorted to exactly fill the frame.</td></tr>
+        <tr><td><code>'tile'</code></td><td><code>src</code> repeated at its own on-screen (contain-fit) size, wallpaper-style.</td></tr>
+        <tr><td><code>'mirror'</code></td><td>Same repeat, but alternating reflected copies — no seam at the tile edges.</td></tr>
+        <tr><td><code>'blur'</code> (default)</td><td>A heavily blurred, <code>'cover'</code>-scaled copy of <code>src</code> — the "blurred sidebar" look phone apps use behind a portrait photo in a landscape frame.</td></tr>
+      </table>
+      <p>
+        <code>{ width, height }</code> default to <code>screenSize()</code> — pass your
+        own (e.g. <code>viewportSize()</code>, or a fixed export resolution) to fill
+        something other than the full square canvas. <code>blurAmount</code> (default
+        20, <code>'blur'</code> mode only) is the blur pass's own sample spacing in
+        texels — same units as <code>Blur</code>'s own <code>amount</code>.
       </p>
     </section>
 
@@ -1183,8 +1283,22 @@ img.tick(url, { fit: <span class="str">'contain'</span> });  <span class="com">/
         visual distortion, e.g. a color-lookup LUT strip).
       </p>
       <pre><code><span class="tag">const</span> video = use(VideoSource, width, height);
-video.tick(url, { fit: <span class="str">'contain'</span> });</code></pre>
+video.tick(url, { fit: <span class="str">'contain'</span>, start: 0, end: 100, speed: 1, reverse: <span class="tag">false</span> });</code></pre>
       <p>Plays and loops a video (muted + playsInline, so autoplay works without a user gesture in most browsers).</p>
+      <p>
+        <code>speed</code> sets <code>video.playbackRate</code> (0.5 = half speed, 2 =
+        double). <code>reverse: true</code> plays the trimmed <code>[start,end]</code>
+        window backward — browsers don't reliably support a negative
+        <code>playbackRate</code>, so this pauses the element and steps
+        <code>currentTime</code> backward by hand each tick instead, based on real
+        elapsed time (<code>speed</code> still applies as the backward rate).
+      </p>
+      <pre><code>video.jumpToRandom(start = 0, end = 100);  <span class="com">// seeks to a new random point in that window</span></code></pre>
+      <p>
+        Call this yourself whenever you want a cut — a <code>button()</code> press, a
+        <code>keyPulse()</code>, a beat pulse from <a href="#tempo">beatmatch</a> — it
+        doesn't happen automatically on its own each tick.
+      </p>
       <pre><code><span class="tag">const</span> cam = use(WebcamSource, width, height);
 <span class="tag">const</span> feed = cam.tick();  <span class="com">// asks for camera permission on first call; check cam.error</span></code></pre>
       <p>Live webcam feed, cropped to fill (<code>'cover'</code>) rather than letterboxed.</p>
@@ -1585,7 +1699,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       </p>
 
       <h4>Feedback &amp; glow</h4>
-      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code></p>
+      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code>, <code>Fill</code></p>
 
       <h4>Generators &amp; color</h4>
       <p style="color:#aac">

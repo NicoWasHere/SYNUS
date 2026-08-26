@@ -90,15 +90,23 @@ void main() {
   outColor = sampleClamped(uSrc, scaled + 0.5);
 }`;
 
-export const FLIP = `${HEADER}
+// uPoint: the point each flipped axis reflects around (default 0.5,0.5 =
+// center, same as this always used to behave). Reflecting around
+// anything OTHER than center can push the sampled coordinate outside
+// 0..1 (e.g. flipping around point.x=0.2 pushes content near uv.x=1 out
+// to -0.6) - uFillMode decides what shows there, same as the modulate
+// family above.
+export const FLIP = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform vec2 uFlip; // 1.0 = flip that axis, 0.0 = leave it
+uniform vec2 uPoint;
+uniform float uFillMode;
 
 void main() {
   vec2 uv = vUv;
-  uv.x = mix(uv.x, 1.0 - uv.x, uFlip.x);
-  uv.y = mix(uv.y, 1.0 - uv.y, uFlip.y);
-  outColor = texture(uSrc, uv);
+  uv.x = mix(uv.x, uPoint.x * 2.0 - uv.x, uFlip.x);
+  uv.y = mix(uv.y, uPoint.y * 2.0 - uv.y, uFlip.y);
+  outColor = sampleFill(uSrc, uv, uFillMode);
 }`;
 
 export const TRANSLATE = `${HEADER}${SAMPLE_CLAMPED}
@@ -300,22 +308,30 @@ void main() {
 // copy of it (not a symmetric "fold both halves toward center" - the
 // named half is always the source, never the one that gets replaced).
 // vUv.y = 1 is visual top (see HEADER's own convention).
-export const MIRROR = `${HEADER}
+// uPoint: where the split happens along the relevant axis (default 0.5 =
+// true center, same as this always used to behave) - e.g. half='left'
+// with point=0.7 keeps the left 70% as source and mirrors it into the
+// remaining 30%. An off-center point can run out of source before
+// reaching the far edge (nothing left to reflect) - uFillMode decides
+// what shows there, same as the modulate family above.
+export const MIRROR = `${HEADER}${FILL_HELPER}
 uniform sampler2D uSrc;
 uniform float uHalf;
+uniform float uPoint;
+uniform float uFillMode;
 
 void main() {
   vec2 uv = vUv;
   if (uHalf < 0.5) { // left -> cloned onto right
-    uv.x = uv.x < 0.5 ? uv.x : 1.0 - uv.x;
+    uv.x = uv.x < uPoint ? uv.x : 2.0 * uPoint - uv.x;
   } else if (uHalf < 1.5) { // right -> cloned onto left
-    uv.x = uv.x > 0.5 ? uv.x : 1.0 - uv.x;
+    uv.x = uv.x > uPoint ? uv.x : 2.0 * uPoint - uv.x;
   } else if (uHalf < 2.5) { // top -> cloned onto bottom
-    uv.y = uv.y > 0.5 ? uv.y : 1.0 - uv.y;
+    uv.y = uv.y > uPoint ? uv.y : 2.0 * uPoint - uv.y;
   } else { // bottom -> cloned onto top
-    uv.y = uv.y < 0.5 ? uv.y : 1.0 - uv.y;
+    uv.y = uv.y < uPoint ? uv.y : 2.0 * uPoint - uv.y;
   }
-  outColor = texture(uSrc, uv);
+  outColor = sampleFill(uSrc, uv, uFillMode);
 }`;
 
 export const TILE = `${HEADER}
@@ -755,17 +771,29 @@ void main() {
   float cellSize = max(uSpacing, 1.0);
   float center = cellSize * 0.5;
   float bandIndex = floor(acrossPx / cellSize);
-
-  float phaseJitter = hash(vec2(bandIndex, uSeed)) * 6.2831853;
-  float freqJitter = 0.7 + hash(vec2(bandIndex, uSeed + 0.5)) * 0.6;
-
-  float wave = sin(alongPx * uWobbleFreq * freqJitter + uTime + phaseJitter) * (luma * uMaxWobble);
-  float linePos = mod(acrossPx - wave, cellSize);
   float halfThickness = max(uThickness + uThicknessAmount * luma, 0.0) * 0.5;
 
-  float within = step(abs(linePos - center), halfThickness);
+  // Checks THIS pixel's own band, plus its immediate neighbors on both
+  // sides, not just the one band it geometrically falls in - each band's
+  // line still wobbles/thickens independently (own hash-seeded phase/
+  // freq jitter), but a thick or wobbly enough line can now reach past
+  // its own band's midpoint and overlap a neighbor's line, instead of
+  // being hard-clipped exactly at the boundary between them. Accumulates
+  // (not just OR's) so two overlapping lines actually read as brighter/
+  // more solid where they cross, rather than one silently replacing the
+  // other.
+  float coverage = 0.0;
+  for (int k = -1; k <= 1; k++) {
+    float band = bandIndex + float(k);
+    float phaseJitter = hash(vec2(band, uSeed)) * 6.2831853;
+    float freqJitter = 0.7 + hash(vec2(band, uSeed + 0.5)) * 0.6;
+    float wave = sin(alongPx * uWobbleFreq * freqJitter + uTime + phaseJitter) * (luma * uMaxWobble);
+    float lineCenterPx = band * cellSize + center + wave;
+    coverage += step(abs(acrossPx - lineCenterPx), halfThickness);
+  }
+
   float passesThreshold = uThresholdMode > 0.5 ? step(luma, uThreshold) : step(uThreshold, luma);
-  float visible = within * passesThreshold;
+  float visible = coverage * passesThreshold;
 
   outColor = vec4(uColor * visible, src.a * visible);
 }`;

@@ -24,8 +24,19 @@ export const EFFECTS = {
 
   flip: {
     frag: shaders.FLIP,
-    // flip(src, { x: true, y: false })
-    toUniforms: ({ x = false, y = false } = {}) => ({ uFlip: [x ? 1 : 0, y ? 1 : 0] }),
+    // flip(src, { x: true, y: false, point: { x: 0.5, y: 0.5 }, fill })  -
+    // point is what each flipped axis reflects around (default: center) -
+    // pass a different point to flip around an off-center pivot instead.
+    // fill (see modulate's own comment above): what shows past the source
+    // once an off-center flip pushes it outside 0..1.
+    toUniforms: ({ x = false, y = false, point = {}, fill = 'clamp' } = {}) => {
+      const { x: px = 0.5, y: py = 0.5 } = point;
+      return {
+        uFlip: [x ? 1 : 0, y ? 1 : 0],
+        uPoint: [px, py],
+        uFillMode: fillMode(fill),
+      };
+    },
   },
 
   translate: {
@@ -115,11 +126,20 @@ export const EFFECTS = {
 
   mirror: {
     frag: shaders.MIRROR,
-    // mirror(src, half)  -  half: 'left' (default) | 'right' | 'top' | 'bottom'.
-    // THAT half keeps its own original content; the OTHER half is
-    // overwritten with a mirrored copy of it - e.g. 'right' clones the
-    // right half onto the left, it does NOT fold both halves toward center.
-    toUniforms: (half = 'left') => ({ uHalf: { left: 0, right: 1, top: 2, bottom: 3 }[half] ?? 0 }),
+    // mirror(src, half, point = 0.5, fill)  -  half: 'left' (default) |
+    // 'right' | 'top' | 'bottom'. THAT half keeps its own original
+    // content; the OTHER half is overwritten with a mirrored copy of it -
+    // e.g. 'right' clones the right half onto the left, it does NOT fold
+    // both halves toward center. point (0..1) is where the split happens
+    // along the relevant axis - default 0.5 is the true center; e.g.
+    // mirror(src, 'left', 0.7) keeps the left 70% and mirrors it into the
+    // remaining 30%. fill (see modulate's own comment above): what shows
+    // if an off-center point runs out of source before reaching the edge.
+    toUniforms: (half = 'left', point = 0.5, fill = 'clamp') => ({
+      uHalf: { left: 0, right: 1, top: 2, bottom: 3 }[half] ?? 0,
+      uPoint: point,
+      uFillMode: fillMode(fill),
+    }),
   },
 
   tile: {
@@ -390,12 +410,16 @@ export const EFFECTS = {
 
   crop: {
     frag: shaders.CROP,
-    // crop(src, { x = 0, y = 0, w = 1, h = 1 })  -  extracts src's
-    // [x,y,w,h] sub-rectangle (x,y = top-left corner, 0..1, y=0 at top -
-    // same convention as ComposeAt) and stretches it to fill the whole
-    // frame. NOT the same as Mask (cuts a hole in place, doesn't move or
-    // rescale anything).
-    toUniforms: ({ x = 0, y = 0, w = 1, h = 1 } = {}) => ({ uRect: [x, y, w, h] }),
+    // crop(src, { x1 = 0, y1 = 0, x2 = 1, y2 = 1 })  -  extracts the
+    // rectangle BETWEEN two corner points (0..1, y=0 at top - same
+    // convention as ComposeAt) and stretches it to fill the whole frame.
+    // Either corner can be passed first - point order doesn't matter,
+    // this always sorts them into the actual [x,y,w,h] rect internally.
+    // NOT the same as Mask (cuts a hole in place, doesn't move or rescale
+    // anything).
+    toUniforms: ({ x1 = 0, y1 = 0, x2 = 1, y2 = 1 } = {}) => ({
+      uRect: [Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)],
+    }),
   },
 };
 

@@ -316,6 +316,7 @@ export class VideoSource {
     this.video.crossOrigin = 'anonymous';
     this.video.muted = true;
     this.video.playsInline = true;
+    this._reverseLastNow = null; // see reverse handling below
   }
 
   // start/end trim the video to a [start%, end%] window of its own
@@ -324,31 +325,74 @@ export class VideoSource {
   // and loops only the middle half. duration isn't known until the video
   // has loaded enough metadata (readyState >= 2, same gate the existing
   // draw already waited on), so this only takes effect once that's true.
-  tick(source, { fit = 'contain', start = 0, end = 100 } = {}) {
+  //
+  // speed: video.playbackRate - 1 = normal, 0.5 = half speed, 2 = double.
+  // Only meaningful when NOT reverse (see below).
+  //
+  // reverse: true plays the trimmed range backward. HTML5 video does not
+  // reliably support a negative playbackRate across browsers, so this
+  // pauses the element entirely and steps currentTime BACKWARD by hand
+  // each tick, based on real elapsed time (the same "drive the clock
+  // ourselves" approach ThreeSource/HydraSource/PhysicsWorld all use) -
+  // speed still applies here too, as the backward stepping rate.
+  tick(source, { fit = 'contain', start = 0, end = 100, speed = 1, reverse = false } = {}) {
     const url = resolveSource(this, source);
     if (url !== this.lastUrl) {
       this.lastUrl = url;
       this.video.src = url;
-      this.video.play().catch(() => {});
+      this._reverseLastNow = null;
+      if (!reverse) this.video.play().catch(() => {});
     }
     if (this.video.readyState >= 2 && this.video.duration) {
       const startTime = (start / 100) * this.video.duration;
       const endTime = (end / 100) * this.video.duration;
-      if (this.video.currentTime < startTime || this.video.currentTime >= endTime) {
-        this.video.currentTime = startTime;
+      const span = Math.max(endTime - startTime, 0.0001);
+
+      if (reverse) {
+        this.video.pause(); // manual stepping owns currentTime entirely - native playback would fight it
+        const now = performance.now();
+        const dt = this._reverseLastNow == null ? 0 : (now - this._reverseLastNow) / 1000;
+        this._reverseLastNow = now;
+        const stepped = this.video.currentTime - dt * speed;
+        // Wraps into [startTime, startTime+span) however far below
+        // startTime `stepped` landed, not just one loop's worth - handles
+        // a big dt (a slow tick, a tab that was backgrounded) the same
+        // way a single loop-back would, just via modulo instead of a
+        // step-until-in-range loop.
+        this.video.currentTime = startTime + (((stepped - startTime) % span) + span) % span;
+      } else {
+        this._reverseLastNow = null;
+        this.video.playbackRate = speed;
+        if (this.video.currentTime < startTime || this.video.currentTime >= endTime) {
+          this.video.currentTime = startTime;
+        }
+        // Reaching the end of the file (or of a trimmed range once seeked
+        // past it) pauses the element - without native video.loop, nothing
+        // else ever resumes it, so seeking currentTime back to startTime
+        // alone left it sitting there paused on the first frame forever
+        // instead of actually looping. Re-triggering .play() every time
+        // it's found paused is what makes the loop keep going.
+        if (this.video.paused) this.video.play().catch(() => {});
       }
-      // Reaching the end of the file (or of a trimmed range once seeked
-      // past it) pauses the element - without native video.loop, nothing
-      // else ever resumes it, so seeking currentTime back to startTime
-      // alone left it sitting there paused on the first frame forever
-      // instead of actually looping. Re-triggering .play() every time
-      // it's found paused is what makes the loop keep going.
-      if (this.video.paused) this.video.play().catch(() => {});
       capToNativeSize(this, this.video.videoWidth, this.video.videoHeight);
       drawLetterboxed(this.gl, this.ctx, this.canvas, this.texture, this.video, this.video.videoWidth, this.video.videoHeight, fit);
     }
     return this;
   }
+
+  // Seeks to a new random point within the [start%, end%] window (same
+  // convention as tick()'s own trim options - call it with the SAME
+  // start/end you're passing tick(), or omit them for the whole file) -
+  // call this yourself whenever you want a cut (a button() press, a beat
+  // pulse, a keyPulse, ...), rather than something that happens on its
+  // own every tick. A no-op until the video's duration is actually known.
+  jumpToRandom(start = 0, end = 100) {
+    if (!this.video.duration) return;
+    const startTime = (start / 100) * this.video.duration;
+    const endTime = (end / 100) * this.video.duration;
+    this.video.currentTime = startTime + Math.random() * Math.max(0, endTime - startTime);
+  }
+
   dispose() {
     this.video.pause();
     this.video.removeAttribute('src');

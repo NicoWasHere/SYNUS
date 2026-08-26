@@ -17,6 +17,7 @@ import { Lag } from './lib/lag.js';
 import { Delay } from './lib/delay.js';
 import { Bloom } from './lib/bloom.js';
 import { Flow } from './lib/flow.js';
+import { Fill } from './lib/fill.js';
 import { Ramp } from './lib/ramp.js';
 import { Gradient } from './lib/gradient.js';
 import { Noise } from './lib/noise.js';
@@ -90,7 +91,7 @@ import { explode } from './lib/explode.js';
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
-// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
+// beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Fill / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / ModelSource / PhysicsWorld / orbitCamera / THREE /
 // screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
@@ -125,6 +126,7 @@ export async function loadProject(gl, source) {
   window.Delay = Delay;
   window.Bloom = Bloom;
   window.Flow = Flow;
+  window.Fill = Fill;
   window.Ramp = Ramp;
   window.Gradient = Gradient;
   window.Noise = Noise;

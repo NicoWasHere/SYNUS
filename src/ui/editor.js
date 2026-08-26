@@ -95,7 +95,14 @@ const EXPLODE_PATTERN = /\$explode\(([\w.]+)\)\$/;
 // scale, ...) are deliberately not included here - those stay under
 // $explode(name)$ only, since they return raw shader source, not a node
 // shape.
-const NODE_PATTERN = new RegExp(`\\$(${NODE_TEMPLATE_NAMES.join('|')})\\$`);
+//
+// The optional "(123)" is a single integer argument passed through to
+// the template's own factory function (see explode.js's
+// nodeTemplateBody) - $gradient(5)$ for a 5-stop starter instead of the
+// default 2, say. Every template factory is free to ignore it (most do);
+// $name$ with no parens at all still works exactly as before, arg simply
+// comes through as undefined.
+const NODE_PATTERN = new RegExp(`\\$(${NODE_TEMPLATE_NAMES.join('|')})(?:\\((\\d+)\\))?\\$`);
 
 // $load$ - not a static template like the ones above (there's nothing to
 // insert until a file is actually picked), so it's handled separately in
@@ -419,7 +426,8 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   function tryExpandNodeShortcut() {
     const match = textarea.value.match(NODE_PATTERN);
     if (!match) return;
-    const body = nodeTemplateBody(match[1]);
+    const arg = match[2] !== undefined ? Number(match[2]) : undefined;
+    const body = nodeTemplateBody(match[1], arg);
     if (body == null) return;
     replaceRange(match.index, match.index + match[0].length, body);
   }

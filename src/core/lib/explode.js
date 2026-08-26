@@ -26,11 +26,17 @@ export function explode(name) {
   throw new Error(`explode: no such name "${name}" - known: ${known.join(', ')}`);
 }
 
-// nodeTemplateBody(name) - just the `{ ... },` value for a node template,
-// no generated key - null if `name` isn't a node template at all (as
-// opposed to an effect name, which has no body form to speak of).
-export function nodeTemplateBody(name) {
-  return NODE_TEMPLATES[name] ? NODE_TEMPLATES[name]() : null;
+// nodeTemplateBody(name, arg) - just the `{ ... },` value for a node
+// template, no generated key - null if `name` isn't a node template at
+// all (as opposed to an effect name, which has no body form to speak
+// of). arg is whatever the editor's `$name(arg)$` shortcut parsed out of
+// the parens (see editor.js's NODE_PATTERN) - undefined for a bare
+// `$name$` with no parens at all. Every template factory takes it
+// positionally and is free to ignore it (most do, same as calling any JS
+// function with an extra argument it doesn't declare) - currently only
+// `gradient` (a stop count) actually uses it.
+export function nodeTemplateBody(name, arg) {
+  return NODE_TEMPLATES[name] ? NODE_TEMPLATES[name](arg) : null;
 }
 
 // The only names the editor's bare $name$ shortcut should ever try to

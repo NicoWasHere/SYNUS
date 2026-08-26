@@ -64,9 +64,13 @@ export const SIGNATURES = {
   VideoSource: {
     ctor: 'new VideoSource(width = 512, height = 512)',
     tick:
-      "vid.tick(url, { fit = 'contain', start = 0, end = 100 })  // loops, muted, autoplays\n" +
+      "vid.tick(url, { fit = 'contain', start = 0, end = 100, speed = 1, reverse = false })  // loops, muted, autoplays\n" +
       '// start/end: 0..100, percent of the video\'s own duration - trims both playback and looping\n' +
-      '// to that window, e.g. { start: 25, end: 75 } loops only the middle half',
+      '// to that window, e.g. { start: 25, end: 75 } loops only the middle half\n' +
+      '// speed: playbackRate (0.5 = half, 2 = double). reverse: true steps currentTime BACKWARD by\n' +
+      '// hand instead (browsers don\'t reliably support negative playbackRate) - speed still applies.\n' +
+      'vid.jumpToRandom(start = 0, end = 100)  // seeks to a new random point in that window - call it\n' +
+      '// yourself (a button(), a beat pulse, ...), not something that happens on its own every tick',
   },
   WebcamSource: {
     ctor: 'new WebcamSource(width = 512, height = 512)',
@@ -110,7 +114,13 @@ export const SIGNATURES = {
     ctor: 'new Scale()',
     tick: 'scale.tick(src, { x = 1, y = 1 })\n// or scale.tick(src, factor) to scale both axes evenly',
   },
-  Flip: { ctor: 'new Flip()', tick: 'flip.tick(src, { x = false, y = false })' },
+  Flip: {
+    ctor: 'new Flip()',
+    tick:
+      "flip.tick(src, { x = false, y = false, point = { x: 0.5, y: 0.5 }, fill = 'clamp' })\n" +
+      '// point is what each flipped axis reflects around (default: center) - an off-center point\n' +
+      "// can push content outside 0..1; fill: 'clamp' | 'transparent' | 'wrap' decides what shows there",
+  },
   Translate: {
     ctor: 'new Translate()',
     tick: 'translate.tick(src, { x = 0, y = 0, wrap = false })  // 0..1 uv units; wrap: true loops content around instead of leaving it transparent',
@@ -141,8 +151,11 @@ export const SIGNATURES = {
   Mirror: {
     ctor: 'new Mirror()',
     tick:
-      "mirror.tick(src, half = 'left')  // half: 'left' | 'right' | 'top' | 'bottom'\n" +
-      "// THAT half keeps its own content; the OTHER half becomes a mirrored copy of it",
+      "mirror.tick(src, half = 'left', point = 0.5, fill = 'clamp')  // half: 'left' | 'right' | 'top' | 'bottom'\n" +
+      '// THAT half keeps its own content; the OTHER half becomes a mirrored copy of it. point (0..1) is\n' +
+      "// where the split happens (default: true center) - e.g. mirror(src, 'left', 0.7) keeps the left\n" +
+      "// 70% and mirrors it into the rest. fill: 'clamp' | 'transparent' | 'wrap' for when an off-center\n" +
+      '// point runs out of source before reaching the edge',
   },
   Tile: {
     ctor: 'new Tile()',
@@ -198,6 +211,17 @@ export const SIGNATURES = {
       '// threshold=0.6 softness=0.2 wideBaseRadius=2 wideGain=1.5 wobbleAmount=0.015 wobbleSpeed=0.15\n' +
       '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate.\n' +
       '// Heavy (~30 draws/tick) - if tps drops more than you want, use Bloom instead.',
+  },
+  Fill: {
+    ctor: 'new Fill()',
+    tick:
+      "fill.tick(src, mode = 'blur', { width, height, blurAmount = 20 })\n" +
+      "// scales src (using its OWN width/height) to fill a target frame (default screenSize()) without\n" +
+      "// distorting the crisp foreground - only the BACKGROUND (letterbox margin, or any hole already\n" +
+      "// in src) uses mode: 'stretch' (bg = src distorted to fill) | 'tile' (bg repeats at its own\n" +
+      "// on-screen size) | 'mirror' (same repeat, alternating reflected copies) | 'blur' (bg = a heavily\n" +
+      "// blurred, cover-scaled copy - the 'blurred sidebar' look). Anywhere src itself is transparent\n" +
+      '// (not just the letterbox margin) shows background too - alpha-over, no special-casing.',
   },
   ColorLookup: {
     ctor: 'new ColorLookup()',
@@ -275,9 +299,9 @@ export const SIGNATURES = {
   Crop: {
     ctor: 'new Crop()',
     tick:
-      'crop.tick(src, { x = 0, y = 0, w = 1, h = 1 })\n' +
-      "// extracts src's [x,y,w,h] sub-rect (x,y = top-left, 0..1) and stretches it to fill the frame -\n" +
-      "// NOT Mask (cuts a hole in place, doesn't move/rescale anything)",
+      'crop.tick(src, { x1 = 0, y1 = 0, x2 = 1, y2 = 1 })\n' +
+      '// extracts the rectangle BETWEEN two corner points (0..1, either order) and stretches it to\n' +
+      "// fill the frame - NOT Mask (cuts a hole in place, doesn't move/rescale anything)",
   },
   AudioSource: {
     ctor: 'new AudioSource(fftSize = 2048)  // fftSize must be a power of 2',

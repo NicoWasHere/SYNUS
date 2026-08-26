@@ -657,24 +657,27 @@ export const NODE_TEMPLATES = {
 
   // A multi-stop gradient, live-editable via colorPicker - unlike ramp
   // above (exactly 2 colors, from/to), Gradient (lib/gradient.js) takes
-  // any number of colors, evenly spaced by default. 2 color pickers to
-  // start; add more calls + more entries in the array for extra stops.
-  // Rename the colorPicker names if you use $gradient$ more than once in
-  // the same file - just a starting point, same as every other bare
-  // $name$ template's generated body, nothing stops renaming it.
-  gradient: () => [
-    "{",
-    "  in: {},",
-    "  code(inputs, state, t) {",
-    "    const use = useInstances(state);",
-    "    const c1 = colorPicker('gradient1', { default: '#ffffff' });",
-    "    const c2 = colorPicker('gradient2', { default: '#000000' });",
-    "    const out = use(Gradient).tick([c1, c2]);",
-    "    preview(out);",
-    "    return { screen: out };",
-    "  },",
-    "},",
-  ].join('\n'),
+  // any number of colors, evenly spaced by default. $gradient$ (no count)
+  // starts you with 2 color pickers; $gradient(5)$ starts you with 5 -
+  // see editor.js's NODE_PATTERN, which is what parses the "(5)" part off
+  // a bare $name$ shortcut (only this template actually uses the number;
+  // every other $name$ template ignores it, same as calling any JS
+  // function with an extra argument it doesn't declare). Rename the
+  // colorPicker names if you use $gradient$ more than once in the same
+  // file - just a starting point, same as every other bare $name$
+  // template's generated body, nothing stops renaming it or adding more
+  // colorPicker calls + array entries by hand later.
+  gradient: (count = 2) => {
+    const defaults = ['#ffffff', '#000000', '#ff3366', '#33ff99', '#3366ff', '#ffcc00'];
+    const n = Math.max(1, Math.round(count));
+    const lines = ["{", "  in: {},", "  code(inputs, state, t) {", "    const use = useInstances(state);"];
+    for (let i = 1; i <= n; i++) {
+      lines.push(`    const c${i} = colorPicker('gradient${i}', { default: '${defaults[(i - 1) % defaults.length]}' });`);
+    }
+    const names = Array.from({ length: n }, (_, i) => `c${i + 1}`).join(', ');
+    lines.push(`    const out = use(Gradient).tick([${names}]);`, "    preview(out);", "    return { screen: out };", "  },", "},");
+    return lines.join('\n');
+  },
 
   // Another generator (no src) - 'value'/'perlin' (smooth/cloudy),
   // 'voronoi' (Pebble-like), or 'static' (flickering TV noise). Passing t
