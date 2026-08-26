@@ -215,10 +215,9 @@ export const SIGNATURES = {
   Fill: {
     ctor: 'new Fill()',
     tick:
-      "fill.tick(src, mode = 'blur', { width, height, blurAmount = 20 })\n" +
-      "// finds src's real content via alpha (not width/height) and scales it to fill a frame\n" +
-      "// mode: 'scale' (cover, no distortion) | 'stretch' (exact fit, distorts) | 'tile' | 'mirror' |\n" +
-      "// 'blur' (extends/averages nearby color - best for irregular/diagonal shapes)",
+      "fill.tick(src, mode = 'mirror')  // mode: 'mirror' | 'copy'\n" +
+      "// finds each row's own content span (via alpha) and extends it sideways to fill that row -\n" +
+      "// an empty row borrows the nearest row that has something, so the whole frame ends up covered",
   },
   ColorLookup: {
     ctor: 'new ColorLookup()',

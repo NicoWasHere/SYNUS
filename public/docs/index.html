@@ -879,19 +879,17 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
     <section id="fill">
       <h2>Fill</h2>
       <p>
-        Finds <code>src</code>'s real content (via alpha, not <code>width</code>/
-        <code>height</code> — so it still works after e.g. a <code>Scale</code> shrinks
-        something inside the same buffer) and scales it to fill a frame (default
-        <code>screenSize()</code>).
+        Fills <code>src</code>'s transparent areas — cuts the frame into rows, finds
+        where each row's own real content starts/ends (via alpha), and extends that
+        same row sideways to cover the rest of it. A row with nothing of its own
+        borrows the nearest row that has something, so the whole frame ends up covered
+        even when the real content only occupies a small part of it.
       </p>
-      <pre><code><span class="tag">const</span> out = use(Fill).tick(inputs.webcam, <span class="str">'blur'</span>);</code></pre>
+      <pre><code><span class="tag">const</span> out = use(Fill).tick(inputs.webcam, <span class="str">'mirror'</span>);</code></pre>
       <table>
         <tr><th><code>mode</code></th><th>What it does</th></tr>
-        <tr><td><code>'scale'</code></td><td>Uniform zoom to cover the frame — no distortion, crops overflow.</td></tr>
-        <tr><td><code>'stretch'</code></td><td>Distorts to fill exactly — no cropping, no leftover gap.</td></tr>
-        <tr><td><code>'tile'</code></td><td>Repeats the content, wallpaper-style.</td></tr>
-        <tr><td><code>'mirror'</code></td><td>Same repeat, alternating reflected copies.</td></tr>
-        <tr><td><code>'blur'</code> (default)</td><td>Extends/averages nearby color into the gap — best for irregular or diagonal shapes, where a hard rectangle doesn't fit well.</td></tr>
+        <tr><td><code>'mirror'</code> (default)</td><td>Extends each row by reflecting it back on itself — no seam at the fold.</td></tr>
+        <tr><td><code>'copy'</code></td><td>Extends each row by repeating it, wallpaper-style.</td></tr>
       </table>
     </section>
 
