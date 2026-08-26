@@ -879,47 +879,20 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
     <section id="fill">
       <h2>Fill</h2>
       <p>
-        Detects where <code>src</code>'s content ACTUALLY is (a real alpha readback,
-        not <code>src.width</code>/<code>height</code> — see the note below) and scales
-        that up to fill a target frame without ever distorting the crisp foreground
-        copy — only the BACKGROUND (the letterbox margin around it, or any hole already
-        in <code>src</code>, e.g. a webcam's own cropped edge, a chroma-keyed hole, or
-        content a <code>Scale</code> shrank down inside the same full-size buffer) uses
-        <code>mode</code>. This is the fix for "why is the edge of my thing just
-        black" — a transparent area reaching <code>render()</code> shows the page
-        through as black by design (see
-        <a href="#render-preview">render() &amp; preview()</a>); <code>Fill</code> gives
-        it something real to show instead.
+        Finds <code>src</code>'s real content (via alpha, not <code>width</code>/
+        <code>height</code> — so it still works after e.g. a <code>Scale</code> shrinks
+        something inside the same buffer) and scales it to fill a frame (default
+        <code>screenSize()</code>).
       </p>
-      <pre><code><span class="tag">const</span> out = use(Fill).tick(inputs.webcam, <span class="str">'blur'</span>);
-<span class="tag">const</span> out2 = use(Fill).tick(inputs.src, <span class="str">'mirror'</span>, { width: 1080, height: 1920 });</code></pre>
+      <pre><code><span class="tag">const</span> out = use(Fill).tick(inputs.webcam, <span class="str">'blur'</span>);</code></pre>
       <table>
-        <tr><th><code>mode</code></th><th>Background strategy</th></tr>
-        <tr><td><code>'stretch'</code></td><td>The detected content rect (not the whole buffer) distorted to exactly fill the frame.</td></tr>
-        <tr><td><code>'tile'</code></td><td>That rect repeated at its own on-screen (contain-fit) size, wallpaper-style.</td></tr>
-        <tr><td><code>'mirror'</code></td><td>Same repeat, but alternating reflected copies — no seam at the tile edges.</td></tr>
-        <tr><td><code>'blur'</code> (default)</td><td>A heavily blurred, <code>'cover'</code>-scaled copy of it — the "blurred sidebar" look phone apps use behind a portrait photo in a landscape frame.</td></tr>
+        <tr><th><code>mode</code></th><th>What it does</th></tr>
+        <tr><td><code>'scale'</code></td><td>Uniform zoom to cover the frame — no distortion, crops overflow.</td></tr>
+        <tr><td><code>'stretch'</code></td><td>Distorts to fill exactly — no cropping, no leftover gap.</td></tr>
+        <tr><td><code>'tile'</code></td><td>Repeats the content, wallpaper-style.</td></tr>
+        <tr><td><code>'mirror'</code></td><td>Same repeat, alternating reflected copies.</td></tr>
+        <tr><td><code>'blur'</code> (default)</td><td>Extends/averages nearby color into the gap — best for irregular or diagonal shapes, where a hard rectangle doesn't fit well.</td></tr>
       </table>
-      <p>
-        <code>{ width, height }</code> default to <code>screenSize()</code> — pass your
-        own (e.g. <code>viewportSize()</code>, or a fixed export resolution) to fill
-        something other than the full square canvas. <code>blurAmount</code> (default
-        20, <code>'blur'</code> mode only) is the blur pass's own sample spacing in
-        texels — same units as <code>Blur</code>'s own <code>amount</code>.
-      </p>
-      <div class="note">
-        <b>Why alpha, not <code>width</code>/<code>height</code>?</b> Those only
-        describe the underlying BUFFER's size, not where the real content sits inside
-        it. That distinction is invisible for <code>ImageSource</code>/
-        <code>VideoSource</code> (a 'contain' fit actually allocates a smaller buffer
-        matching the real native aspect) but very visible the moment content shrinks
-        via a GLSL effect instead — <code>use(Scale).tick(src, {x: 0.5})</code> still
-        reports the SAME full <code>width</code>/<code>height</code> (it resamples
-        within the same buffer), so trusting that metadata would find no margin to fill
-        at all. Reading the actual alpha finds the real occupied rect either way — a
-        genuine GPU→CPU readback each call (a small fixed-size grid, same honest
-        tradeoff as <a href="#sampletexture">sampleTexture</a>), not free, but bounded.
-      </div>
     </section>
 
     <section id="pattern">

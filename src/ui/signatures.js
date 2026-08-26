@@ -216,14 +216,9 @@ export const SIGNATURES = {
     ctor: 'new Fill()',
     tick:
       "fill.tick(src, mode = 'blur', { width, height, blurAmount = 20 })\n" +
-      "// detects where src's content ACTUALLY is (a real alpha readback, not src.width/height - so it\n" +
-      "// still finds the right rect even after e.g. use(Scale).tick(src, {x:0.5}), which keeps the same\n" +
-      "// width/height but shrinks the content INSIDE it) and scales that to fill a target frame (default\n" +
-      "// screenSize()) without distorting the crisp foreground - only the BACKGROUND (letterbox margin,\n" +
-      "// or any hole already in src) uses mode: 'stretch' (bg = the detected rect distorted to fill) | 'tile' (bg repeats at its own\n" +
-      "// on-screen size) | 'mirror' (same repeat, alternating reflected copies) | 'blur' (bg = a heavily\n" +
-      "// blurred, cover-scaled copy - the 'blurred sidebar' look). Anywhere src itself is transparent\n" +
-      '// (not just the letterbox margin) shows background too - alpha-over, no special-casing.',
+      "// finds src's real content via alpha (not width/height) and scales it to fill a frame\n" +
+      "// mode: 'scale' (cover, no distortion) | 'stretch' (exact fit, distorts) | 'tile' | 'mirror' |\n" +
+      "// 'blur' (extends/averages nearby color - best for irregular/diagonal shapes)",
   },
   ColorLookup: {
     ctor: 'new ColorLookup()',

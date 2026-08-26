@@ -1,25 +1,15 @@
 import { getGL, screenSize } from './context.js';
 import { GLSL } from './glsl.js';
-import { BLUR } from './fx/shaders.js';
 
-// Composites src over a background that fills the rest of the frame
-// using one of four strategies. Anywhere src is transparent (a letterbox
-// margin, a webcam's own cropped edge, a chroma-keyed hole, content that
-// was Scale'd down inside the SAME full-size buffer, ...) shows the same
-// background through, via plain alpha-over compositing - "if it's
-// transparent, it gets filled" falls out of that for free.
-//
-// uRectMin/uRectMax/uRectCenter/uMapScale are all precomputed in JS from
-// a DETECTED content rect (see _detectContentRect below) - deliberately
-// NOT from src.width/src.height. Width/height only tells you the size of
-// the underlying BUFFER, not where the real content sits inside it - true
-// for ImageSource/VideoSource's own letterboxing (a smaller buffer,
-// matching its real native aspect), but false the moment content got
-// smaller via a GLSL effect (use(Scale).tick(src, {x:0.5}), say) INSIDE
-// a same-size buffer: width/height still reports the full frame, so
-// there'd be no margin left for Fill to even know about, let alone fill.
-// Detecting the occupied rect from alpha directly handles both cases
-// the same way, and correctly finds an off-center or irregular hole too.
+// new Fill() inside a node's code(), or use(Fill). tick(src, mode, { width,
+// height, blurAmount }) finds src's actual content (via alpha, not
+// width/height - so it still works after e.g. a Scale shrinks something
+// inside the same buffer) and scales it to fill a frame (default
+// screenSize()). mode: 'scale' (cover - uniform zoom, no distortion, crops
+// overflow) | 'stretch' (distorts to fill exactly, no cropping) | 'tile' |
+// 'mirror' | 'blur' (default - extends/averages nearby color into the gap,
+// the one to reach for on irregular or diagonal shapes a rectangle doesn't
+// fit well).
 const COMPOSITE_FRAG = `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -29,40 +19,50 @@ uniform sampler2D uBlurred; // only sampled in 'blur' mode - ignored otherwise
 uniform vec2 uRectMin;      // detected content rect, in uSrc's own uv space
 uniform vec2 uRectMax;
 uniform vec2 uRectCenter;
-uniform vec2 uMapScale;     // precomputed contain-fit scale (target ↔ source)
-uniform float uMode;        // 0 = stretch, 1 = tile, 2 = mirror, 3 = blur
+uniform vec2 uMapScale;      // contain-fit scale (target <-> source)
+uniform vec2 uCoverMapScale; // cover-fit scale (target <-> source)
+uniform float uMode;         // 0 scale, 1 stretch, 2 tile, 3 mirror, 4 blur
 
 vec2 mirrorFold(vec2 uv) {
   vec2 i = floor(uv);
   vec2 f = fract(uv);
-  vec2 flip = mod(i, 2.0);
-  return mix(f, 1.0 - f, flip);
+  return mix(f, 1.0 - f, mod(i, 2.0));
 }
 
 void main() {
-  vec2 sourceUv = uRectCenter + (vUv - 0.5) * uMapScale;
   vec2 rectSpan = max(uRectMax - uRectMin, vec2(0.0001));
 
+  if (uMode < 0.5) { // scale: uniform zoom to cover, no distortion
+    vec2 uv = uRectCenter + (vUv - 0.5) * uCoverMapScale;
+    vec4 c = texture(uSrc, clamp(uv, uRectMin, uRectMax));
+    outColor = vec4(mix(vec3(0.0), c.rgb, c.a), 1.0);
+    return;
+  }
+  if (uMode < 1.5) { // stretch: distort to fill exactly
+    vec4 c = texture(uSrc, uRectMin + vUv * rectSpan);
+    outColor = vec4(mix(vec3(0.0), c.rgb, c.a), 1.0);
+    return;
+  }
+
+  // tile / mirror / blur: crisp contain-fit foreground, composited over a
+  // background that fills the rest.
+  vec2 sourceUv = uRectCenter + (vUv - 0.5) * uMapScale;
   vec4 bg;
-  if (uMode < 0.5) {
-    // stretch - the detected rect (not the whole buffer) distorted to fill the frame
-    bg = texture(uSrc, uRectMin + vUv * rectSpan);
-  } else if (uMode < 1.5) {
+  if (uMode < 2.5) {
     vec2 rel = (sourceUv - uRectMin) / rectSpan;
-    bg = texture(uSrc, uRectMin + fract(rel) * rectSpan); // tile
-  } else if (uMode < 2.5) {
+    bg = texture(uSrc, uRectMin + fract(rel) * rectSpan);
+  } else if (uMode < 3.5) {
     vec2 rel = (sourceUv - uRectMin) / rectSpan;
-    bg = texture(uSrc, uRectMin + mirrorFold(rel) * rectSpan); // mirror
+    bg = texture(uSrc, uRectMin + mirrorFold(rel) * rectSpan);
   } else {
-    bg = texture(uBlurred, vUv); // blur - a separately pre-blurred cover-fit pass
+    bg = texture(uBlurred, vUv);
   }
 
   vec4 fg = vec4(0.0);
   if (sourceUv.x >= uRectMin.x && sourceUv.x <= uRectMax.x && sourceUv.y >= uRectMin.y && sourceUv.y <= uRectMax.y) {
     fg = texture(uSrc, sourceUv);
   }
-
-  vec3 bgRgb = mix(vec3(0.0), bg.rgb, bg.a); // guarantees full opacity even if bg itself has holes
+  vec3 bgRgb = mix(vec3(0.0), bg.rgb, bg.a);
   outColor = vec4(mix(bgRgb, fg.rgb, fg.a), 1.0);
 }`;
 
@@ -73,31 +73,45 @@ out vec4 outColor;
 uniform sampler2D uSrc;
 void main() { outColor = texture(uSrc, vUv); }`;
 
-const MODE_INDEX = { stretch: 0, tile: 1, mirror: 2, blur: 3 };
+// Same 5x5 weighted blur every other blur here uses, EXCEPT it weights
+// each tap's color contribution by that tap's own alpha - a fully
+// transparent neighbor (typically black, since that's what "nothing
+// drawn here" clears to) contributes NOTHING to the color average
+// instead of dragging it toward black. Repeated passes progressively
+// extend real color outward from wherever it actually exists into
+// nearby gaps - genuinely "average the closest color", not a blur that
+// happens to sit on top of one, which is what makes this the mode that
+// still looks reasonable around an irregular or diagonal edge (where a
+// straight rect's corners don't match the actual shape).
+const FILL_BLUR = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform float uAmount;
+
+void main() {
+  float w[5] = float[5](1.0, 4.0, 6.0, 4.0, 1.0);
+  vec3 colorSum = vec3(0.0);
+  float alphaSum = 0.0;
+  float weightSum = 0.0;
+  for (int y = -2; y <= 2; y++) {
+    for (int x = -2; x <= 2; x++) {
+      vec4 c = texture(uSrc, clamp(vUv + vec2(float(x), float(y)) * uTexel * uAmount, 0.0, 1.0));
+      float weight = w[x + 2] * w[y + 2];
+      colorSum += c.rgb * c.a * weight;
+      alphaSum += c.a * weight;
+      weightSum += weight;
+    }
+  }
+  vec3 rgb = alphaSum > 0.001 ? colorSum / alphaSum : vec3(0.0);
+  outColor = vec4(rgb, alphaSum / weightSum);
+}`;
+
+const MODE_INDEX = { scale: 0, stretch: 1, tile: 2, mirror: 3, blur: 4 };
 const BBOX_GRID = 48; // fine enough to find a rect without a heavy readback
 
-// new Fill() inside a node's code(), or use(Fill) via useInstances.
-// tick(src, mode = 'blur', { width, height, blurAmount = 20 } = {}) -
-// detects where src's own content ACTUALLY is (a coarse alpha readback,
-// see _detectContentRect below - genuinely not free, same tradeoff
-// sampleTexture's own doc comment describes, which is why the grid is
-// small) and scales THAT up to fill a target frame (default
-// screenSize(), override via width/height) without ever distorting the
-// crisp foreground copy - only the background (everywhere outside/inside
-// that content that's transparent) uses `mode`:
-//
-//   const out = use(Fill).tick(inputs.webcam, 'blur');
-//   const out = use(Fill).tick(inputs.src, 'mirror', { width: 1080, height: 1920 });
-//
-// mode: 'stretch' (background = the detected content rect distorted to
-// exactly fill the frame), 'tile' (background = that rect repeated at
-// its own on-screen size), 'mirror' (same repeat, alternating reflected
-// copies - no seam at the tile edges), 'blur' (background = a heavily
-// blurred, 'cover'-scaled copy - the "blurred sidebar" look phone apps
-// use for portrait photos in a landscape frame). blurAmount only matters
-// for 'blur' mode - sample spacing in texels per pass (3 passes, same
-// reasoning as Bloom's own wide blur: one 5x5 pass alone bands at a
-// large radius, a few passes compound into an actually smooth blur).
 export class Fill {
   constructor(filter = 'linear') {
     this.gl = getGL();
@@ -112,14 +126,11 @@ export class Fill {
     this._size = { width: -1, height: -1 };
   }
 
-  // Finds the tightest rect (in uSrc's own 0..1 uv space) containing
-  // every pixel whose alpha is above a small noise floor - a real GPU→CPU
-  // readback (gl.readPixels), so it costs something every call, same
-  // honest tradeoff sampleTexture's own doc comment makes for the same
-  // reason (a small fixed grid keeps that cost bounded regardless of
-  // src's own real resolution). Falls back to the whole frame [0,0,1,1]
-  // if nothing in src has any real alpha at all (avoids a degenerate
-  // zero-size rect).
+  // Tightest rect (in uSrc's own 0..1 uv space) containing every pixel
+  // whose alpha is above a small noise floor - a real GPU->CPU readback,
+  // same tradeoff sampleTexture's own doc comment makes, for the same
+  // reason (a small fixed grid keeps the cost bounded). Falls back to
+  // the whole frame if src has no real alpha anywhere.
   _detectContentRect(src) {
     this._bboxPass.tick(ALPHA_PASSTHROUGH, { uSrc: src });
     const gl = this.gl;
@@ -142,14 +153,11 @@ export class Fill {
     }
     if (maxCol < 0) return [0, 0, 1, 1];
 
-    // readPixels' row 0 is the BOTTOM of the texture (GL convention), and
-    // this project's own uv convention has v=1 at the visual TOP (see
-    // gl-context.js's UNPACK_FLIP_Y_WEBGL) - flip before converting to uv.
-    const x0 = minCol / BBOX_GRID;
-    const x1 = (maxCol + 1) / BBOX_GRID;
-    const y0 = (BBOX_GRID - 1 - maxRow) / BBOX_GRID;
-    const y1 = (BBOX_GRID - minRow) / BBOX_GRID;
-    return [x0, y0, x1, y1];
+    // readPixels' row 0 is v=0 (GL convention) - that already matches uv.y
+    // directly, no flip needed (unlike sampleTexture's OWN row flip, which
+    // exists only to make ITS OWN returned array read "row 0 = visual top"
+    // for callers - not relevant here since this converts straight to uv).
+    return [minCol / BBOX_GRID, minRow / BBOX_GRID, (maxCol + 1) / BBOX_GRID, (maxRow + 1) / BBOX_GRID];
   }
 
   _ensureBlurPasses(width, height) {
@@ -182,12 +190,12 @@ export class Fill {
 
     const containScale = Math.min(w / rectW, h / rectH);
     const mapScale = [w / containScale / srcW, h / containScale / srcH];
+    const coverScale = Math.max(w / rectW, h / rectH);
+    const coverMapScale = [w / coverScale / srcW, h / coverScale / srcH];
 
     let blurredTex = null;
     if (mode === 'blur') {
       this._ensureBlurPasses(w, h);
-      const coverScale = Math.max(w / rectW, h / rectH);
-      const coverMapScale = [w / coverScale / srcW, h / coverScale / srcH];
       this._cover.tick(
         `#version 300 es
 precision highp float;
@@ -202,10 +210,15 @@ void main() {
 }`,
         { uSrc: src, uRectCenter: rectCenter, uCoverMapScale: coverMapScale }
       );
+      // Each pass reaches further than the last (1x, 2x, 4x) instead of
+      // three equal small passes - a small/off-center shape can leave a
+      // gap far bigger than any single pass's own 5-tap radius covers,
+      // and this reaches ~7x further for the same 3 passes (same
+      // "blur pyramid" idea Bloom/Flow already use elsewhere here).
       const texel = [1 / w, 1 / h];
-      this._blurA.tick(BLUR, { uSrc: this._cover, uTexel: texel, uAmount: blurAmount });
-      this._blurB.tick(BLUR, { uSrc: this._blurA, uTexel: texel, uAmount: blurAmount });
-      this._blurC.tick(BLUR, { uSrc: this._blurB, uTexel: texel, uAmount: blurAmount });
+      this._blurA.tick(FILL_BLUR, { uSrc: this._cover, uTexel: texel, uAmount: blurAmount });
+      this._blurB.tick(FILL_BLUR, { uSrc: this._blurA, uTexel: texel, uAmount: blurAmount * 2 });
+      this._blurC.tick(FILL_BLUR, { uSrc: this._blurB, uTexel: texel, uAmount: blurAmount * 4 });
       blurredTex = this._blurC;
     }
 
@@ -216,7 +229,8 @@ void main() {
       uRectMax: rectMax,
       uRectCenter: rectCenter,
       uMapScale: mapScale,
-      uMode: MODE_INDEX[mode] ?? 3,
+      uCoverMapScale: coverMapScale,
+      uMode: MODE_INDEX[mode] ?? 4,
     });
     return this._composite;
   }
