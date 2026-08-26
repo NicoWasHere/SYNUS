@@ -35,12 +35,12 @@ void main() {
   if (uMode < 0.5) { // scale: uniform zoom to cover, no distortion
     vec2 uv = uRectCenter + (vUv - 0.5) * uCoverMapScale;
     vec4 c = texture(uSrc, clamp(uv, uRectMin, uRectMax));
-    outColor = vec4(mix(vec3(0.0), c.rgb, c.a), 1.0);
+    outColor = vec4(c.rgb, 1.0); // forced opaque - never re-darken toward black by alpha
     return;
   }
   if (uMode < 1.5) { // stretch: distort to fill exactly
     vec4 c = texture(uSrc, uRectMin + vUv * rectSpan);
-    outColor = vec4(mix(vec3(0.0), c.rgb, c.a), 1.0);
+    outColor = vec4(c.rgb, 1.0);
     return;
   }
 
@@ -62,8 +62,12 @@ void main() {
   if (sourceUv.x >= uRectMin.x && sourceUv.x <= uRectMax.x && sourceUv.y >= uRectMin.y && sourceUv.y <= uRectMax.y) {
     fg = texture(uSrc, sourceUv);
   }
-  vec3 bgRgb = mix(vec3(0.0), bg.rgb, bg.a);
-  outColor = vec4(mix(bgRgb, fg.rgb, fg.a), 1.0);
+  // bg.rgb is used AS-IS (not re-darkened toward black by its own alpha
+  // first) - it's meant to be a guaranteed-opaque backdrop, and doing
+  // that darkened it wherever the fill hadn't fully "saturated" back to
+  // alpha 1 (a real color was already found and averaged in - alpha
+  // there is just confidence, not a reason to dim it).
+  outColor = vec4(mix(bg.rgb, fg.rgb, fg.a), 1.0);
 }`;
 
 const ALPHA_PASSTHROUGH = `#version 300 es
