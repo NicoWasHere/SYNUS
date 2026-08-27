@@ -6,14 +6,21 @@
 // never touch `patch` directly and mobile-app.js has one place to hook a
 // debounced recompile+reload.
 //
-// Every node exposes exactly ONE input port (always named `src`) and ONE
-// output port (always named `out`) - this is what keeps the touch canvas's
-// wiring gesture simple (one dot in, one dot out, per node, always).
-// patch-compiler.js's generated code always `return { out }` for exactly
-// this reason. A node needing more than one input is out of scope for v1
-// (see the plan's non-goals) - `raw` slots can still reach `inputs.src`
-// for anything more elaborate a hand-authored node would have wired.
+// Every node has a `src` input by default, but can declare MORE named
+// input ports (`node.inputNames`, e.g. for a "comp" node reading two
+// wired sources by name) - each is its own dot on the touch canvas, and
+// each is readable in code as `inputs.<name>` (patch-compiler.js's `in:
+// {...}` object literal was always keyed generically, so this needed no
+// compiler change, just a way to DECLARE more of them and draw more
+// dots). Every node always publishes `out` (the slot chain's running
+// value), but can also declare extra named outputs (`node.extraOutputs`,
+// e.g. a "bpm" node publishing both `out` and a numeric `bpm`) - each is
+// a raw JS expression (same `$expr` convention as node-view.js's per-arg
+// "t" toggle) evaluated after every slot has run, so it can read `out`,
+// `t`, or a local a `raw` slot declared earlier in the same node.
 let nextIdCounter = 1;
+
+const DEFAULT_INPUT_NAMES = ['src'];
 
 export class PatchStore {
   constructor(initialPatch, onChange) {
@@ -37,18 +44,85 @@ export class PatchStore {
     this._changeTimer = setTimeout(() => this.onChange(this.patch), 150);
   }
 
-  addNode({ id, pos = { x: 40, y: 40 }, slots = [] } = {}) {
+  addNode({ id, pos = { x: 40, y: 40 }, slots = [], in: inputs = {}, inputNames, extraOutputs = {} } = {}) {
     const nodeId = id || `node${nextIdCounter++}`;
     if (this.getNode(nodeId)) throw new Error(`Node "${nodeId}" already exists`);
-    this.patch.nodes.push({ id: nodeId, pos: { ...pos }, in: {}, slots });
+    this.patch.nodes.push({
+      id: nodeId,
+      pos: { ...pos },
+      in: { ...inputs },
+      inputNames: inputNames ? [...inputNames] : [...DEFAULT_INPUT_NAMES],
+      extraOutputs: { ...extraOutputs },
+      slots,
+    });
     this._notify();
     return nodeId;
+  }
+
+  // Declared input ports, in dot order - a patch saved before this field
+  // existed just has `src` (matching what compileNode already assumed).
+  getInputNames(node) {
+    return node.inputNames && node.inputNames.length ? node.inputNames : DEFAULT_INPUT_NAMES;
+  }
+
+  addInputPort(nodeId, name) {
+    const node = this.getNode(nodeId);
+    name = (name || '').trim();
+    if (!node || !name) return false;
+    const names = this.getInputNames(node);
+    if (names.includes(name)) return false;
+    node.inputNames = [...names, name];
+    this._notify();
+    return true;
+  }
+
+  // The wire (if any) feeding that port goes with it - same "nothing
+  // left pointing at a name that no longer exists" reasoning as
+  // removeNode/renameNode, just for a port instead of a whole node.
+  removeInputPort(nodeId, name) {
+    const node = this.getNode(nodeId);
+    if (!node) return;
+    node.inputNames = this.getInputNames(node).filter((n) => n !== name);
+    delete node.in[name];
+    this._notify();
+  }
+
+  // Extra outputs beyond the always-present `out` (the slot chain's
+  // running value - see compileNode) - each is a raw expression, not a
+  // value, so it can be edited (setOutputExpr) after adding without
+  // needing a separate "value vs expression" toggle the way a slot arg
+  // does; there's no non-expression form for an output to begin with.
+  addOutputPort(nodeId, name, expr = 'out') {
+    const node = this.getNode(nodeId);
+    name = (name || '').trim();
+    if (!node || !name || name === 'out' || name in node.extraOutputs) return false;
+    node.extraOutputs = { ...node.extraOutputs, [name]: expr };
+    this._notify();
+    return true;
+  }
+
+  removeOutputPort(nodeId, name) {
+    const node = this.getNode(nodeId);
+    if (!node || !(name in node.extraOutputs)) return;
+    const rest = { ...node.extraOutputs };
+    delete rest[name];
+    node.extraOutputs = rest;
+    this._notify();
+  }
+
+  setOutputExpr(nodeId, name, expr) {
+    const node = this.getNode(nodeId);
+    if (!node || !(name in node.extraOutputs)) return;
+    node.extraOutputs[name] = expr;
+    this._notify();
   }
 
   removeNode(id) {
     this.patch.nodes = this.patch.nodes.filter((n) => n.id !== id);
     for (const node of this.patch.nodes) {
-      if (node.in.src === `${id}.out`) delete node.in.src; // nothing left pointing at the removed node
+      for (const port of Object.keys(node.in)) {
+        if (node.in[port]?.split('.')[0] === id) delete node.in[port]; // nothing left pointing at the removed node
+      }
     }
     this._notify();
   }
@@ -67,7 +141,11 @@ export class PatchStore {
     if (!node) return false;
     node.id = newId;
     for (const n of this.patch.nodes) {
-      if (n.in.src === `${oldId}.out`) n.in.src = `${newId}.out`;
+      for (const port of Object.keys(n.in)) {
+        const ref = n.in[port];
+        const [sourceId, sourcePort] = ref ? ref.split('.') : [];
+        if (sourceId === oldId) n.in[port] = `${newId}.${sourcePort}`;
+      }
     }
     this._notify();
     return true;
@@ -80,23 +158,29 @@ export class PatchStore {
     this._notify();
   }
 
-  // wire(targetId, sourceId) - targetId's `src` input now reads sourceId's
-  // `out` output. Always the same two port names (see class comment) -
-  // nothing else to specify.
-  wire(targetId, sourceId) {
+  // wire(targetId, targetPort, sourceId, sourcePort) - targetId's named
+  // input port now reads sourceId's named output port. targetPort/
+  // sourcePort default to the original single-port convention ('src'/
+  // 'out') so old 2-arg call sites still behave identically. A node
+  // wiring its OWN output back into its own input is allowed, not a
+  // degenerate case - that's exactly what a "feedback" node (see
+  // canvas.js's node-template picker) is: reading last tick's own
+  // output, same as Graph's bus.read() already does for any wire.
+  wire(targetId, targetPort, sourceId, sourcePort = 'out') {
     const target = this.getNode(targetId);
-    if (!target || !this.getNode(sourceId) || targetId === sourceId) return;
-    target.in.src = `${sourceId}.out`;
+    if (!target || !this.getNode(sourceId)) return;
+    target.in[targetPort] = `${sourceId}.${sourcePort}`;
     this._notify();
   }
 
-  // unwire(id) - clears id's OWN `src` input (a node's downstream
-  // consumers, if any, are untouched - see removeNode for the "id itself
-  // is going away, so nothing should be left reading its output" case).
-  unwire(id) {
+  // unwire(id, port) - clears id's own named input port (a node's
+  // downstream consumers, if any, are untouched - see removeNode for the
+  // "id itself is going away, so nothing should be left reading its
+  // output" case, which is the opposite direction from this).
+  unwire(id, port = 'src') {
     const node = this.getNode(id);
     if (!node) return;
-    delete node.in.src;
+    delete node.in[port];
     this._notify();
   }
 
@@ -134,11 +218,17 @@ export class PatchStore {
     this._notify();
   }
 
-  // Flattened wire list for rendering - one entry per node that actually
-  // has a `src` wire right now.
+  // Flattened wire list for rendering - one entry per WIRED input port
+  // across every node (a node with 2 wired inputs contributes 2 entries).
   listWires() {
-    return this.patch.nodes
-      .filter((n) => n.in.src)
-      .map((n) => ({ targetId: n.id, sourceId: n.in.src.split('.')[0] }));
+    const wires = [];
+    for (const node of this.patch.nodes) {
+      for (const [targetPort, ref] of Object.entries(node.in)) {
+        if (!ref) continue;
+        const [sourceId, sourcePort] = ref.split('.');
+        wires.push({ targetId: node.id, targetPort, sourceId, sourcePort: sourcePort || 'out' });
+      }
+    }
+    return wires;
   }
 }

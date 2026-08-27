@@ -97,7 +97,7 @@ function applyInitialValue(entry, req) {
 
 const EXPR_TOGGLE_STYLE = `background: #333; border: 1px solid #555; color: #9ece6a; border-radius: 4px; padding: 3px 7px; font: 11px monospace; flex-shrink: 0;`;
 
-export function mountNodeView(container, patchStore, { onAddBlock, onRenamed } = {}) {
+export function mountNodeView(container, patchStore, { onAddBlock, onGraphChanged } = {}) {
   const sheet = document.createElement('div');
   sheet.dataset.mobileNodeSheet = ''; // precise hook for automated tests/tooling
   sheet.style.cssText = `
@@ -203,6 +203,64 @@ export function mountNodeView(container, patchStore, { onAddBlock, onRenamed } =
     return box;
   }
 
+  // One "Inputs" or "Outputs" section: existing ports as removable
+  // chips, plus an inline "+ add" that reveals a name field rather than
+  // a native prompt() (consistent with the rest of this sheet's inline-
+  // editing convention). `onAdd(name)` returns false to reject (e.g. a
+  // taken/blank name) and leave the field open instead of clearing it.
+  function renderPortSection(title, names, { onAdd, onRemove, removable = () => true }) {
+    const section = document.createElement('div');
+    section.style.cssText = `margin-bottom: 14px;`;
+    const label = document.createElement('div');
+    label.textContent = title;
+    label.style.cssText = `color: #777; font-size: 11px; text-transform: uppercase; margin-bottom: 6px;`;
+    section.appendChild(label);
+
+    const chipRow = document.createElement('div');
+    chipRow.style.cssText = `display: flex; flex-wrap: wrap; gap: 6px; align-items: center;`;
+    for (const name of names) {
+      const chip = document.createElement('span');
+      chip.style.cssText = `display: inline-flex; align-items: center; gap: 4px; background: #23262e; border: 1px solid #333844; border-radius: 12px; padding: 4px 6px 4px 10px; font-size: 12px; color: #eee;`;
+      const text = document.createElement('span');
+      text.textContent = name;
+      chip.appendChild(text);
+      if (removable(name)) {
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = '×';
+        removeBtn.style.cssText = `background: none; border: none; color: #e08a8a; font-size: 14px; line-height: 1; padding: 0 2px; cursor: pointer;`;
+        removeBtn.addEventListener('click', () => onRemove(name));
+        chip.appendChild(removeBtn);
+      }
+      chipRow.appendChild(chip);
+    }
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.textContent = '+';
+    addBtn.title = `add ${title.toLowerCase().slice(0, -1)}`;
+    addBtn.style.cssText = `background: none; border: 1px dashed #555; color: #9fd6ff; border-radius: 12px; width: 24px; height: 24px; font-size: 14px; line-height: 1;`;
+    const addField = document.createElement('input');
+    addField.type = 'text';
+    addField.placeholder = 'name';
+    addField.spellcheck = false;
+    addField.style.cssText = `display: none; width: 80px; background: #111; color: #eee; border: 1px solid #444; border-radius: 12px; padding: 4px 10px; font-size: 12px;`;
+    addBtn.addEventListener('click', () => {
+      addField.style.display = addField.style.display === 'none' ? 'inline-block' : 'none';
+      if (addField.style.display !== 'none') addField.focus();
+    });
+    addField.addEventListener('change', () => {
+      if (!addField.value.trim()) return;
+      if (onAdd(addField.value)) {
+        addField.value = '';
+        addField.style.display = 'none';
+      }
+    });
+    chipRow.append(addBtn, addField);
+    section.appendChild(chipRow);
+    return section;
+  }
+
   function renderNode(nodeId) {
     openSlotIndex = null;
     const node = patchStore.getNode(nodeId);
@@ -233,7 +291,7 @@ export function mountNodeView(container, patchStore, { onAddBlock, onRenamed } =
       if (patchStore.renameNode(node.id, requested)) {
         openNodeId = requested.trim();
         renderNode(openNodeId);
-        onRenamed?.();
+        onGraphChanged?.();
       } else {
         title.value = node.id; // blank, unchanged, or already taken - revert
       }
@@ -245,6 +303,62 @@ export function mountNodeView(container, patchStore, { onAddBlock, onRenamed } =
     closeBtn.addEventListener('click', hide);
     header.append(title, closeBtn);
     sheet.appendChild(header);
+
+    sheet.appendChild(
+      renderPortSection('Inputs', patchStore.getInputNames(node), {
+        onAdd: (name) => {
+          const ok = patchStore.addInputPort(nodeId, name);
+          if (ok) {
+            renderNode(nodeId);
+            onGraphChanged?.();
+          }
+          return ok;
+        },
+        onRemove: (name) => {
+          patchStore.removeInputPort(nodeId, name);
+          renderNode(nodeId);
+          onGraphChanged?.();
+        },
+        // Down to zero declared inputs is allowed (a pure source node),
+        // but getInputNames() falls back to showing ['src'] whenever the
+        // list is actually empty - removing the very last chip wouldn't
+        // visibly do anything, so it's just not offered.
+        removable: () => patchStore.getInputNames(node).length > 1,
+      })
+    );
+    sheet.appendChild(
+      renderPortSection('Outputs', ['out', ...Object.keys(node.extraOutputs || {})], {
+        onAdd: (name) => {
+          const ok = patchStore.addOutputPort(nodeId, name);
+          if (ok) {
+            renderNode(nodeId);
+            onGraphChanged?.();
+          }
+          return ok;
+        },
+        onRemove: (name) => {
+          patchStore.removeOutputPort(nodeId, name);
+          renderNode(nodeId);
+          onGraphChanged?.();
+        },
+        removable: (name) => name !== 'out', // always the slot chain's own result - not optional
+      })
+    );
+    for (const [name, expr] of Object.entries(node.extraOutputs || {})) {
+      const row = document.createElement('div');
+      row.style.cssText = `display: flex; align-items: center; gap: 8px; padding: 4px 0 10px;`;
+      const label = document.createElement('span');
+      label.textContent = name;
+      label.style.cssText = `color: #999; font-size: 11px; min-width: 56px; flex-shrink: 0;`;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = expr;
+      input.spellcheck = false;
+      input.style.cssText = `flex: 1; min-width: 0; background: #111; color: #9ece6a; border: 1px solid #444; border-radius: 3px; font: 12px monospace; padding: 5px 6px;`;
+      input.addEventListener('input', () => patchStore.setOutputExpr(nodeId, name, input.value));
+      row.append(label, input);
+      sheet.appendChild(row);
+    }
 
     if (node.slots.length === 0) {
       const empty = document.createElement('div');

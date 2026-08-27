@@ -123,7 +123,20 @@ function compileNode(node) {
   const lines = [`const use = useInstances(state);`, `const { width, height } = screenSize();`];
 
   const hasSeed = Object.prototype.hasOwnProperty.call(inputs, 'src');
-  if (hasSeed) lines.push(`let out = inputs.src;`);
+  if (hasSeed) {
+    lines.push(`let out = inputs.src;`);
+  } else if (slots.length === 0) {
+    // Nothing else will ever declare `out` for a slot-less, wire-less
+    // node (exactly what canvas.js's "+ node" creates) - pre-declared
+    // here (as undefined) so an extra output's expression (below), which
+    // defaults to the literal text "out", can safely reference it
+    // instead of throwing a ReferenceError every tick before the node
+    // has any real content. Slots present take the ORIGINAL path
+    // untouched - a `raw` slot providing its own `let out = ...` as the
+    // seed is still valid and wouldn't tolerate `out` also being
+    // declared here (a duplicate declaration in the same scope).
+    lines.push(`let out;`);
+  }
 
   slots.forEach((slot, i) => {
     const isFirst = !hasSeed && i === 0;
@@ -135,8 +148,16 @@ function compileNode(node) {
   // slot) - a brand-new box with neither (no wire yet, no slots yet -
   // exactly what canvas.js's "+ node" button creates) has nothing to
   // return at all, and referencing `out` here would throw every tick
-  // until the user actually wires or fills it in.
-  lines.push(hasSeed || slots.length > 0 ? `return { out };` : `return {};`);
+  // until the user actually wires or fills it in. Extra outputs (see
+  // node-view.js's "+ add output") are independent raw expressions, not
+  // tied to `out` existing - they can read `t`/`inputs`/`state` or a
+  // local a `raw` slot declared, so they're always included regardless.
+  const extraOutputs = node.extraOutputs || {};
+  const returnEntries = [
+    ...(hasSeed || slots.length > 0 ? ['out'] : []),
+    ...Object.entries(extraOutputs).map(([name, expr]) => `${jsKey(name)}: (${expr})`),
+  ];
+  lines.push(returnEntries.length ? `return { ${returnEntries.join(', ')} };` : `return {};`);
 
   const inSrc = `{ ${Object.entries(inputs)
     .map(([k, v]) => `${jsKey(k)}: ${JSON.stringify(v)}`)

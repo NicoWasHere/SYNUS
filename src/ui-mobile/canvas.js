@@ -1,19 +1,33 @@
 // mountMobileCanvas(container, patchStore, { onNodeTap }) - the touch
 // node-graph surface: pan/pinch-zoom the canvas, drag a node to
-// reposition it, drag from a node's (right-side, blue) output dot to
-// another node's (left-side, gray) input dot to wire them, tap a wired
-// input dot to unwire it, tap a node's body (no drag) to open it (Phase
-// 3's node-view.js hooks in via `onNodeTap`). Same inline-`style.cssText`,
-// plain-DOM, window-level-pointermove/pointerup convention as
-// compose-at-tool.js/draw-tool.js - no framework, nothing new to learn.
+// reposition it, drag from any of a node's (right-side, blue) output
+// dots to another node's (left-side, gray) input dots to wire them, tap
+// a wired input dot to unwire it, tap a node's body (no drag) to open it
+// (Phase 3's node-view.js hooks in via `onNodeTap`). Same inline-
+// `style.cssText`, plain-DOM, window-level-pointermove/pointerup
+// convention as compose-at-tool.js/draw-tool.js - no framework, nothing
+// new to learn.
 //
-// Every node has exactly one input dot and one output dot (see
-// patch-store.js's class comment for why) - this is what keeps the
-// wiring gesture a single, uniform "drag dot A to dot B", never a picker
-// of which port you meant.
+// A node can declare more than one input/output port (patch-store.js's
+// inputNames/extraOutputs, edited from node-view.js's sheet) - each gets
+// its own dot, evenly spaced along the node's left/right edge, so the
+// "drag dot A to dot B" wiring gesture stays exactly as uniform as the
+// old always-exactly-one-of-each version, just with a specific port
+// (tracked via each dot's own dataset.port) at each end instead of an
+// implied 'src'/'out'.
 const NODE_W = 140;
 const NODE_H = 64;
+const PORT_SPACING = 26; // vertical gap between stacked dots on a tall (multi-port) node
 const DOT_SIZE = 26; // touch-target sized, not just visually-sized
+
+function outputNamesOf(node) {
+  return ['out', ...Object.keys(node.extraOutputs || {})];
+}
+
+function nodeHeight(patchStore, node) {
+  const portCount = Math.max(patchStore.getInputNames(node).length, outputNamesOf(node).length);
+  return Math.max(NODE_H, portCount * PORT_SPACING + 20);
+}
 
 export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   container.innerHTML = '';
@@ -113,8 +127,15 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   window.addEventListener('pointerup', releasePointer);
   window.addEventListener('pointercancel', releasePointer);
 
-  function portPos(node, side) {
-    return { x: node.pos.x + (side === 'in' ? 0 : NODE_W), y: node.pos.y + NODE_H / 2 };
+  // Evenly spaces N ports top-to-bottom along whichever edge - index 0 at
+  // 1/(N+1) of the way down, ..., so a single port sits at the dead
+  // center (same spot the old always-one-dot version used) and more
+  // ports fan out symmetrically around it as they're added.
+  function portPos(node, side, portName) {
+    const h = nodeHeight(patchStore, node);
+    const names = side === 'in' ? patchStore.getInputNames(node) : outputNamesOf(node);
+    const i = Math.max(0, names.indexOf(portName));
+    return { x: node.pos.x + (side === 'in' ? 0 : NODE_W), y: node.pos.y + (h * (i + 1)) / (names.length + 1) };
   }
 
   function renderWires() {
@@ -123,8 +144,8 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
       const source = patchStore.getNode(wire.sourceId);
       const target = patchStore.getNode(wire.targetId);
       if (!source || !target) continue;
-      const a = portPos(source, 'out');
-      const b = portPos(target, 'in');
+      const a = portPos(source, 'out', wire.sourcePort);
+      const b = portPos(target, 'in', wire.targetPort);
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', a.x);
       line.setAttribute('y1', a.y);
@@ -145,7 +166,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     const el = document.createElement('div');
     el.dataset.nodeId = node.id; // precise hook for automated tests/tooling - not used by canvas.js itself
     el.style.cssText = `
-      position: absolute; width: ${NODE_W}px; height: ${NODE_H}px;
+      position: absolute; width: ${NODE_W}px;
       background: #23262e; border: 2px solid #454952; border-radius: 10px;
       color: #eee; font: 13px/1.3 sans-serif; display: flex; align-items: center;
       justify-content: center; user-select: none; touch-action: none; cursor: grab;
@@ -153,34 +174,55 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     `;
     el.textContent = node.id;
 
-    const inDot = document.createElement('div');
-    inDot.title = 'input - tap to disconnect';
-    inDot.style.cssText = `
-      position: absolute; left: ${-DOT_SIZE / 2}px; top: 50%; transform: translateY(-50%);
-      width: ${DOT_SIZE}px; height: ${DOT_SIZE}px; border-radius: 50%;
-      background: #8a8f99; border: 3px solid #14161a; touch-action: none;
-    `;
-    const outDot = document.createElement('div');
-    outDot.title = 'output - drag to another node’s input';
-    outDot.style.cssText = `
-      position: absolute; right: ${-DOT_SIZE / 2}px; top: 50%; transform: translateY(-50%);
-      width: ${DOT_SIZE}px; height: ${DOT_SIZE}px; border-radius: 50%;
-      background: #5bb0e0; border: 3px solid #14161a; touch-action: none;
-    `;
-    el.appendChild(inDot);
-    el.appendChild(outDot);
-
     const del = document.createElement('div');
     del.textContent = '×';
     del.title = 'delete node';
     del.style.cssText = `
       position: absolute; right: -10px; top: -12px; width: 22px; height: 22px;
       border-radius: 50%; background: #a83a3a; color: #fff; font: bold 14px/22px sans-serif;
-      text-align: center; cursor: pointer; touch-action: none;
+      text-align: center; cursor: pointer; touch-action: none; z-index: 1;
     `;
     el.appendChild(del);
 
-    return { el, inDot, outDot, del };
+    return { el, del, inDots: new Map(), outDots: new Map() };
+  }
+
+  // Rebuilds a node's port dots to match its CURRENT declared inputs/
+  // extra outputs (node-view.js's "+ add input"/"+ add output") and
+  // resizes the box to fit them. Cheap enough to call on every full
+  // refresh() (add/remove/wire/rename) - NOT called from the per-frame
+  // drag path (layoutNodeEl, called directly during a body drag) since a
+  // dot's own identity has no reason to change mid-drag and constantly
+  // tearing down/rebuilding it would be wasted work.
+  function syncPorts(entry, node) {
+    for (const el of entry.inDots.values()) el.remove();
+    for (const el of entry.outDots.values()) el.remove();
+    entry.inDots.clear();
+    entry.outDots.clear();
+
+    const h = nodeHeight(patchStore, node);
+    entry.el.style.height = `${h}px`;
+
+    function makeDot(kind, name, index, count) {
+      const dot = document.createElement('div');
+      dot.dataset.kind = kind;
+      dot.dataset.ownerNodeId = node.id; // NOT dataset.nodeId - that's the node BOX's own unique test hook (see makeNodeEl)
+      dot.dataset.port = name;
+      dot.title = kind === 'in' ? `${name} - tap to disconnect` : `${name} - drag to another node's input`;
+      const side = kind === 'in' ? `left: ${-DOT_SIZE / 2}px;` : `right: ${-DOT_SIZE / 2}px;`;
+      dot.style.cssText = `
+        position: absolute; ${side} top: ${(h * (index + 1)) / (count + 1)}px; transform: translateY(-50%);
+        width: ${DOT_SIZE}px; height: ${DOT_SIZE}px; border-radius: 50%;
+        background: ${kind === 'in' ? '#8a8f99' : '#5bb0e0'}; border: 3px solid #14161a; touch-action: none;
+      `;
+      entry.el.appendChild(dot);
+      return dot;
+    }
+
+    const inNames = patchStore.getInputNames(node);
+    inNames.forEach((name, i) => entry.inDots.set(name, makeDot('in', name, i, inNames.length)));
+    const outNames = outputNamesOf(node);
+    outNames.forEach((name, i) => entry.outDots.set(name, makeDot('out', name, i, outNames.length)));
   }
 
   function renderNodes() {
@@ -198,6 +240,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
         nodeEls.set(node.id, entry);
         attachNodeInteractions(entry, node.id);
       }
+      syncPorts(entry, node);
       layoutNodeEl(entry, node);
     }
   }
@@ -234,42 +277,11 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
       if (node) patchStore.setPos(nodeId, node.pos);
       if (!moved && onNodeTap) onNodeTap(nodeId);
     }
-    entry.el.addEventListener('pointerdown', (e) => {
-      if (e.target === entry.inDot || e.target === entry.outDot || e.target === entry.del) return;
-      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a drag
-      e.stopPropagation();
-      dragging = true;
-      moved = false;
-      startClient = { x: e.clientX, y: e.clientY };
-      startPos = { ...patchStore.getNode(nodeId).pos };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    });
 
-    // --- delete ---
-    entry.del.addEventListener('pointerdown', (e) => e.stopPropagation());
-    entry.del.addEventListener('click', (e) => {
-      e.stopPropagation();
-      patchStore.removeNode(nodeId);
-      refresh();
-    });
-
-    // --- unwire (tap the input dot) ---
-    entry.inDot.addEventListener('pointerdown', (e) => e.stopPropagation());
-    entry.inDot.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (patchStore.getNode(nodeId)?.in.src) {
-        patchStore.unwire(nodeId);
-        refresh();
-      }
-    });
-
-    // --- wire (drag from the output dot) ---
-    entry.outDot.addEventListener('pointerdown', (e) => {
-      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a wire drag
-      e.stopPropagation();
+    // --- wire (drag from an output dot) ---
+    function startWireDrag(sourcePort) {
       const source = patchStore.getNode(nodeId);
-      const a = portPos(source, 'out');
+      const a = portPos(source, 'out', sourcePort);
       const dragLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       dragLine.setAttribute('x1', a.x);
       dragLine.setAttribute('y1', a.y);
@@ -291,14 +303,59 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
         window.removeEventListener('pointerup', onWireUp);
         dragLine.remove();
         const dropEl = document.elementFromPoint(ev.clientX, ev.clientY);
-        const targetEntry = [...nodeEls.entries()].find(([, en]) => en.inDot === dropEl);
-        if (targetEntry) {
-          patchStore.wire(targetEntry[0], nodeId);
+        if (dropEl?.dataset.kind === 'in') {
+          patchStore.wire(dropEl.dataset.ownerNodeId, dropEl.dataset.port, nodeId, sourcePort);
           refresh();
         }
       }
       window.addEventListener('pointermove', onWireMove);
       window.addEventListener('pointerup', onWireUp);
+    }
+
+    // A single delegated listener per node, reading e.target.dataset at
+    // event time - dots get torn down/rebuilt on every port change
+    // (syncPorts above), which would otherwise mean re-binding a fresh
+    // listener onto each new dot element every time a port is added or
+    // removed. Delegation means this listener never needs touching again.
+    entry.el.addEventListener('pointerdown', (e) => {
+      const kind = e.target.dataset.kind;
+      if (e.target === entry.del) return; // its own listener below
+      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a drag/wire
+      if (kind === 'in') {
+        e.stopPropagation();
+        return; // unwire is a tap, handled by the 'click' listener below
+      }
+      if (kind === 'out') {
+        e.stopPropagation();
+        startWireDrag(e.target.dataset.port);
+        return;
+      }
+      e.stopPropagation();
+      dragging = true;
+      moved = false;
+      startClient = { x: e.clientX, y: e.clientY };
+      startPos = { ...patchStore.getNode(nodeId).pos };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    // --- unwire (tap an input dot) ---
+    entry.el.addEventListener('click', (e) => {
+      if (e.target.dataset.kind !== 'in') return;
+      e.stopPropagation();
+      const port = e.target.dataset.port;
+      if (patchStore.getNode(nodeId)?.in[port]) {
+        patchStore.unwire(nodeId, port);
+        refresh();
+      }
+    });
+
+    // --- delete ---
+    entry.del.addEventListener('pointerdown', (e) => e.stopPropagation());
+    entry.del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      patchStore.removeNode(nodeId);
+      refresh();
     });
   }
 
@@ -326,17 +383,18 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     window.addEventListener('pointerup', onPanUp);
   });
 
-  // --- add-node button (a minimal stand-in - palette.js in Phase 4
-  // replaces this with a real "pick a prefab" picker; this just proves
-  // out the add/drag/wire mechanics with a blank, slot-less node) ---
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.textContent = '+ node';
-  addBtn.style.cssText = `
-    position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 12px 16px;
-    border-radius: 22px; border: none; background: #3a9d6e; color: #fff; font: 15px sans-serif;
-  `;
-  addBtn.addEventListener('click', () => {
+  // --- add-node button + template picker - a few common starting
+  // shapes (a plain blank box, a self-feeding "feedback" node, a
+  // 2-input "comp" node for combining two sources) instead of always
+  // the same slot-less/single-input box, so the common cases don't each
+  // need manually adding ports/rewiring right after creation. ---
+  const NODE_TEMPLATES = [
+    { label: 'Blank node', inputNames: undefined, selfWire: false },
+    { label: 'Feedback (reads its own output)', inputNames: undefined, selfWire: true },
+    { label: 'Comp (2 inputs: a, b)', inputNames: ['a', 'b'], selfWire: false },
+  ];
+
+  function spawnNode(template) {
     const rect = container.getBoundingClientRect();
     const center = clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
     // Cascades each new node a little further from the last one (wrapping
@@ -345,11 +403,41 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     // just looked like nothing had happened.
     const n = patchStore.getPatch().nodes.length % 5;
     const pos = { x: center.x - NODE_W / 2 + n * 36, y: center.y - NODE_H / 2 + n * 36 };
-    patchStore.addNode({ pos });
+    const id = patchStore.addNode({ pos, inputNames: template.inputNames });
+    if (template.selfWire) patchStore.wire(id, 'src', id, 'out');
     refresh();
     centerCameraOn(pos.x + NODE_W / 2, pos.y + NODE_H / 2);
+  }
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.textContent = '+ node';
+  addBtn.style.cssText = `
+    position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 12px 16px;
+    border-radius: 22px; border: none; background: #3a9d6e; color: #fff; font: 15px sans-serif;
+  `;
+
+  const templateMenu = document.createElement('div');
+  templateMenu.style.cssText = `
+    position: absolute; right: 12px; bottom: 62px; z-index: 6; display: none;
+    background: #1b1d22; border: 1px solid #3a3f4a; border-radius: 10px; overflow: hidden;
+    min-width: 210px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  `;
+  NODE_TEMPLATES.forEach((tpl) => {
+    const row = document.createElement('div');
+    row.textContent = tpl.label;
+    row.style.cssText = `padding: 12px 14px; color: #eee; font: 14px sans-serif; cursor: pointer;`;
+    row.addEventListener('click', () => {
+      templateMenu.style.display = 'none';
+      spawnNode(tpl);
+    });
+    templateMenu.appendChild(row);
   });
-  container.appendChild(addBtn);
+  container.append(templateMenu, addBtn);
+
+  addBtn.addEventListener('click', () => {
+    templateMenu.style.display = templateMenu.style.display === 'none' ? 'block' : 'none';
+  });
 
   refresh();
   return { refresh };
