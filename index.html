@@ -64,21 +64,32 @@
          changes the code editor pane's OWN layout), so #mobile-pane
          shares #editor-pane's structural rules below rather than getting
          its own separate set. */
-      #block-mode-toggle {
-        position: fixed;
-        top: 106px;
-        left: 10px;
-        z-index: 100;
-        background: #222;
-        color: #eee;
-        border: 1px solid #444;
-        padding: 10px 14px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 14px;
+      /* Hidden by default - a mouse-and-keyboard computer already has the
+         strictly more powerful code editor, so this button (and the touch-
+         only surface it opens) would just be clutter/confusion there.
+         `(hover: none) and (pointer: coarse)` is the standard way to ask
+         "is the PRIMARY input here a finger, not a mouse/trackpad" -
+         true on phones/tablets, false on laptops/desktops even if they
+         happen to also have a touchscreen. */
+      #block-mode-toggle { display: none; }
+      @media (hover: none) and (pointer: coarse) {
+        #block-mode-toggle {
+          display: block;
+          position: fixed;
+          top: 106px;
+          left: 10px;
+          z-index: 100;
+          background: #222;
+          color: #eee;
+          border: 1px solid #444;
+          padding: 10px 14px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: inherit;
+          font-size: 14px;
+        }
+        #block-mode-toggle:hover { background: #2c2c2c; }
       }
-      #block-mode-toggle:hover { background: #2c2c2c; }
 
       /* Patch-send model: editing never runs anything by itself - only
          Ctrl+Enter (or clicking this) actually sends the current text to
