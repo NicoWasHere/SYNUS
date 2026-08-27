@@ -123,7 +123,13 @@ function compileNode(node) {
     lines.push(compileSlot(slot, node.id, i, isFirst));
   });
 
-  lines.push(`return { out };`);
+  // `out` only ever gets declared by the `let out = ...` above (an
+  // incoming wire) or by the first slot's own `let out = ...` (a source
+  // slot) - a brand-new box with neither (no wire yet, no slots yet -
+  // exactly what canvas.js's "+ node" button creates) has nothing to
+  // return at all, and referencing `out` here would throw every tick
+  // until the user actually wires or fills it in.
+  lines.push(hasSeed || slots.length > 0 ? `return { out };` : `return {};`);
 
   const inSrc = `{ ${Object.entries(inputs)
     .map(([k, v]) => `${jsKey(k)}: ${JSON.stringify(v)}`)

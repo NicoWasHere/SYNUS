@@ -6,8 +6,15 @@
     <style>
       html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: monospace; }
       #app { display: flex; height: 100vh; }
-      #editor-pane { flex: 1 1 55%; display: flex; flex-direction: column; border-right: 1px solid #333; min-width: 0; }
+      #editor-pane, #mobile-pane { flex: 1 1 55%; display: flex; flex-direction: column; border-right: 1px solid #333; min-width: 0; }
       #editor-mount { flex: 1; overflow: hidden; background: #1a1a1a; }
+      /* #mobile-pane starts hidden by this plain rule - #app.block-mode
+         below (higher specificity, same two rules further down) is what
+         actually shows it, same "CSS class flip, no DOM restructuring"
+         convention as Perform mode already uses. */
+      #mobile-pane { display: none; position: relative; }
+      #app.block-mode #editor-pane { display: none; }
+      #app.block-mode #mobile-pane { display: flex; }
       #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
                 border-top: 1px solid #333; min-height: 1.2em; }
       /* Solid background only while there's actually something to show
@@ -49,6 +56,28 @@
         font-size: 12px;
       }
       #mode-toggle:hover { background: #2c2c2c; }
+
+      /* Block mode: a touch node-graph editor (src/ui-mobile/) as an
+         alternate authoring surface alongside the code editor, not a
+         replacement - orthogonal to Perform mode above (that one only
+         changes the code editor pane's OWN layout), so #mobile-pane
+         shares #editor-pane's structural rules below rather than getting
+         its own separate set. */
+      #block-mode-toggle {
+        position: fixed;
+        top: 82px;
+        left: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+      }
+      #block-mode-toggle:hover { background: #2c2c2c; }
 
       /* Patch-send model: editing never runs anything by itself - only
          Ctrl+Enter (or clicking this) actually sends the current text to
@@ -167,7 +196,8 @@
          (see .line-backdrop-layer below). Always the full screen width -
          no dynamic sizing to fight with the previews, which anchor to
          this same pane's right edge (see .node-preview below). */
-      #app.perform-mode #editor-pane {
+      #app.perform-mode #editor-pane,
+      #app.perform-mode #mobile-pane {
         position: fixed;
         top: 50px;
         left: 0;
@@ -489,6 +519,7 @@
     <button id="mode-toggle" type="button">Perform mode</button>
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
+    <button id="block-mode-toggle" type="button">Block mode</button>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>
@@ -497,6 +528,7 @@
         <div id="editor-mount"></div>
         <div id="errors"></div>
       </div>
+      <div id="mobile-pane"></div>
       <div id="render-pane"></div>
     </div>
     <a id="docs-link" href="docs/" target="_blank" rel="noopener">docs</a>

@@ -74,7 +74,7 @@ function applyInitialValue(entry, req) {
   }
 }
 
-export function mountNodeView(container, patchStore) {
+export function mountNodeView(container, patchStore, { onAddBlock } = {}) {
   const sheet = document.createElement('div');
   sheet.dataset.mobileNodeSheet = ''; // precise hook for automated tests/tooling
   sheet.style.cssText = `
@@ -159,11 +159,23 @@ export function mountNodeView(container, patchStore) {
 
     if (node.slots.length === 0) {
       const empty = document.createElement('div');
-      empty.textContent = 'No slots yet - add one from the palette.';
+      empty.textContent = 'No slots yet - add one below.';
       empty.style.cssText = `color: #888; padding: 8px 0;`;
       sheet.appendChild(empty);
     }
     node.slots.forEach((slot, i) => sheet.appendChild(renderSlotRow(nodeId, slot, i)));
+
+    if (onAddBlock) {
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.textContent = '+ add block';
+      addBtn.style.cssText = `
+        width: 100%; margin-top: 4px; padding: 10px; border-radius: 8px; border: 1px dashed #555;
+        background: none; color: #9fd6ff; font: 13px sans-serif;
+      `;
+      addBtn.addEventListener('click', () => onAddBlock(nodeId));
+      sheet.appendChild(addBtn);
+    }
   }
 
   function show(nodeId) {

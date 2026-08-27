@@ -19,7 +19,7 @@ import { PreviewPanel } from './ui/preview-panel.js';
 import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
 import { renderJsonTree } from './ui/json-tree.js';
-import { getPatchFromUrl, setPatchInUrl } from './ui/patch-link.js';
+import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
 import { parseNodeBlocks, offsetToLine } from './ui/node-parser.js';
 
 const appEl = document.getElementById('app');
@@ -32,6 +32,8 @@ const tEl = document.getElementById('t-counter');
 const sendBtn = document.getElementById('send-btn');
 const fullscreenBtn = document.getElementById('fullscreen-btn');
 const resetPatchBtn = document.getElementById('reset-patch-btn');
+const blockModeToggle = document.getElementById('block-mode-toggle');
+const mobilePane = document.getElementById('mobile-pane');
 
 // Perform mode by default - set before resizeCanvas() below runs, so the
 // very first size computation already reflects the fullscreen layout
@@ -204,10 +206,27 @@ async function send(text) {
   flashSendResult(ok);
 }
 
+// Same as send() above, but for block-mode edits (see ui-mobile/) - the
+// text here is core/patch-compiler.js's generated JS, not anything the
+// user typed. Persists the JSON patch alongside it (setPatchAndBlocksInUrl,
+// not plain setPatchInUrl) so reloading the URL - or opening it on another
+// device - can rehydrate the real editable block graph, not just replay
+// the generated code as inert text.
+async function sendCompiledPatch(source, patchJSON) {
+  const ok = await reload(source);
+  if (ok) setPatchAndBlocksInUrl(source, patchJSON);
+  flashSendResult(ok);
+}
+
 // A URL that already has a shared patch in it (see ui/patch-link.js)
 // loads THAT instead of the bundled default project - falls back to
 // defaultSource if there's no patch in the URL, or it fails to decode.
 const initialSource = getPatchFromUrl() ?? defaultSource;
+// The mobile block-patch mode's own JSON source of truth, if the URL had
+// one - read once at startup and handed to mountMobileUI whenever block
+// mode is first actually opened (see blockModeToggle below), same lazy
+// pattern as everything else about that mode's cost.
+const initialBlockPatch = getBlockPatchFromUrl();
 
 const view = createEditor({
   parent: editorMount,
@@ -270,6 +289,55 @@ modeToggle.addEventListener('click', () => {
     node.state = {};
   }
 });
+
+// Block mode (ui-mobile/) - a touch node-graph editor as an ALTERNATE
+// authoring surface, not a replacement (the code editor is untouched
+// either way) - orthogonal to Perform mode above, so this only ever
+// toggles its own class (see index.html's shared #editor-pane/
+// #mobile-pane structural rules) and never touches appEl's
+// 'perform-mode' class. mountMobileUI itself (and patch-compiler.js) are
+// dynamically imported on first activation - desktop users who never
+// open block mode don't pay for either.
+let mobileUI = null;
+async function activateBlockMode() {
+  appEl.classList.add('block-mode');
+  blockModeToggle.textContent = 'Code mode';
+  resizeCanvas(); // the render pane's box just changed shape, same reasoning as modeToggle's own handler below
+  if (mobileUI) return;
+
+  const [{ mountMobileUI }, { compilePatchToSource, validatePatch }] = await Promise.all([
+    import('./ui-mobile/mobile-app.js'),
+    import('./core/patch-compiler.js'),
+  ]);
+  mobileUI = mountMobileUI(mobilePane, {
+    initialPatch: initialBlockPatch ?? undefined,
+    onChange(patch) {
+      const errors = validatePatch(patch);
+      if (errors.length) {
+        console.warn('block patch has errors, not compiling:', errors);
+        return;
+      }
+      sendCompiledPatch(compilePatchToSource(patch), patch);
+    },
+  });
+}
+
+blockModeToggle.addEventListener('click', () => {
+  if (appEl.classList.contains('block-mode')) {
+    appEl.classList.remove('block-mode');
+    blockModeToggle.textContent = 'Block mode';
+    resizeCanvas();
+  } else {
+    activateBlockMode();
+  }
+});
+
+// A shared link that was saved FROM block mode (see ui/patch-link.js's
+// `&blocks=` segment) should land back in block mode too, not force an
+// extra manual tap just to see the graph the link was actually pointing
+// at - same reasoning as initialSource above falling back to whatever
+// the URL already specified.
+if (initialBlockPatch) activateBlockMode();
 
 // Real OS-level fullscreen (hides the browser's own tab/address bar
 // entirely) - separate from Perform mode above, which is only a layout
