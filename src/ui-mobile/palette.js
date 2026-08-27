@@ -65,6 +65,7 @@ export function mountPalette(container, patchStore, { onAdded } = {}) {
   container.appendChild(sheet);
 
   let targetNodeId = null;
+  let query = '';
 
   function item(label, onPick) {
     const row = document.createElement('div');
@@ -92,7 +93,14 @@ export function mountPalette(container, patchStore, { onAdded } = {}) {
     header.append(title, closeBtn);
     sheet.appendChild(header);
 
-    for (const fx of FIXED_ITEMS) {
+    // Re-focusing after every render() (each keystroke re-renders the
+    // whole list) would fight the browser's own caret position - built
+    // once, outside render()'s per-keystroke rebuild, see show() below.
+    sheet.appendChild(searchInput);
+
+    const q = query.trim().toLowerCase();
+    const matchedFixed = FIXED_ITEMS.filter((fx) => fx.label.toLowerCase().includes(q));
+    for (const fx of matchedFixed) {
       sheet.appendChild(
         item(fx.label, () => {
           patchStore.addSlot(targetNodeId, { prefab: fx.prefab, args: fx.args });
@@ -101,23 +109,52 @@ export function mountPalette(container, patchStore, { onAdded } = {}) {
       );
     }
 
-    const divider = document.createElement('div');
-    divider.textContent = 'effects';
-    divider.style.cssText = `color: #777; font-size: 11px; text-transform: uppercase; margin: 12px 0 6px;`;
-    sheet.appendChild(divider);
+    const matchedEffects = Object.keys(EFFECTS).filter((key) => key.toLowerCase().includes(q));
+    if (matchedEffects.length) {
+      const divider = document.createElement('div');
+      divider.textContent = 'effects';
+      divider.style.cssText = `color: #777; font-size: 11px; text-transform: uppercase; margin: 12px 0 6px;`;
+      sheet.appendChild(divider);
 
-    for (const key of Object.keys(EFFECTS)) {
-      sheet.appendChild(
-        item(key, () => {
-          patchStore.addSlot(targetNodeId, { prefab: `fx.${key}`, args: DEFAULT_ARGS[key] ?? FALLBACK_ARG });
-          onAdded?.(targetNodeId);
-        })
-      );
+      for (const key of matchedEffects) {
+        sheet.appendChild(
+          item(key, () => {
+            patchStore.addSlot(targetNodeId, { prefab: `fx.${key}`, args: DEFAULT_ARGS[key] ?? FALLBACK_ARG });
+            onAdded?.(targetNodeId);
+          })
+        );
+      }
+    }
+
+    if (!matchedFixed.length && !matchedEffects.length) {
+      const empty = document.createElement('div');
+      empty.textContent = `No blocks match "${query.trim()}"`;
+      empty.style.cssText = `color: #888; padding: 12px 0; text-align: center;`;
+      sheet.appendChild(empty);
     }
   }
 
+  // Built once (not inside render(), which reruns on every keystroke) so
+  // typing doesn't fight the caret/focus by recreating the input under
+  // the user's own finger every time.
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search effects...';
+  searchInput.spellcheck = false;
+  searchInput.style.cssText = `
+    width: 100%; box-sizing: border-box; background: #111; color: #eee; border: 1px solid #444;
+    border-radius: 8px; padding: 9px 12px; font: 13px sans-serif; margin-bottom: 10px;
+  `;
+  searchInput.addEventListener('input', () => {
+    query = searchInput.value;
+    render();
+    searchInput.focus();
+  });
+
   function show(nodeId) {
     targetNodeId = nodeId;
+    query = '';
+    searchInput.value = '';
     render();
     sheet.style.transform = 'translateY(0)';
   }

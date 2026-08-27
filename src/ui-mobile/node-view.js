@@ -117,7 +117,7 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
   // button that swaps it INTO expr mode, or a raw-expression text field
   // (while in that mode) with a "#" button that swaps it back to a
   // plain number.
-  function buildLeafRow(nodeId, slotIndex, path, value) {
+  function buildLeafRow(nodeId, slotIndex, path, value, slot) {
     const built = requestForLeaf(path, value);
 
     if (built.readonly) {
@@ -161,6 +161,36 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
     });
     applyInitialValue(entry, built.req);
     entry.row.style.cssText += `display: flex; align-items: center; gap: 8px; padding: 4px 0;`;
+
+    // A source's `url` field can be filled from the phone's own photo/
+    // video library (or camera, if the OS picker offers it) instead of
+    // typing a URL - a plain <input type="file"> handed to the browser's
+    // native picker, turned into an object URL. That URL only lives for
+    // this page session (it's revoked the moment the tab closes/reloads,
+    // same as it would be if you pasted a temporary blob: URL by hand) -
+    // there's no server here to upload the actual bytes to for a
+    // permanent link, so this is the same tradeoff the desktop editor's
+    // own url field already has for a local file:// path.
+    const isFileUrl = (slot.prefab === 'source.image' || slot.prefab === 'source.video') && path.length === 1 && path[0] === 'url';
+    if (isFileUrl) {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = slot.prefab === 'source.image' ? 'image/*' : 'video/*';
+      fileInput.style.display = 'none';
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        patchStore.setArgValue(nodeId, slotIndex, path, URL.createObjectURL(file));
+        renderSlotDetail(nodeId, slotIndex);
+      });
+      const pickBtn = document.createElement('button');
+      pickBtn.type = 'button';
+      pickBtn.textContent = '📁';
+      pickBtn.title = 'choose from phone';
+      pickBtn.style.cssText = EXPR_TOGGLE_STYLE;
+      pickBtn.addEventListener('click', () => fileInput.click());
+      entry.row.append(pickBtn, fileInput);
+    }
 
     const exprBtn = document.createElement('button');
     exprBtn.type = 'button';
@@ -428,7 +458,7 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
     }
 
     for (const { path, value } of walkArgs(slot.args, [])) {
-      sheet.appendChild(buildLeafRow(nodeId, slotIndex, path, value));
+      sheet.appendChild(buildLeafRow(nodeId, slotIndex, path, value, slot));
     }
   }
 

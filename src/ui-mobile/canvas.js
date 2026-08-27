@@ -383,18 +383,17 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     window.addEventListener('pointerup', onPanUp);
   });
 
-  // --- add-node button + template picker - a few common starting
-  // shapes (a plain blank box, a self-feeding "feedback" node, a
-  // 2-input "comp" node for combining two sources) instead of always
-  // the same slot-less/single-input box, so the common cases don't each
-  // need manually adding ports/rewiring right after creation. ---
-  const NODE_TEMPLATES = [
-    { label: 'Blank node', inputNames: undefined, selfWire: false },
-    { label: 'Feedback (reads its own output)', inputNames: undefined, selfWire: true },
-    { label: 'Comp (2 inputs: a, b)', inputNames: ['a', 'b'], selfWire: false },
-  ];
-
-  function spawnNode(template) {
+  // --- add-node button - just a blank node for now (a template picker
+  // for common shapes like feedback/comp is a plausible later addition,
+  // but not wanted yet) ---
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.textContent = '+ node';
+  addBtn.style.cssText = `
+    position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 12px 16px;
+    border-radius: 22px; border: none; background: #3a9d6e; color: #fff; font: 15px sans-serif;
+  `;
+  addBtn.addEventListener('click', () => {
     const rect = container.getBoundingClientRect();
     const center = clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
     // Cascades each new node a little further from the last one (wrapping
@@ -403,41 +402,11 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     // just looked like nothing had happened.
     const n = patchStore.getPatch().nodes.length % 5;
     const pos = { x: center.x - NODE_W / 2 + n * 36, y: center.y - NODE_H / 2 + n * 36 };
-    const id = patchStore.addNode({ pos, inputNames: template.inputNames });
-    if (template.selfWire) patchStore.wire(id, 'src', id, 'out');
+    patchStore.addNode({ pos });
     refresh();
     centerCameraOn(pos.x + NODE_W / 2, pos.y + NODE_H / 2);
-  }
-
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.textContent = '+ node';
-  addBtn.style.cssText = `
-    position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 12px 16px;
-    border-radius: 22px; border: none; background: #3a9d6e; color: #fff; font: 15px sans-serif;
-  `;
-
-  const templateMenu = document.createElement('div');
-  templateMenu.style.cssText = `
-    position: absolute; right: 12px; bottom: 62px; z-index: 6; display: none;
-    background: #1b1d22; border: 1px solid #3a3f4a; border-radius: 10px; overflow: hidden;
-    min-width: 210px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  `;
-  NODE_TEMPLATES.forEach((tpl) => {
-    const row = document.createElement('div');
-    row.textContent = tpl.label;
-    row.style.cssText = `padding: 12px 14px; color: #eee; font: 14px sans-serif; cursor: pointer;`;
-    row.addEventListener('click', () => {
-      templateMenu.style.display = 'none';
-      spawnNode(tpl);
-    });
-    templateMenu.appendChild(row);
   });
-  container.append(templateMenu, addBtn);
-
-  addBtn.addEventListener('click', () => {
-    templateMenu.style.display = templateMenu.style.display === 'none' ? 'block' : 'none';
-  });
+  container.appendChild(addBtn);
 
   refresh();
   return { refresh };
