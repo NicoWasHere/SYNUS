@@ -641,6 +641,47 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // Turns a flat 2D shape into a real, lit, rotatable 3D one via
+  // lib/extrude.js's Extrude class - reads the source's alpha on a coarse
+  // grid and builds one small extruded box per covered cell (a
+  // "voxel-relief" look, not a smooth silhouette - much cheaper to rebuild
+  // every tick than real contour tracing). Swap the drawn circle for any
+  // other alpha-bearing source (inputs.src, ChromaKey'd footage, text on a
+  // Canvas2D, ...) - anything with a shape in its alpha works.
+  three_extrude: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(ThreeSource, width, height);",
+    "    const extrude = use(Extrude);",
+    "    const shape = use(Canvas2D, 256, 256);",
+    "    if (!state.scene || newPatch) {",
+    "      const { ctx } = shape;",
+    "      ctx.clearRect(0, 0, 256, 256);",
+    "      ctx.fillStyle = '#4488ff';",
+    "      ctx.beginPath();",
+    "      ctx.arc(128, 128, 100, 0, Math.PI * 2);",
+    "      ctx.fill();",
+    "      shape.upload();",
+    "",
+    "      state.scene = new THREE.Scene();",
+    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
+    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
+    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
+    "      state.added = false;",
+    "    }",
+    "    const mesh = extrude.tick(shape, { depth: 0.3, resolution: 32 });",
+    "    if (!state.added) { state.scene.add(mesh); state.added = true; }",
+    "    mesh.rotation.y = t * 0.5;",
+    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    const out = three.tick(state.scene, state.camera);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // A generator, not an effect - no src, it draws its own gradient every
   // tick. angle is in degrees; from/to are [r,g,b] in 0..1. See lib/ramp.js.
   ramp: () => [

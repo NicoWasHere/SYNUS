@@ -1394,6 +1394,35 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         it to the scene on it actually being truthy. Re-loads automatically if you pass a
         different source.
       </p>
+
+      <h3>Extrude</h3>
+      <pre><code><span class="tag">const</span> extrude = use(Extrude);
+<span class="tag">const</span> mesh = extrude.tick(shape, { depth: 0.3, resolution: 32, threshold: 20 });
+<span class="tag">if</span> (!state.added) { state.scene.add(mesh); state.added = <span class="tag">true</span>; }</code></pre>
+      <p>
+        Turns a flat 2D shape into a real, lit, rotatable 3D one. <code>shape</code> is any
+        texture-bearing value (a <code>Canvas2D</code> drawing, <code>inputs.src</code>, a
+        <code>ChromaKey</code>'d chop, anything with a shape in its alpha) — <code>tick()</code>
+        reads its alpha channel on a coarse <code>resolution</code>×<code>resolution</code>
+        grid and builds one small box per covered cell, extruded along Z by
+        <code>depth</code> and colored from that cell's own RGB. It's a "voxel-relief" look,
+        not a smooth silhouette extrusion — real contour tracing would be far more
+        expensive to redo every tick, and the blocky look fits a livecode-visuals context
+        fine.
+      </p>
+      <p>
+        Returns a <code>THREE.Mesh</code> owned by the <code>Extrude</code> instance — its
+        geometry is rebuilt in place every tick, but it's the <b>same mesh object</b> each
+        time, so add it to your scene once (same <code>if (!state.added)</code> guard as
+        <code>ModelSource</code> above), then rotate/light/orbit it like any other mesh.
+      </p>
+      <div class="note">
+        Cost is one CPU texture readback per tick at <code>resolution²</code> pixels — the
+        same order of cost as <code>three.toTexture()</code>'s own readback. Keep
+        <code>resolution</code> modest (24–48) for anything ticking every frame; higher
+        looks smoother but costs more CPU per tick. Try <code>$three_extrude$</code> for a
+        working starting point.
+      </div>
     </section>
 
     <section id="physics">
@@ -1557,6 +1586,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         <tr><td><code>three_sphere</code></td><td>Projects one of THIS project's own texture-bearing values onto a sphere via <code>three.toTexture()</code>.</td></tr>
         <tr><td><code>three_model</code></td><td>Loads a real glTF/GLB file via <code>ModelSource</code>.</td></tr>
         <tr><td><code>three_text</code></td><td>Text mapped onto a 3D plane via a <code>Canvas2D</code>-drawn <code>THREE.CanvasTexture</code> — no external font asset needed, unlike true extruded <code>TextGeometry</code>.</td></tr>
+        <tr><td><code>three_extrude</code></td><td>Turns a flat <code>Canvas2D</code> shape into a real lit 3D voxel-relief mesh via <code>Extrude</code>.</td></tr>
         <tr><td><code>physics</code></td><td><code>PhysicsWorld</code> demo — a ball spawns onto a bouncy 45° platform once a second.</td></tr>
         <tr><td><code>pattern</code></td><td>A <code>Pattern</code> driving a plain value (a circle's radius here) — swap the shape freely.</td></tr>
         <tr><td><code>pattern_plot</code></td><td>A <code>Pattern.plot()</code> rendered full-screen (real resolution + margin), not just a small <code>preview()</code> card.</td></tr>
@@ -1706,7 +1736,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       <p style="color:#aac">
         <code>ImageSource</code>, <code>VideoSource</code>, <code>WebcamSource</code>,
         <code>HydraSource</code>, <code>ThreeSource</code>, <code>ModelSource</code>,
-        <code>THREE</code>, <code>orbitCamera</code>, <code>PhysicsWorld</code>,
+        <code>Extrude</code>, <code>THREE</code>, <code>orbitCamera</code>, <code>PhysicsWorld</code>,
         <code>files</code>
       </p>
 

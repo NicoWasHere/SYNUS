@@ -92,6 +92,15 @@ export const SIGNATURES = {
       "model = modelSource.tick(source)  // source: URL string or files.get('name.glb')\n" +
       '// loads a glTF/GLB file - returns the loaded THREE.Group once ready, null while still loading',
   },
+  Extrude: {
+    ctor: 'new Extrude()',
+    tick:
+      "mesh = extrude.tick(src, { depth = 0.3, resolution = 32, threshold = 20 })\n" +
+      '// reads src\'s own alpha at a resolution x resolution grid and builds a real 3D mesh -\n' +
+      '// one box per covered cell, extruded along Z by depth, colored from that cell\'s own RGB.\n' +
+      '// returns a THREE.Mesh (same object every tick) - add it to your own scene once, then\n' +
+      '// light/orbit/rotate it like any other three.js mesh (see the three_extrude template)',
+  },
   ScreenOutput: {
     ctor: 'new ScreenOutput()',
     tick: 'screenOutput.tick({ uInput })  // render() does this for you',
