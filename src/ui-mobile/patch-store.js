@@ -117,6 +117,25 @@ export class PatchStore {
     this._notify();
   }
 
+  // `out` itself defaults to a plain pass-through of the slot chain's own
+  // running value (patch-compiler.js emits the bare identifier `out`) -
+  // node.outExpr overrides that with a raw expression instead, same
+  // $expr convention as everything else, so a node can publish something
+  // other than "whatever its slots computed" (e.g. a pure value/computed
+  // node with zero slots). Clearing it back to blank or literally "out"
+  // just removes the override rather than storing a no-op one.
+  setOutExpr(nodeId, expr) {
+    const node = this.getNode(nodeId);
+    if (!node) return;
+    const trimmed = (expr ?? '').trim();
+    if (!trimmed || trimmed === 'out') {
+      delete node.outExpr;
+    } else {
+      node.outExpr = expr;
+    }
+    this._notify();
+  }
+
   removeNode(id) {
     this.patch.nodes = this.patch.nodes.filter((n) => n.id !== id);
     for (const node of this.patch.nodes) {

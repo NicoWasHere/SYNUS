@@ -291,6 +291,25 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
     return section;
   }
 
+  // One output's raw-expression field ("out" itself, or a named extra
+  // output) - same row shape as a slot arg's own expr field, just always
+  // in expr mode (an output was never a slider/literal to begin with).
+  function buildOutputExprRow(name, expr, onChange) {
+    const row = document.createElement('div');
+    row.style.cssText = `display: flex; align-items: center; gap: 8px; padding: 4px 0 10px;`;
+    const label = document.createElement('span');
+    label.textContent = name;
+    label.style.cssText = `color: #999; font-size: 11px; min-width: 56px; flex-shrink: 0;`;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = expr;
+    input.spellcheck = false;
+    input.style.cssText = `flex: 1; min-width: 0; background: #111; color: #9ece6a; border: 1px solid #444; border-radius: 3px; font: 12px monospace; padding: 5px 6px;`;
+    input.addEventListener('input', () => onChange(input.value));
+    row.append(label, input);
+    return row;
+  }
+
   function renderNode(nodeId) {
     openSlotIndex = null;
     const node = patchStore.getNode(nodeId);
@@ -374,20 +393,17 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
         removable: (name) => name !== 'out', // always the slot chain's own result - not optional
       })
     );
+    // `out` can't be REMOVED (see the chip section above) but its value
+    // is still just as editable as an extra output's - defaults to the
+    // literal pass-through "out" (the slot chain's own running value),
+    // so this looks blank-ish but functional until you actually want it
+    // to publish something else (e.g. a pure computed value with no
+    // slots at all).
+    sheet.appendChild(
+      buildOutputExprRow('out', node.outExpr ?? 'out', (value) => patchStore.setOutExpr(nodeId, value))
+    );
     for (const [name, expr] of Object.entries(node.extraOutputs || {})) {
-      const row = document.createElement('div');
-      row.style.cssText = `display: flex; align-items: center; gap: 8px; padding: 4px 0 10px;`;
-      const label = document.createElement('span');
-      label.textContent = name;
-      label.style.cssText = `color: #999; font-size: 11px; min-width: 56px; flex-shrink: 0;`;
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = expr;
-      input.spellcheck = false;
-      input.style.cssText = `flex: 1; min-width: 0; background: #111; color: #9ece6a; border: 1px solid #444; border-radius: 3px; font: 12px monospace; padding: 5px 6px;`;
-      input.addEventListener('input', () => patchStore.setOutputExpr(nodeId, name, input.value));
-      row.append(label, input);
-      sheet.appendChild(row);
+      sheet.appendChild(buildOutputExprRow(name, expr, (value) => patchStore.setOutputExpr(nodeId, name, value)));
     }
 
     if (node.slots.length === 0) {

@@ -96,9 +96,17 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     const mid = pinchMidpoint();
     pinch.anchorWorld = clientToWorld(mid.x, mid.y);
   }
+  // Raw 1:1 finger-distance ratio felt way too twitchy - starting with
+  // fingers close together (a common, not-deliberately-precise pinch
+  // start) meant a small movement was a huge ratio change (e.g. going
+  // from 20px to 40px apart is already 2x zoom). Damping the ratio by
+  // this exponent before applying it compresses that - a full finger
+  // spread from 20px to 200px (10x) becomes ~3.2x zoom instead of 10x.
+  const PINCH_DAMPING = 0.5;
   function updatePinch() {
     if (pinch.startDist <= 0) return;
-    const newZoom = Math.max(0.25, Math.min(2.5, pinch.startZoom * (pinchDistance() / pinch.startDist)));
+    const damped = Math.pow(pinchDistance() / pinch.startDist, PINCH_DAMPING);
+    const newZoom = Math.max(0.25, Math.min(2.5, pinch.startZoom * damped));
     const mid = pinchMidpoint();
     zoom = newZoom;
     // Keeps the world point under the fingers fixed on screen as they

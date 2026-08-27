@@ -148,13 +148,17 @@ function compileNode(node) {
   // slot) - a brand-new box with neither (no wire yet, no slots yet -
   // exactly what canvas.js's "+ node" button creates) has nothing to
   // return at all, and referencing `out` here would throw every tick
-  // until the user actually wires or fills it in. Extra outputs (see
-  // node-view.js's "+ add output") are independent raw expressions, not
-  // tied to `out` existing - they can read `t`/`inputs`/`state` or a
+  // until the user actually wires or fills it in - UNLESS node.outExpr
+  // (see node-view.js's editable "out" field) overrides it with an
+  // expression of its own, in which case there's something to publish
+  // regardless of whether the slot chain ever produced anything. Extra
+  // outputs (see node-view.js's "+ add output") are independent raw
+  // expressions the same way - they can read `t`/`inputs`/`state` or a
   // local a `raw` slot declared, so they're always included regardless.
   const extraOutputs = node.extraOutputs || {};
+  const hasOut = hasSeed || slots.length > 0 || node.outExpr != null;
   const returnEntries = [
-    ...(hasSeed || slots.length > 0 ? ['out'] : []),
+    ...(hasOut ? [node.outExpr != null ? `out: (${node.outExpr})` : 'out'] : []),
     ...Object.entries(extraOutputs).map(([name, expr]) => `${jsKey(name)}: (${expr})`),
   ];
   lines.push(returnEntries.length ? `return { ${returnEntries.join(', ')} };` : `return {};`);
