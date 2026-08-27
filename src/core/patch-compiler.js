@@ -15,6 +15,12 @@
 // This file is pure (no DOM, no globals) - it only ever produces text.
 import { EFFECTS } from './lib/fx/registry.js';
 
+// These three effects' .tick() takes a second TEXTURE argument (see
+// registry.js's own comments on each) before their options object,
+// unlike every other effect's single value - compileSlot below handles
+// them differently for exactly that reason.
+const MULTI_ARG_EFFECTS = new Set(['mask', 'gradientMap', 'colorLookup']);
+
 function jsKey(key) {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
@@ -67,6 +73,20 @@ function compileSlot(slot, nodeId, slotIndex, isFirst) {
   if (prefab.startsWith('fx.')) {
     const effectKey = prefab.slice(3);
     if (!EFFECTS[effectKey]) throw new Error(`Unknown fx prefab "${prefab}" (node ${nodeId}, slot ${slotIndex})`);
+    if (MULTI_ARG_EFFECTS.has(effectKey)) {
+      // mask/gradientMap/colorLookup each take a SECOND texture argument
+      // (a mask shape, a gradient ramp, a LUT strip) before their options
+      // object, unlike every other effect's single value - args is
+      // `{ tex: <usually {$ref: 'tex'}>, opts: {...} }` instead. `tex` is
+      // rendered at path ['tex'] specifically so a $ref there reads
+      // `inputs.tex` (renderArgTree's $ref uses the accumulated PATH, not
+      // the $ref's own value, as the port name) - the node wiring this
+      // slot in is expected to declare and wire an input port also named
+      // 'tex' (see ui-mobile/default-patch.js for a worked example).
+      const texExpr = renderArgTree(slot.args?.tex ?? null, nodeId, slotIndex, ['tex']);
+      const optsExpr = renderArgTree(slot.args?.opts ?? {}, nodeId, slotIndex, ['opts']);
+      return `out = use(FX.${effectKey}).tick(out, ${texExpr}, ${optsExpr});`;
+    }
     const arg = renderArgTree(slot.args, nodeId, slotIndex, []);
     return `out = use(FX.${effectKey}).tick(out, ${arg});`;
   }

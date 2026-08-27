@@ -1,5 +1,7 @@
 // mountMobileCanvas(container, patchStore, { onNodeTap }) - the touch
-// node-graph surface: pan/pinch-zoom the canvas, drag a node to
+// node-graph surface: pan (drag the background) and zoom (the slider,
+// see below - pinch-to-zoom was tried and dropped, it stayed too
+// sensitive/unpredictable on touch even damped) the canvas, drag a node to
 // reposition it, drag from any of a node's (right-side, blue) output
 // dots to another node's (left-side, gray) input dots to wire them, tap
 // a wired input dot to unwire it, tap a node's body (no drag) to open it
@@ -70,70 +72,6 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     pan = { x: rect.width / 2 - worldX * zoom, y: rect.height / 2 - worldY * zoom };
     applyWorldTransform();
   }
-
-  // --- pinch-to-zoom (two-finger) - shared `pinch.active` is checked by
-  // the single-pointer gestures below (node drag, background pan, wire
-  // drag) so a second finger touching down takes over cleanly instead of
-  // fighting whatever the first finger was already doing. Tracked at the
-  // container level (capture phase, so it sees every pointerdown before
-  // a node/dot's own handler can stopPropagation() it away) rather than
-  // folded into any one gesture's own state.
-  const activePointers = new Map(); // pointerId -> {x, y} in client coords
-  const pinch = { active: false, startDist: 0, startZoom: 1, anchorWorld: null };
-
-  function pinchDistance() {
-    const [a, b] = activePointers.values();
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-  function pinchMidpoint() {
-    const [a, b] = activePointers.values();
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-  function startPinch() {
-    pinch.active = true;
-    pinch.startDist = pinchDistance();
-    pinch.startZoom = zoom;
-    const mid = pinchMidpoint();
-    pinch.anchorWorld = clientToWorld(mid.x, mid.y);
-  }
-  // Raw 1:1 finger-distance ratio felt way too twitchy - starting with
-  // fingers close together (a common, not-deliberately-precise pinch
-  // start) meant a small movement was a huge ratio change (e.g. going
-  // from 20px to 40px apart is already 2x zoom). Damping the ratio by
-  // this exponent before applying it compresses that - a full finger
-  // spread from 20px to 200px (10x) becomes ~3.2x zoom instead of 10x.
-  const PINCH_DAMPING = 0.5;
-  function updatePinch() {
-    if (pinch.startDist <= 0) return;
-    const damped = Math.pow(pinchDistance() / pinch.startDist, PINCH_DAMPING);
-    const newZoom = Math.max(0.25, Math.min(2.5, pinch.startZoom * damped));
-    const mid = pinchMidpoint();
-    zoom = newZoom;
-    // Keeps the world point under the fingers fixed on screen as they
-    // spread/pinch (standard "zoom toward where your fingers are"), and
-    // riding the midpoint's own movement gives two-finger panning for free.
-    pan = { x: mid.x - pinch.anchorWorld.x * zoom, y: mid.y - pinch.anchorWorld.y * zoom };
-    applyWorldTransform();
-  }
-  container.addEventListener(
-    'pointerdown',
-    (e) => {
-      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (activePointers.size === 2) startPinch();
-    },
-    { capture: true }
-  );
-  window.addEventListener('pointermove', (e) => {
-    if (!activePointers.has(e.pointerId)) return;
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinch.active && activePointers.size >= 2) updatePinch();
-  });
-  function releasePointer(e) {
-    activePointers.delete(e.pointerId);
-    if (activePointers.size < 2) pinch.active = false;
-  }
-  window.addEventListener('pointerup', releasePointer);
-  window.addEventListener('pointercancel', releasePointer);
 
   // Evenly spaces N ports top-to-bottom along whichever edge - index 0 at
   // 1/(N+1) of the way down, ..., so a single port sits at the dead
@@ -266,7 +204,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     let startPos = null;
 
     function onMove(e) {
-      if (!dragging || pinch.active) return;
+      if (!dragging) return;
       const dx = (e.clientX - startClient.x) / zoom;
       const dy = (e.clientY - startClient.y) / zoom;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
@@ -301,7 +239,6 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
       svg.appendChild(dragLine);
 
       function onWireMove(ev) {
-        if (pinch.active) return;
         const w = clientToWorld(ev.clientX, ev.clientY);
         dragLine.setAttribute('x2', w.x);
         dragLine.setAttribute('y2', w.y);
@@ -328,7 +265,6 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     entry.el.addEventListener('pointerdown', (e) => {
       const kind = e.target.dataset.kind;
       if (e.target === entry.del) return; // its own listener below
-      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a drag/wire
       if (kind === 'in') {
         e.stopPropagation();
         return; // unwire is a tap, handled by the 'click' listener below
@@ -372,7 +308,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   let panStart = null;
   let panOrigin = null;
   function onPanMove(e) {
-    if (!panning || pinch.active) return;
+    if (!panning) return;
     pan = { x: panOrigin.x + (e.clientX - panStart.x), y: panOrigin.y + (e.clientY - panStart.y) };
     applyWorldTransform();
   }
@@ -383,7 +319,6 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   }
   container.addEventListener('pointerdown', (e) => {
     if (e.target !== container) return; // a node/dot/button already stopped propagation
-    if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a pan
     panning = true;
     panStart = { x: e.clientX, y: e.clientY };
     panOrigin = { ...pan };
@@ -415,6 +350,29 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     centerCameraOn(pos.x + NODE_W / 2, pos.y + NODE_H / 2);
   });
   container.appendChild(addBtn);
+
+  // --- zoom bar - a direct slider instead of pinch-to-zoom, which
+  // turned out too sensitive/unpredictable on touch even after damping
+  // the raw finger-distance ratio (see the top-of-file comment). Always
+  // zooms toward the CURRENT viewport center - recomputed from the
+  // slider's own current value each move, not a fixed drag-start anchor,
+  // since a slider has no discrete gesture start/end the way a pinch does.
+  const zoomBar = document.createElement('input');
+  zoomBar.type = 'range';
+  zoomBar.min = '0.25';
+  zoomBar.max = '2.5';
+  zoomBar.step = '0.05';
+  zoomBar.value = String(zoom);
+  zoomBar.title = 'zoom';
+  zoomBar.style.cssText = `position: absolute; right: 12px; top: 12px; z-index: 5; width: 120px;`;
+  zoomBar.addEventListener('input', () => {
+    const rect = container.getBoundingClientRect();
+    const anchorWorld = clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    zoom = parseFloat(zoomBar.value);
+    pan = { x: rect.width / 2 - anchorWorld.x * zoom, y: rect.height / 2 - anchorWorld.y * zoom };
+    applyWorldTransform();
+  });
+  container.appendChild(zoomBar);
 
   refresh();
   return { refresh };

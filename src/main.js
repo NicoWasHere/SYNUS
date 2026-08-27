@@ -21,6 +21,7 @@ import { ResetPanel } from './ui/reset-panel.js';
 import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
 import { parseNodeBlocks, offsetToLine } from './ui/node-parser.js';
+import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
 
 const appEl = document.getElementById('app');
 const editorMount = document.getElementById('editor-mount');
@@ -225,8 +226,14 @@ const initialSource = getPatchFromUrl() ?? defaultSource;
 // The mobile block-patch mode's own JSON source of truth, if the URL had
 // one - read once at startup and handed to mountMobileUI whenever block
 // mode is first actually opened (see blockModeToggle below), same lazy
-// pattern as everything else about that mode's cost.
-const initialBlockPatch = getBlockPatchFromUrl();
+// pattern as everything else about that mode's cost. sharedBlockPatch
+// (not initialBlockPatch) is what decides whether to auto-open block
+// mode below - it stays null unless the URL ACTUALLY had one, so a
+// plain fresh visit falls back to DEFAULT_BLOCK_PATCH for the CONTENT
+// block mode opens to (whenever the user actually chooses it) without
+// forcing everyone into block mode just because a bundled default exists.
+const sharedBlockPatch = getBlockPatchFromUrl();
+const initialBlockPatch = sharedBlockPatch ?? DEFAULT_BLOCK_PATCH;
 
 const view = createEditor({
   parent: editorMount,
@@ -309,17 +316,22 @@ async function activateBlockMode() {
     import('./ui-mobile/mobile-app.js'),
     import('./core/patch-compiler.js'),
   ]);
-  mobileUI = mountMobileUI(mobilePane, {
-    initialPatch: initialBlockPatch ?? undefined,
-    onChange(patch) {
-      const errors = validatePatch(patch);
-      if (errors.length) {
-        console.warn('block patch has errors, not compiling:', errors);
-        return;
-      }
-      sendCompiledPatch(compilePatchToSource(patch), patch);
-    },
-  });
+  function compileAndSendPatch(patch) {
+    const errors = validatePatch(patch);
+    if (errors.length) {
+      console.warn('block patch has errors, not compiling:', errors);
+      return;
+    }
+    sendCompiledPatch(compilePatchToSource(patch), patch);
+  }
+  mobileUI = mountMobileUI(mobilePane, { initialPatch: initialBlockPatch, onChange: compileAndSendPatch });
+  // PatchStore only calls onChange on a MUTATION, not on construction -
+  // without this, the initial patch (whether from the URL or the
+  // bundled default-patch.js) sits there fully visible and editable in
+  // the touch canvas but never actually rendered until you make some
+  // edit, unlike the code editor's own initialSource (see reload(
+  // initialSource) near the bottom of this file), which runs immediately.
+  compileAndSendPatch(initialBlockPatch);
 }
 
 blockModeToggle.addEventListener('click', () => {
@@ -336,8 +348,11 @@ blockModeToggle.addEventListener('click', () => {
 // `&blocks=` segment) should land back in block mode too, not force an
 // extra manual tap just to see the graph the link was actually pointing
 // at - same reasoning as initialSource above falling back to whatever
-// the URL already specified.
-if (initialBlockPatch) activateBlockMode();
+// the URL already specified. Checked against sharedBlockPatch, NOT
+// initialBlockPatch (always truthy now thanks to DEFAULT_BLOCK_PATCH) -
+// a plain fresh visit with no shared link should NOT be forced into
+// block mode just because a bundled default patch exists for it.
+if (sharedBlockPatch) activateBlockMode();
 
 // Real OS-level fullscreen (hides the browser's own tab/address bar
 // entirely) - separate from Perform mode above, which is only a layout
