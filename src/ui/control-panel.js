@@ -2,6 +2,82 @@ import { setControlValue } from '../core/lib/controls.js';
 
 const STACK_OFFSET = 34; // approx widget row height + gap
 
+// createControlRow(req, onChange) - builds one widget row's DOM for a
+// controls.js-shaped request ({ name, type, opts, value }, same shape
+// beginControlsTick()/getControlRequests() produce), calling
+// onChange(newValue) whenever the user interacts with it. Deliberately
+// knows nothing about WHERE that value goes - ControlPanel below wires
+// it to setControlValue() (the live desktop-editor widgets), and
+// ui-mobile/node-view.js (the mobile block-patch mode's tap-to-open
+// parameter panel) wires the exact same row-building code to
+// patchStore.setArgValue() instead. One DOM implementation, two very
+// different value destinations.
+export function createControlRow(req, onChange) {
+  const row = document.createElement('div');
+  row.className = 'control-widget';
+  const entry = { row };
+
+  const label = document.createElement('span');
+  label.className = 'control-widget-label';
+  label.textContent = req.name;
+  row.appendChild(label);
+  entry.label = label;
+
+  if (req.type === 'slider') {
+    const rangeInput = document.createElement('input');
+    rangeInput.type = 'range';
+    rangeInput.min = req.opts.min;
+    rangeInput.max = req.opts.max;
+    rangeInput.step = req.opts.step;
+    rangeInput.addEventListener('input', () => onChange(parseFloat(rangeInput.value)));
+    const valueLabel = document.createElement('span');
+    valueLabel.className = 'control-widget-value';
+    row.append(rangeInput, valueLabel);
+    entry.input = rangeInput;
+    entry.valueLabel = valueLabel;
+    return entry;
+  }
+
+  if (req.type === 'button') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.addEventListener('click', () => onChange(!btn.classList.contains('active')));
+    row.appendChild(btn);
+    entry.input = btn;
+    return entry;
+  }
+
+  if (req.type === 'colorPicker') {
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    // Some interaction paths on a native color swatch (picking a preset
+    // rather than dragging the wheel/typing a hex code) only fire
+    // 'change', not 'input' - listening to just 'input' meant the app
+    // never learned about that pick at all: the native input still
+    // LOOKED updated (its own internal state changed), nothing
+    // downstream ever saw the new value, and the next resync (once
+    // focus left the input, opening _syncValue's activeElement guard)
+    // forced the swatch back to the stale app-side value - "works for
+    // a second, then resets" the moment you click elsewhere.
+    const onPick = () => onChange(colorInput.value);
+    colorInput.addEventListener('input', onPick);
+    colorInput.addEventListener('change', onPick);
+    row.appendChild(colorInput);
+    entry.input = colorInput;
+    return entry;
+  }
+
+  // 'input'
+  const textInput = document.createElement('input');
+  textInput.type = req.opts.type === 'number' ? 'number' : 'text';
+  textInput.addEventListener('input', () => {
+    onChange(req.opts.type === 'number' ? parseFloat(textInput.value) || 0 : textInput.value);
+  });
+  row.appendChild(textInput);
+  entry.input = textInput;
+  return entry;
+}
+
 function parseKey(id) {
   const match = id.match(/^(.*)#(\d+)$/);
   return match ? { baseId: match[1], index: Number(match[2]) } : { baseId: id, index: 1 };
@@ -75,73 +151,12 @@ export class ControlPanel {
 
   _createRow(req) {
     // entry.name is mutable (sync() above updates it if the same call
-    // site later reports a different name) - every listener below reads
-    // entry.name at fire time rather than closing over req.name directly,
-    // so a rename takes effect immediately without needing to recreate
-    // the DOM element.
-    const entry = { name: req.name };
-    const row = document.createElement('div');
-    row.className = 'control-widget';
-    entry.row = row;
-
-    const label = document.createElement('span');
-    label.className = 'control-widget-label';
-    label.textContent = entry.name;
-    row.appendChild(label);
-    entry.label = label;
-
-    if (req.type === 'slider') {
-      const rangeInput = document.createElement('input');
-      rangeInput.type = 'range';
-      rangeInput.min = req.opts.min;
-      rangeInput.max = req.opts.max;
-      rangeInput.step = req.opts.step;
-      rangeInput.addEventListener('input', () => setControlValue(entry.name, parseFloat(rangeInput.value)));
-      const valueLabel = document.createElement('span');
-      valueLabel.className = 'control-widget-value';
-      row.append(rangeInput, valueLabel);
-      entry.input = rangeInput;
-      entry.valueLabel = valueLabel;
-      return entry;
-    }
-
-    if (req.type === 'button') {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.addEventListener('click', () => setControlValue(entry.name, !btn.classList.contains('active')));
-      row.appendChild(btn);
-      entry.input = btn;
-      return entry;
-    }
-
-    if (req.type === 'colorPicker') {
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      // Some interaction paths on a native color swatch (picking a preset
-      // rather than dragging the wheel/typing a hex code) only fire
-      // 'change', not 'input' - listening to just 'input' meant the app
-      // never learned about that pick at all: the native input still
-      // LOOKED updated (its own internal state changed), nothing
-      // downstream ever saw the new value, and the next resync (once
-      // focus left the input, opening _syncValue's activeElement guard)
-      // forced the swatch back to the stale app-side value - "works for
-      // a second, then resets" the moment you click elsewhere.
-      const onPick = () => setControlValue(entry.name, colorInput.value);
-      colorInput.addEventListener('input', onPick);
-      colorInput.addEventListener('change', onPick);
-      row.appendChild(colorInput);
-      entry.input = colorInput;
-      return entry;
-    }
-
-    // 'input'
-    const textInput = document.createElement('input');
-    textInput.type = req.opts.type === 'number' ? 'number' : 'text';
-    textInput.addEventListener('input', () => {
-      setControlValue(entry.name, req.opts.type === 'number' ? parseFloat(textInput.value) || 0 : textInput.value);
-    });
-    row.appendChild(textInput);
-    entry.input = textInput;
+    // site later reports a different name) - createControlRow's onChange
+    // below reads entry.name at fire time rather than closing over
+    // req.name directly, so a rename takes effect immediately without
+    // needing to recreate the DOM element.
+    const entry = createControlRow(req, (value) => setControlValue(entry.name, value));
+    entry.name = req.name;
     return entry;
   }
 
