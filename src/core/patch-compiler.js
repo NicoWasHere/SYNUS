@@ -25,6 +25,13 @@ function jsKey(key) {
 // top of the tree, or `${nodeId}.${slotIndex}.${path.join('.')}` deeper in.
 function renderArgTree(node, nodeId, slotIndex, path) {
   if (node !== null && typeof node === 'object' && !Array.isArray(node)) {
+    // A raw JS expression (see ui-mobile/node-view.js's "t" toggle) -
+    // spliced in verbatim, NOT JSON.stringify'd, so it runs as real code
+    // with `t` (and `state`/`inputs`) in scope, the same as the rest of
+    // this slot's generated `code(inputs, state, t) { ... }` body.
+    if (node.$expr != null) {
+      return `(${node.$expr})`;
+    }
     if (node.$control) {
       const key = path.length ? `${nodeId}.${slotIndex}.${path.join('.')}` : `${nodeId}.${slotIndex}`;
       const { $control, ...opts } = node;

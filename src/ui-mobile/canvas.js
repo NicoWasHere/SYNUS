@@ -256,24 +256,6 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     window.addEventListener('pointerup', onPanUp);
   });
 
-  // --- zoom buttons (pinch-zoom is an explicit v1 non-goal) ---
-  const zoomBar = document.createElement('div');
-  zoomBar.style.cssText = `position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 5;`;
-  function zoomButton(label, delta) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = label;
-    b.style.cssText = `width: 40px; height: 40px; border-radius: 10px; border: none; background: #33373f; color: #fff; font-size: 20px;`;
-    b.addEventListener('click', () => {
-      zoom = Math.max(0.25, Math.min(2.5, zoom + delta));
-      applyWorldTransform();
-    });
-    return b;
-  }
-  zoomBar.appendChild(zoomButton('+', 0.2));
-  zoomBar.appendChild(zoomButton('−', -0.2));
-  container.appendChild(zoomBar);
-
   // --- add-node button (a minimal stand-in - palette.js in Phase 4
   // replaces this with a real "pick a prefab" picker; this just proves
   // out the add/drag/wire mechanics with a blank, slot-less node) ---
