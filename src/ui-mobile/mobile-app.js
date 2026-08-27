@@ -30,8 +30,18 @@ export function mountMobileUI(container, { initialPatch, onChange } = {}) {
   container.append(canvasHost, sheetHost);
 
   const store = new PatchStore(initialPatch, onChange);
-  const nodeView = mountNodeView(sheetHost, store, { onAddBlock: (id) => palette.show(id) });
+  // canvas.js owns its own node boxes' DOM (id text, dataset) independent
+  // of patch-store.js's data - a rename happening through node-view.js's
+  // title input changes the STORE fine on its own, but leaves canvas.js's
+  // already-built box showing the old id until told to refresh(). `let`
+  // + assign-after lets nodeView's callback close over the not-yet-built
+  // `canvas` below; it's never actually invoked before that assignment.
+  let canvas;
+  const nodeView = mountNodeView(sheetHost, store, {
+    onAddBlock: (id) => palette.show(id),
+    onRenamed: () => canvas.refresh(),
+  });
   const palette = mountPalette(sheetHost, store, { onAdded: () => nodeView.refresh() });
-  const canvas = mountMobileCanvas(canvasHost, store, { onNodeTap: (id) => nodeView.show(id) });
+  canvas = mountMobileCanvas(canvasHost, store, { onNodeTap: (id) => nodeView.show(id) });
   return { store, canvas, nodeView, palette };
 }

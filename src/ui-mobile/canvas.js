@@ -1,9 +1,9 @@
 // mountMobileCanvas(container, patchStore, { onNodeTap }) - the touch
-// node-graph surface: pan/zoom the canvas, drag a node to reposition it,
-// drag from a node's (right-side, blue) output dot to another node's
-// (left-side, gray) input dot to wire them, tap a wired input dot to
-// unwire it, tap a node's body (no drag) to open it (Phase 3's
-// node-view.js hooks in via `onNodeTap`). Same inline-`style.cssText`,
+// node-graph surface: pan/pinch-zoom the canvas, drag a node to
+// reposition it, drag from a node's (right-side, blue) output dot to
+// another node's (left-side, gray) input dot to wire them, tap a wired
+// input dot to unwire it, tap a node's body (no drag) to open it (Phase
+// 3's node-view.js hooks in via `onNodeTap`). Same inline-`style.cssText`,
 // plain-DOM, window-level-pointermove/pointerup convention as
 // compose-at-tool.js/draw-tool.js - no framework, nothing new to learn.
 //
@@ -46,6 +46,72 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     const rect = container.getBoundingClientRect();
     return { x: (clientX - rect.left - pan.x) / zoom, y: (clientY - rect.top - pan.y) / zoom };
   }
+
+  // Re-centers the view on one world point, at whatever zoom is
+  // currently set - used to snap the camera onto a freshly added node
+  // (see the add-node button below) so it's always what you're looking
+  // at right after tapping "+ node", not just wherever it happened to land.
+  function centerCameraOn(worldX, worldY) {
+    const rect = container.getBoundingClientRect();
+    pan = { x: rect.width / 2 - worldX * zoom, y: rect.height / 2 - worldY * zoom };
+    applyWorldTransform();
+  }
+
+  // --- pinch-to-zoom (two-finger) - shared `pinch.active` is checked by
+  // the single-pointer gestures below (node drag, background pan, wire
+  // drag) so a second finger touching down takes over cleanly instead of
+  // fighting whatever the first finger was already doing. Tracked at the
+  // container level (capture phase, so it sees every pointerdown before
+  // a node/dot's own handler can stopPropagation() it away) rather than
+  // folded into any one gesture's own state.
+  const activePointers = new Map(); // pointerId -> {x, y} in client coords
+  const pinch = { active: false, startDist: 0, startZoom: 1, anchorWorld: null };
+
+  function pinchDistance() {
+    const [a, b] = activePointers.values();
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function pinchMidpoint() {
+    const [a, b] = activePointers.values();
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  function startPinch() {
+    pinch.active = true;
+    pinch.startDist = pinchDistance();
+    pinch.startZoom = zoom;
+    const mid = pinchMidpoint();
+    pinch.anchorWorld = clientToWorld(mid.x, mid.y);
+  }
+  function updatePinch() {
+    if (pinch.startDist <= 0) return;
+    const newZoom = Math.max(0.25, Math.min(2.5, pinch.startZoom * (pinchDistance() / pinch.startDist)));
+    const mid = pinchMidpoint();
+    zoom = newZoom;
+    // Keeps the world point under the fingers fixed on screen as they
+    // spread/pinch (standard "zoom toward where your fingers are"), and
+    // riding the midpoint's own movement gives two-finger panning for free.
+    pan = { x: mid.x - pinch.anchorWorld.x * zoom, y: mid.y - pinch.anchorWorld.y * zoom };
+    applyWorldTransform();
+  }
+  container.addEventListener(
+    'pointerdown',
+    (e) => {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size === 2) startPinch();
+    },
+    { capture: true }
+  );
+  window.addEventListener('pointermove', (e) => {
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch.active && activePointers.size >= 2) updatePinch();
+  });
+  function releasePointer(e) {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) pinch.active = false;
+  }
+  window.addEventListener('pointerup', releasePointer);
+  window.addEventListener('pointercancel', releasePointer);
 
   function portPos(node, side) {
     return { x: node.pos.x + (side === 'in' ? 0 : NODE_W), y: node.pos.y + NODE_H / 2 };
@@ -149,7 +215,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     let startPos = null;
 
     function onMove(e) {
-      if (!dragging) return;
+      if (!dragging || pinch.active) return;
       const dx = (e.clientX - startClient.x) / zoom;
       const dy = (e.clientY - startClient.y) / zoom;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
@@ -170,6 +236,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
     }
     entry.el.addEventListener('pointerdown', (e) => {
       if (e.target === entry.inDot || e.target === entry.outDot || e.target === entry.del) return;
+      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a drag
       e.stopPropagation();
       dragging = true;
       moved = false;
@@ -199,6 +266,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
 
     // --- wire (drag from the output dot) ---
     entry.outDot.addEventListener('pointerdown', (e) => {
+      if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a wire drag
       e.stopPropagation();
       const source = patchStore.getNode(nodeId);
       const a = portPos(source, 'out');
@@ -213,6 +281,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
       svg.appendChild(dragLine);
 
       function onWireMove(ev) {
+        if (pinch.active) return;
         const w = clientToWorld(ev.clientX, ev.clientY);
         dragLine.setAttribute('x2', w.x);
         dragLine.setAttribute('y2', w.y);
@@ -238,7 +307,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   let panStart = null;
   let panOrigin = null;
   function onPanMove(e) {
-    if (!panning) return;
+    if (!panning || pinch.active) return;
     pan = { x: panOrigin.x + (e.clientX - panStart.x), y: panOrigin.y + (e.clientY - panStart.y) };
     applyWorldTransform();
   }
@@ -249,6 +318,7 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   }
   container.addEventListener('pointerdown', (e) => {
     if (e.target !== container) return; // a node/dot/button already stopped propagation
+    if (pinch.active || activePointers.size >= 2) return; // a 2nd finger means pinch-zoom, not a pan
     panning = true;
     panStart = { x: e.clientX, y: e.clientY };
     panOrigin = { ...pan };
@@ -269,8 +339,15 @@ export function mountMobileCanvas(container, patchStore, { onNodeTap } = {}) {
   addBtn.addEventListener('click', () => {
     const rect = container.getBoundingClientRect();
     const center = clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    patchStore.addNode({ pos: { x: center.x - NODE_W / 2, y: center.y - NODE_H / 2 } });
+    // Cascades each new node a little further from the last one (wrapping
+    // every 5) instead of always spawning dead-center - repeated taps
+    // used to stack every node exactly on top of the previous one, which
+    // just looked like nothing had happened.
+    const n = patchStore.getPatch().nodes.length % 5;
+    const pos = { x: center.x - NODE_W / 2 + n * 36, y: center.y - NODE_H / 2 + n * 36 };
+    patchStore.addNode({ pos });
     refresh();
+    centerCameraOn(pos.x + NODE_W / 2, pos.y + NODE_H / 2);
   });
   container.appendChild(addBtn);
 

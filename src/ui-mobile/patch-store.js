@@ -53,6 +53,26 @@ export class PatchStore {
     this._notify();
   }
 
+  // renameNode(oldId, newId) - false (no-op) on a blank/unchanged/colliding
+  // newId or a missing oldId, so a caller (node-view.js's editable title)
+  // can just revert its own input on failure rather than needing to
+  // pre-validate itself. Every other node's wire gets repointed at the
+  // new id, same "nothing left pointing at a name that no longer exists"
+  // reasoning as removeNode above - a rename is really just "remove +
+  // re-add under a new name" from every OTHER node's perspective.
+  renameNode(oldId, newId) {
+    newId = newId.trim();
+    if (!newId || newId === oldId || this.getNode(newId)) return false;
+    const node = this.getNode(oldId);
+    if (!node) return false;
+    node.id = newId;
+    for (const n of this.patch.nodes) {
+      if (n.in.src === `${oldId}.out`) n.in.src = `${newId}.out`;
+    }
+    this._notify();
+    return true;
+  }
+
   setPos(id, pos) {
     const node = this.getNode(id);
     if (!node) return;

@@ -97,7 +97,7 @@ function applyInitialValue(entry, req) {
 
 const EXPR_TOGGLE_STYLE = `background: #333; border: 1px solid #555; color: #9ece6a; border-radius: 4px; padding: 3px 7px; font: 11px monospace; flex-shrink: 0;`;
 
-export function mountNodeView(container, patchStore, { onAddBlock } = {}) {
+export function mountNodeView(container, patchStore, { onAddBlock, onRenamed } = {}) {
   const sheet = document.createElement('div');
   sheet.dataset.mobileNodeSheet = ''; // precise hook for automated tests/tooling
   sheet.style.cssText = `
@@ -213,14 +213,35 @@ export function mountNodeView(container, patchStore, { onAddBlock } = {}) {
     }
 
     const header = document.createElement('div');
-    header.style.cssText = `display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;`;
-    const title = document.createElement('div');
-    title.textContent = node.id;
-    title.style.cssText = `font-size: 16px; font-weight: 700;`;
+    header.style.cssText = `display: flex; align-items: center; gap: 8px; margin-bottom: 12px;`;
+    // A plain text input, not a div - tapping in renames the node directly
+    // rather than needing a separate rename button/mode. Reverts to the
+    // old id on blur if the new one's blank or already taken (see
+    // patch-store.js's renameNode) instead of silently discarding the
+    // keystrokes into a dead end.
+    const title = document.createElement('input');
+    title.type = 'text';
+    title.value = node.id;
+    title.spellcheck = false;
+    title.style.cssText = `font-size: 16px; font-weight: 700; color: #eee; background: none; border: none; border-bottom: 1px dashed #555; padding: 2px 0; flex: 1; min-width: 0;`;
+    title.addEventListener('change', () => {
+      const requested = title.value;
+      if (requested.trim() === node.id) {
+        title.value = node.id;
+        return;
+      }
+      if (patchStore.renameNode(node.id, requested)) {
+        openNodeId = requested.trim();
+        renderNode(openNodeId);
+        onRenamed?.();
+      } else {
+        title.value = node.id; // blank, unchanged, or already taken - revert
+      }
+    });
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.textContent = 'done';
-    closeBtn.style.cssText = `background: #3a9d6e; border: none; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px;`;
+    closeBtn.style.cssText = `background: #3a9d6e; border: none; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; flex-shrink: 0;`;
     closeBtn.addEventListener('click', hide);
     header.append(title, closeBtn);
     sheet.appendChild(header);
