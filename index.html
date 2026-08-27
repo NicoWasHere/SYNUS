@@ -211,6 +211,51 @@
       #app.perform-mode #editor-mount { background: transparent; }
       #app.perform-mode #errors { border-top-color: transparent; }
 
+      /* Narrow screens: always the plain two-pane layout, rotated 90° -
+         stacked top/bottom (editor/block-mode on top, render output on
+         bottom) instead of side by side, since a left/right split
+         leaves each pane too narrow to use on a phone. flex-basis (the
+         55%/45% above) applies to whichever axis is the current main
+         axis, so switching to flex-direction: column repurposes those
+         same numbers as height shares with no separate values needed.
+         Perform mode's fullscreen-backdrop takeover is a desktop-only
+         trick - its own fixed positioning (right above) plus a mere
+         50px top offset is exactly what was leaving the toolbar buttons
+         (send/reset/block-mode on the left, mode/fullscreen on the
+         right) sitting on top of the editor text, which is what this
+         whole block exists to stop happening - so on mobile it's
+         overridden back to the same plain in-flow layout regardless of
+         which mode the toggle is actually in, and that now-pointless
+         toggle button is hidden rather than left dangling. */
+      @media (max-width: 820px) {
+        #app {
+          flex-direction: column;
+          box-sizing: border-box;
+          padding-top: 150px;
+        }
+        #editor-pane, #mobile-pane {
+          border-right: none;
+          border-bottom: 1px solid #333;
+        }
+        #app.perform-mode #render-pane {
+          position: static;
+          z-index: auto;
+        }
+        #app.perform-mode #editor-pane,
+        #app.perform-mode #mobile-pane {
+          position: relative;
+          top: auto;
+          left: auto;
+          right: auto;
+          bottom: auto;
+          z-index: auto;
+        }
+        #app.perform-mode #editor-mount { background: #1a1a1a; }
+        #app.perform-mode #errors { border-top-color: #333; }
+        #app.perform-mode .line-backdrop-layer { display: none; }
+        #mode-toggle { display: none; }
+      }
+
       /* the code editor: a plain textarea (real cursor/click/selection,
          native browser behavior - nothing to get out of sync) with a
          Prism-highlighted <pre> sitting behind it, purely for color.
