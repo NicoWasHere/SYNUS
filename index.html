@@ -212,12 +212,16 @@
       #app.perform-mode #errors { border-top-color: transparent; }
 
       /* Narrow screens: always the plain two-pane layout, rotated 90° -
-         stacked top/bottom (editor/block-mode on top, render output on
-         bottom) instead of side by side, since a left/right split
-         leaves each pane too narrow to use on a phone. flex-basis (the
-         55%/45% above) applies to whichever axis is the current main
-         axis, so switching to flex-direction: column repurposes those
-         same numbers as height shares with no separate values needed.
+         stacked top/bottom instead of side by side, since a left/right
+         split leaves each pane too narrow to use on a phone. Render
+         output goes on TOP (order: -1 - the DOM order stays
+         editor/mobile-pane then render-pane, only the visual order
+         flips) with the editor/block-mode pane below it, since that's
+         what's actually being looked at while the code/graph below is
+         only touched occasionally. flex-basis (the 55%/45% above)
+         applies to whichever axis is the current main axis, so
+         switching to flex-direction: column repurposes those same
+         numbers as height shares with no separate values needed.
          Perform mode's fullscreen-backdrop takeover is a desktop-only
          trick - its own fixed positioning (right above) plus a mere
          50px top offset is exactly what was leaving the toolbar buttons
@@ -233,9 +237,12 @@
           box-sizing: border-box;
           padding-top: 150px;
         }
+        #render-pane {
+          order: -1;
+          border-bottom: 1px solid #333;
+        }
         #editor-pane, #mobile-pane {
           border-right: none;
-          border-bottom: 1px solid #333;
         }
         #app.perform-mode #render-pane {
           position: static;

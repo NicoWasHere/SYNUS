@@ -59,7 +59,7 @@ export function mountPalette(container, patchStore, { onAdded } = {}) {
     position: absolute; left: 0; right: 0; bottom: 0; max-height: 70%;
     background: #1b1d22; border-top: 2px solid #3a3f4a; border-radius: 16px 16px 0 0;
     color: #eee; font: 13px sans-serif; overflow-y: auto; z-index: 20;
-    transform: translateY(110%); transition: transform 160ms ease-out;
+    transform: translateY(100vh); transition: transform 160ms ease-out;
     box-sizing: border-box; padding: 14px 16px 24px; pointer-events: auto;
   `;
   container.appendChild(sheet);
@@ -124,7 +124,7 @@ export function mountPalette(container, patchStore, { onAdded } = {}) {
 
   function hide() {
     targetNodeId = null;
-    sheet.style.transform = 'translateY(110%)';
+    sheet.style.transform = 'translateY(100vh)';
   }
 
   return { show, hide };
