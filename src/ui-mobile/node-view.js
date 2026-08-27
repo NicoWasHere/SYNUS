@@ -393,6 +393,19 @@ export function mountNodeView(container, patchStore, { onAddBlock, onGraphChange
         removable: (name) => name !== 'out', // always the slot chain's own result - not optional
       })
     );
+    // Each output is an independent expression, but every slot mutates
+    // the SAME running value - by itself that means only the very last
+    // slot's result is ever reachable from an output. slotN (patch-
+    // compiler.js) snapshots the value right after slot N ran, so e.g.
+    // slot0 (before any effect) can be one output and out/slot1 (after
+    // effect 0) can be a second - this line is what actually tells you
+    // those names exist to type.
+    if (node.slots.length > 0) {
+      const hint = document.createElement('div');
+      hint.textContent = `In any output below, you can use: ${node.slots.map((_, i) => `slot${i}`).join(', ')} (the value right after that slot), t, inputs, state`;
+      hint.style.cssText = `color: #666; font-size: 11px; margin: -4px 0 10px; line-height: 1.4;`;
+      sheet.appendChild(hint);
+    }
     // `out` can't be REMOVED (see the chip section above) but its value
     // is still just as editable as an extra output's - defaults to the
     // literal pass-through "out" (the slot chain's own running value),

@@ -138,9 +138,18 @@ function compileNode(node) {
     lines.push(`let out;`);
   }
 
+  // Every slot mutates the SAME running `out` in place, so by the time
+  // the function returns, only the very last slot's result survives -
+  // there was no way for an output to publish "the value partway
+  // through the chain" (e.g. the source BEFORE a rotate, alongside the
+  // final rotated result as a second output). `slotN` snapshots `out`
+  // right after slot N ran, so any output's expression (or a later raw
+  // slot) can reference `slot0`, `slot1`, ... directly - node-view.js's
+  // Outputs section lists these as available names.
   slots.forEach((slot, i) => {
     const isFirst = !hasSeed && i === 0;
     lines.push(compileSlot(slot, node.id, i, isFirst));
+    lines.push(`const slot${i} = out;`);
   });
 
   // `out` only ever gets declared by the `let out = ...` above (an
