@@ -1420,8 +1420,8 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         Cost is one CPU texture readback per tick at <code>resolution²</code> pixels — the
         same order of cost as <code>three.toTexture()</code>'s own readback. Keep
         <code>resolution</code> modest (24–48) for anything ticking every frame; higher
-        looks smoother but costs more CPU per tick. Try <code>$three_extrude$</code> for a
-        working starting point.
+        looks smoother but costs more CPU per tick. Try <code>$extrude$</code> (feed it
+        <code>$star$</code> or any other alpha-bearing source) for a working starting point.
       </div>
     </section>
 
@@ -1586,7 +1586,8 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         <tr><td><code>three_sphere</code></td><td>Projects one of THIS project's own texture-bearing values onto a sphere via <code>three.toTexture()</code>.</td></tr>
         <tr><td><code>three_model</code></td><td>Loads a real glTF/GLB file via <code>ModelSource</code>.</td></tr>
         <tr><td><code>three_text</code></td><td>Text mapped onto a 3D plane via a <code>Canvas2D</code>-drawn <code>THREE.CanvasTexture</code> — no external font asset needed, unlike true extruded <code>TextGeometry</code>.</td></tr>
-        <tr><td><code>three_extrude</code></td><td>Turns a flat <code>Canvas2D</code> shape into a real lit 3D voxel-relief mesh via <code>Extrude</code>.</td></tr>
+        <tr><td><code>extrude</code></td><td>Turns an incoming texture's shape into a real lit 3D voxel-relief mesh via <code>Extrude</code>.</td></tr>
+        <tr><td><code>star</code></td><td>A filled star drawn with <code>Canvas2D</code> — a source with more going on than a plain rectangle/circle.</td></tr>
         <tr><td><code>physics</code></td><td><code>PhysicsWorld</code> demo — a ball spawns onto a bouncy 45° platform once a second.</td></tr>
         <tr><td><code>pattern</code></td><td>A <code>Pattern</code> driving a plain value (a circle's radius here) — swap the shape freely.</td></tr>
         <tr><td><code>pattern_plot</code></td><td>A <code>Pattern.plot()</code> rendered full-screen (real resolution + margin), not just a small <code>preview()</code> card.</td></tr>

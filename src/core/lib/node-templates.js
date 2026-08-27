@@ -43,6 +43,34 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // A filled star shape, drawn with Canvas2D - handy as a source for
+  // $extrude$ or any other effect chain that wants a shape with more
+  // going on than a plain rectangle/circle.
+  star: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const canvas = use(Canvas2D, 256, 256);",
+    "    const { ctx } = canvas;",
+    "    ctx.clearRect(0, 0, 256, 256);",
+    "    ctx.fillStyle = '#ffcc00';",
+    "    ctx.beginPath();",
+    "    const spikes = 5, outerR = 110, innerR = 45, cx = 128, cy = 128;",
+    "    for (let i = 0; i < spikes * 2; i++) {",
+    "      const r = i % 2 === 0 ? outerR : innerR;",
+    "      const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;",
+    "      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;",
+    "      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);",
+    "    }",
+    "    ctx.closePath();",
+    "    ctx.fill();",
+    "    canvas.upload();",
+    "    return { screen: canvas };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   screen: () => [
     "{",
     "  in: { src: 'other.screen' },",
@@ -645,34 +673,24 @@ export const NODE_TEMPLATES = {
   // lib/extrude.js's Extrude class - reads the source's alpha on a coarse
   // grid and builds one small extruded box per covered cell (a
   // "voxel-relief" look, not a smooth silhouette - much cheaper to rebuild
-  // every tick than real contour tracing). Swap the drawn circle for any
-  // other alpha-bearing source (inputs.src, ChromaKey'd footage, text on a
-  // Canvas2D, ...) - anything with a shape in its alpha works.
-  three_extrude: () => [
+  // every tick than real contour tracing). Takes any alpha-bearing texture
+  // in (inputs.src) - $star$ makes a good source to try it with.
+  extrude: () => [
     "{",
-    "  in: {},",
+    "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
     "    const three = use(ThreeSource, width, height);",
     "    const extrude = use(Extrude);",
-    "    const shape = use(Canvas2D, 256, 256);",
     "    if (!state.scene || newPatch) {",
-    "      const { ctx } = shape;",
-    "      ctx.clearRect(0, 0, 256, 256);",
-    "      ctx.fillStyle = '#4488ff';",
-    "      ctx.beginPath();",
-    "      ctx.arc(128, 128, 100, 0, Math.PI * 2);",
-    "      ctx.fill();",
-    "      shape.upload();",
-    "",
     "      state.scene = new THREE.Scene();",
     "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
     "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
     "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
     "      state.added = false;",
     "    }",
-    "    const mesh = extrude.tick(shape, { depth: 0.3, resolution: 32 });",
+    "    const mesh = extrude.tick(inputs.src, { depth: 0.3, resolution: 32 });",
     "    if (!state.added) { state.scene.add(mesh); state.added = true; }",
     "    mesh.rotation.y = t * 0.5;",
     "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
