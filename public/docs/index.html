@@ -1153,10 +1153,10 @@ colorPicker(<span class="str">'tint'</span>, { default: <span class="str">'#ffff
         <tr><td><code>phase</code></td><td>0..1 progress through the current beat (0 = right on the beat) — for smooth per-beat interpolation instead of a hard step.</td></tr>
         <tr><td><code>pulse</code></td><td><code>true</code> for the brief window (<code>pulseWidth</code>, default 0.08) right around the beat — handy for triggering a hit once per beat.</td></tr>
         <tr><td><code>value</code></td><td><code>phase</code> reshaped by <code>shape</code> (see <code>beatEnvelope</code> below) — usually what you actually want driving brightness/scale/etc, not the raw linear <code>phase</code>.</td></tr>
-        <tr><td><code>step</code>, <code>stepPhase</code>, <code>stepPulse</code></td><td>Same three ideas as <code>beat</code>/<code>phase</code>/<code>pulse</code>, but at <code>subdivide</code> steps per beat (default 1 — a step IS a beat) — pass <code>{ subdivide: 4 }</code> for a trigger every quarter-beat, <code>3</code> for triplets, etc.</td></tr>
+        <tr><td><code>step</code>, <code>stepPhase</code>, <code>stepPulse</code>, <code>stepValue</code></td><td>Same four ideas as <code>beat</code>/<code>phase</code>/<code>pulse</code>/<code>value</code>, but at <code>subdivide</code> steps per beat (default 1 — a step IS a beat) — pass <code>{ subdivide: 4 }</code> for a trigger every quarter-beat, <code>3</code> for triplets, etc. <code>stepValue</code> is <code>stepPhase</code> reshaped by the same <code>shape</code>, so e.g. <code>subdivide: 4</code> with <code>shape: 'pulse'</code> gives 4 quick spikes per beat instead of 1.</td></tr>
       </table>
-      <pre><code><span class="tag">const</span> { step, stepPulse } = beatmatch(120, t, { subdivide: 4 });
-<span class="tag">if</span> (stepPulse) out = use(Rotate).tick(out, step * 15);  <span class="com">// fires every 1/4 beat</span></code></pre>
+      <pre><code><span class="tag">const</span> { step, stepPulse, stepValue } = beatmatch(120, t, { subdivide: 4, shape: <span class="str">'pulse'</span> });
+out = use(Brightness).tick(out, stepValue);  <span class="com">// 4 quick flashes per beat</span></code></pre>
       <pre><code>beatEnvelope(phase, <span class="str">'triangle'</span>, { peak: 0.5 });  <span class="com">// -&gt; 0..1, reshaped</span></code></pre>
       <p>
         Reshapes a 0..1 phase (from <code>beatmatch</code> above, or any other 0..1

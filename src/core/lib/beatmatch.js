@@ -38,6 +38,10 @@
 //   stepPulse (or watch `step` change), not off a hand-rolled fractional
 //   counter like `beat + phase`, which only ever grows continuously and
 //   never tells you when you've crossed a subdivision line.
+// stepValue: `stepPhase` reshaped by the SAME `shape` (like `value`, but
+//   re-triggering once per subdivision instead of once per beat) - e.g.
+//   subdivide: 4 with shape: 'pulse' gives 4 quick decaying spikes per
+//   beat instead of 1, driven by stepValue instead of value.
 export function beatmatch(bpm, t = 0, { pulseWidth = 0.08, shape = 'triangle', subdivide = 1, ...shapeOpts } = {}) {
   const beatDuration = 60 / bpm;
   const total = t / beatDuration;
@@ -49,7 +53,8 @@ export function beatmatch(bpm, t = 0, { pulseWidth = 0.08, shape = 'triangle', s
   const step = Math.floor(stepTotal);
   const stepPhase = stepTotal - step;
   const stepPulse = stepPhase < pulseWidth || stepPhase > 1 - pulseWidth;
-  return { beat, phase, pulse, value, bpm, step, stepPhase, stepPulse };
+  const stepValue = beatEnvelope(stepPhase, shape, shapeOpts);
+  return { beat, phase, pulse, value, bpm, step, stepPhase, stepPulse, stepValue };
 }
 
 // beatEnvelope(phase, shape, opts) - reshapes a 0..1 beat phase (see

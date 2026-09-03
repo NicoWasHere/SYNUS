@@ -428,9 +428,10 @@ const GLOBALS = {
     '// -> flat array (0..1) per cell, row-major, row 0 = visual top',
   beatmatch:
     "beatmatch(bpm, t, { pulseWidth = 0.08, shape = 'triangle', subdivide = 1, ...shapeOpts })\n" +
-    '// -> { beat, phase, pulse, value, step, stepPhase, stepPulse, bpm } - replaces Math.round(t / secondsPerBeat) with real bpm timing\n' +
+    '// -> { beat, phase, pulse, value, step, stepPhase, stepPulse, stepValue, bpm } - replaces Math.round(t / secondsPerBeat) with real bpm timing\n' +
     "// shape: 'pulse'|'build'|'triangle'|'adsr'|'sawJump'|'inverse' - value is phase reshaped by it, see beatEnvelope\n" +
-    '// subdivide: steps per beat for step/stepPhase/stepPulse - e.g. 4 to trigger things every 1/4 beat',
+    '// subdivide: steps per beat for step/stepPhase/stepPulse/stepValue - e.g. 4 to trigger things every 1/4 beat\n' +
+    '// stepValue: stepPhase reshaped by the SAME shape - e.g. subdivide:4 + shape:\'pulse\' = 4 spikes per beat',
   beatEnvelope:
     "beatEnvelope(phase, shape = 'triangle', opts)  // -> reshaped 0..1 (or -1..1 for sawJump) value\n" +
     "// 'pulse': {decay=12} quick spike, fast decay | 'build': smooth sine build-and-fall\n" +
