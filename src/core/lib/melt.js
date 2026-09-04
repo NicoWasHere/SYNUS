@@ -34,6 +34,7 @@ uniform float uSeed;      // change for a different random per-section pattern
 uniform float uThickness; // half-width (uv units) of the source strip - keep this near one texel for a clean "single row" look
 uniform float uDrip;      // uv units this tick's trail has slid away from the line, versus last tick's
 uniform float uDieOff;    // per-tick brightness/alpha multiplier on the trail - 1 = never fades, lower fades faster
+uniform float uRawMode;   // 0 = comp (untouched side shows plain src, like a normal effect), 1 = raw (untouched side is transparent - just the trail itself, for compositing yourself)
 
 // Cheap deterministic 1D hash - same sin/fract trick lib/pattern.js's own
 // JS-side hash() uses, just GLSL-side here so it can run per-fragment.
@@ -75,8 +76,11 @@ void main() {
     vec2 prevUv = uAxis > 0.5 ? vec2(vUv.x + uDrip, vUv.y) : vec2(vUv.x, vUv.y + uDrip);
     outColor = texture(uPrev, prevUv) * uDieOff;
   } else {
-    // The other side of the line - untouched, plain live src.
-    outColor = texture(uSrc, vUv);
+    // The other side of the line - untouched, plain live src by default
+    // (uRawMode 0, "comp") - or fully transparent (uRawMode 1, "raw"),
+    // for a caller who wants just the trail on its own to composite by
+    // hand (Composite/Mask/whatever) instead of this baked-in passthrough.
+    outColor = uRawMode > 0.5 ? vec4(0.0) : texture(uSrc, vUv);
   }
 }`;
 
@@ -86,14 +90,19 @@ void main() {
 // line that wanders within a range instead of sitting still - the trail
 // keeps dripping from wherever the line currently is.
 //
-// sections (default 1, the original single-line behavior): splits the
-// CROSS axis into that many independent segments, each getting its own
-// randomly-jittered line instead of one shared line the whole width/
-// height - e.g. axis: 'y', sections: 12 gives 12 vertical columns, each
-// starting its drip from a different row. jitter (0..1) is how far from
-// `line` each section's own line can land; seed reshuffles which section
-// gets which offset (same seed -> same pattern every time, change it for
-// a different one).
+// sections splits the CROSS axis into that many independent segments,
+// each getting its own randomly-jittered line instead of one shared line
+// the whole width/height - e.g. axis: 'y', sections: 200 (the default)
+// gives 200 individually-dripping columns instead of one clean edge.
+// jitter (0..1) is how far from `line` each section's own line can land;
+// seed reshuffles which section gets which offset (same seed -> same
+// pattern every time, change it for a different one). Pass sections: 1
+// for the original single-shared-line behavior.
+//
+// output: 'comp' (default) shows the untouched side as plain live src,
+// same as any other effect - 'trail' makes that side fully transparent
+// instead, returning just the drip trail on its own so you can composite
+// it over something else yourself (Composite, Mask, ...).
 export class Melt {
   constructor(filter = 'linear') {
     this.gl = getGL();
@@ -135,7 +144,17 @@ export class Melt {
 
   tick(
     src,
-    { axis = 'y', line = 0.5, sections = 1, jitter = 0.2, seed = 0, thickness = 0.004, drip = 0.01, dieOff = 0.95 } = {}
+    {
+      axis = 'y',
+      line = 0.6,
+      sections = 200,
+      jitter = 0.01,
+      seed = 0,
+      thickness = 0.004,
+      drip = 0.01,
+      dieOff = 0.99,
+      output = 'comp',
+    } = {}
   ) {
     if (!src || !src.texture) return src;
     const width = src.width || this.gl.canvas.width;
@@ -154,6 +173,7 @@ export class Melt {
       uThickness: thickness,
       uDrip: drip,
       uDieOff: dieOff,
+      uRawMode: output === 'trail' ? 1 : 0,
     });
 
     this._copyInto(this._pass, this._feedbackFbo, width, height);

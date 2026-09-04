@@ -327,10 +327,12 @@ export const NODE_TEMPLATES = {
   // sort (expensive, hard to do on a GPU at all). Picks one row (axis:
   // 'y') or column (axis: 'x') and feeds it back into itself every tick,
   // sliding a little further away (drip) and fading a little more
-  // (dieOff) each time. Animate `line` yourself for a wandering source -
-  // sections/jitter splits it into several independently-drifting drips
-  // instead of one shared line, each starting from a different (randomly
-  // jittered) point - see lib/melt.js.
+  // (dieOff) each time. Defaults already give many independently-dripping
+  // sections (sections: 200), each starting from a slightly different
+  // (randomly jittered) point rather than one clean shared line. Animate
+  // `line` yourself for a wandering source - see lib/melt.js. output:
+  // 'trail' instead of the default 'comp' gets just the drip on its own
+  // (transparent elsewhere) if you'd rather composite it yourself.
   melt: () => [
     "{",
     "  in: { src: 'other.screen' },",
@@ -338,12 +340,13 @@ export const NODE_TEMPLATES = {
     "    const use = useInstances(state);",
     "    const out = use(Melt).tick(inputs.src, {",
     "      axis: 'y',",
-    "      line: 0.5 + Math.sin(t * 0.3) * 0.3, // wanders instead of sitting still",
-    "      sections: 10, // independent drips, not one shared line",
-    "      jitter: 0.3, // how far each section's own line can land from `line`",
+    "      line: 0.6 + Math.sin(t * 0.3) * 0.2, // wanders instead of sitting still",
+    "      sections: 200,",
+    "      jitter: 0.01,",
     "      thickness: 0.004,",
     "      drip: 0.01,",
-    "      dieOff: 0.95,",
+    "      dieOff: 0.99,",
+    "      output: 'comp', // or 'trail' for just the drip, transparent elsewhere",
     "    });",
     "    return { screen: out };",
     "  },",

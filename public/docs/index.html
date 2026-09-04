@@ -888,26 +888,27 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         happening — the trail is really just last tick's trail, shifted and dimmed.
       </p>
       <pre><code><span class="tag">const</span> out = use(Melt).tick(src, {
-  axis: <span class="str">'y'</span>, line: 0.5, sections: 10, jitter: 0.3, seed: 0,
-  thickness: 0.004, drip: 0.01, dieOff: 0.95,
+  axis: <span class="str">'y'</span>, line: 0.6, sections: 200, jitter: 0.01, seed: 0,
+  thickness: 0.004, drip: 0.01, dieOff: 0.99, output: <span class="str">'comp'</span>,
 });</code></pre>
       <table>
         <tr><th>Option</th><th>Meaning</th></tr>
         <tr><td><code>axis</code></td><td><code>'y'</code> (default) picks a horizontal line — melts downward. <code>'x'</code> picks a vertical line instead.</td></tr>
-        <tr><td><code>line</code></td><td>0..1 BASE position of that line along its axis. Animate it yourself (<code>0.5 + Math.sin(t) * 0.3</code>) for a source that wanders instead of sitting still — the trail keeps dripping from wherever the line currently is.</td></tr>
-        <tr><td><code>sections</code></td><td>Default 1 (one shared line, the whole width/height drips from the same spot). Set higher to split the CROSS axis into that many independent segments, each getting its OWN randomly-jittered line — e.g. <code>axis: 'y', sections: 10</code> gives 10 columns, each starting its drip from a different row, instead of one clean straight edge.</td></tr>
+        <tr><td><code>line</code></td><td>0..1 BASE position of that line along its axis. Animate it yourself (<code>0.6 + Math.sin(t) * 0.2</code>) for a source that wanders instead of sitting still — the trail keeps dripping from wherever the line currently is.</td></tr>
+        <tr><td><code>sections</code></td><td>Splits the CROSS axis into that many independent segments, each getting its OWN randomly-jittered line, instead of one shared line the whole width/height drips from — default 200 gives that many individually-dripping columns instead of one clean straight edge. Pass <code>1</code> to go back to a single shared line.</td></tr>
         <tr><td><code>jitter</code></td><td>0..1 — how far from <code>line</code> each section's own line is allowed to land. 0 makes every section identical (same as <code>sections: 1</code>); higher spreads them further apart for a more jagged, "distinct starting points" look.</td></tr>
         <tr><td><code>seed</code></td><td>Reshuffles which section gets which offset — same seed always gives the same pattern, change it for a different (but still stable, non-flickering) random layout.</td></tr>
         <tr><td><code>thickness</code></td><td>Half-width (uv units) of the source strip. Keep this near one texel for a clean "single row" look — wider reads more like a soft band.</td></tr>
         <tr><td><code>drip</code></td><td>How far (uv units) the trail slides away from the line each tick — higher drips faster.</td></tr>
         <tr><td><code>dieOff</code></td><td>Per-tick brightness/alpha multiplier on the trail — 1 keeps it forever, lower fades it out faster. With a perfectly static source this converges to a fixed decaying gradient rather than growing forever.</td></tr>
+        <tr><td><code>output</code></td><td><code>'comp'</code> (default) shows the untouched side of the line as plain live <code>src</code>, same as any other effect. <code>'trail'</code> makes that side fully transparent instead, so what you get back is JUST the drip on its own — composite it over something else yourself with <code>Composite</code>/<code>Mask</code>/whatever.</td></tr>
       </table>
       <div class="note">
-        The side of the line that ISN'T dripping stays untouched, plain live <code>src</code> —
-        this only ever replaces content on the "away" side, it never blends with or
-        darkens the rest of the frame. A section's random jitter is seeded purely by its
-        own index and <code>seed</code> — stable tick to tick, never flickering — so only
-        changing <code>seed</code> reshuffles the pattern.
+        The side of the line that ISN'T dripping stays untouched (or transparent, in
+        <code>output: 'trail'</code>) — this only ever replaces content on the "away" side,
+        it never blends with or darkens the rest of the frame. A section's random jitter
+        is seeded purely by its own index and <code>seed</code> — stable tick to tick,
+        never flickering — so only changing <code>seed</code> reshuffles the pattern.
       </div>
     </section>
 
