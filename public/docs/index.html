@@ -207,6 +207,7 @@
       <li><a href="#filtering">Texture filtering (NEAREST)</a></li>
       <li><a href="#generators">Generators: Ramp / Gradient / Noise / Colors / Colormap</a></li>
       <li><a href="#bloom">Bloom / Flow</a></li>
+      <li><a href="#melt">Melt</a></li>
       <li><a href="#fill">Fill</a></li>
     </ul>
 
@@ -874,6 +875,34 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
         feedback, a fraction of the cost) and only reach for <code>Flow</code> when the
         liquid/plasma wobble is specifically the look you're after and can afford it.
       </p>
+    </section>
+
+    <section id="melt">
+      <h2>Melt</h2>
+      <p>
+        Fake pixel sorting — real pixel sorting (sorting each row/column's own
+        pixels by brightness, fresh, every frame) is genuinely expensive and awkward
+        on a GPU. This fakes the same "melting" look for a fraction of the cost: pick
+        one row or column, and feed it back into itself every tick, sliding a little
+        further away and fading a little more each time. There's no actual sorting
+        happening — the trail is really just last tick's trail, shifted and dimmed.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Melt).tick(src, {
+  axis: <span class="str">'y'</span>, line: 0.5, thickness: 0.004, drip: 0.01, dieOff: 0.95,
+});</code></pre>
+      <table>
+        <tr><th>Option</th><th>Meaning</th></tr>
+        <tr><td><code>axis</code></td><td><code>'y'</code> (default) picks a horizontal line — melts downward. <code>'x'</code> picks a vertical line instead.</td></tr>
+        <tr><td><code>line</code></td><td>0..1 position of that line along its axis. Animate it yourself (<code>0.5 + Math.sin(t) * 0.3</code>) for a source that wanders instead of sitting still — the trail keeps dripping from wherever the line currently is.</td></tr>
+        <tr><td><code>thickness</code></td><td>Half-width (uv units) of the source strip. Keep this near one texel for a clean "single row" look — wider reads more like a soft band.</td></tr>
+        <tr><td><code>drip</code></td><td>How far (uv units) the trail slides away from the line each tick — higher drips faster.</td></tr>
+        <tr><td><code>dieOff</code></td><td>Per-tick brightness/alpha multiplier on the trail — 1 keeps it forever, lower fades it out faster. With a perfectly static source this converges to a fixed decaying gradient rather than growing forever.</td></tr>
+      </table>
+      <div class="note">
+        The side of the line that ISN'T dripping stays untouched, plain live <code>src</code> —
+        this only ever replaces content on the "away" side, it never blends with or
+        darkens the rest of the frame.
+      </div>
     </section>
 
     <section id="fill">
@@ -1570,6 +1599,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         <tr><td><code>composite</code></td><td><code>use(Composite).tick(a, b, mode, opacity)</code> starter.</td></tr>
         <tr><td><code>mask</code></td><td>Cuts a hole in <code>src</code> using a second shape's alpha.</td></tr>
         <tr><td><code>chroma_key</code></td><td>Green-screen style keying starter.</td></tr>
+        <tr><td><code>melt</code></td><td><code>Melt</code> fake-pixel-sorting drip starter, with a wandering line.</td></tr>
         <tr><td><code>gradient_map</code></td><td>The Ramp → Lookup palette-recolor starter (<code>GradientMap</code>).</td></tr>
         <tr><td><code>kaleidoscope</code></td><td><code>Kaleidoscope</code> effect starter.</td></tr>
         <tr><td><code>spiral</code></td><td>A working feedback loop — rotates/shrinks/drifts its own previous frame through <code>Lag</code>, compositing fresh content on top each tick, building a spiral/tunnel over time.</td></tr>
@@ -1716,7 +1746,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       </p>
 
       <h4>Feedback &amp; glow</h4>
-      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code>, <code>Fill</code></p>
+      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code>, <code>Melt</code>, <code>Fill</code></p>
 
       <h4>Generators &amp; color</h4>
       <p style="color:#aac">

@@ -221,6 +221,14 @@ export const SIGNATURES = {
       '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate.\n' +
       '// Heavy (~30 draws/tick) - if tps drops more than you want, use Bloom instead.',
   },
+  Melt: {
+    ctor: "new Melt(filter = 'linear')",
+    tick:
+      "melt.tick(src, { axis = 'y', line = 0.5, thickness = 0.004, drip = 0.01, dieOff = 0.95 })\n" +
+      "// axis: 'y' picks a horizontal line, 'x' a vertical one - line is its 0..1 position along that axis\n" +
+      '// fake pixel sorting: feeds that single row/column back into itself every tick, sliding `drip`\n' +
+      '// further away and fading by `dieOff` each time - animate `line` yourself for a wandering source',
+  },
   Fill: {
     ctor: 'new Fill()',
     tick:

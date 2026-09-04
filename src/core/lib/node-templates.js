@@ -323,6 +323,29 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // Fake pixel sorting - a cheap "melting drip" instead of a real per-row
+  // sort (expensive, hard to do on a GPU at all). Picks one row (axis:
+  // 'y') or column (axis: 'x') and feeds it back into itself every tick,
+  // sliding a little further away (drip) and fading a little more
+  // (dieOff) each time. Animate `line` yourself for a wandering source -
+  // see lib/melt.js.
+  melt: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const out = use(Melt).tick(inputs.src, {",
+    "      axis: 'y',",
+    "      line: 0.5 + Math.sin(t * 0.3) * 0.3, // wanders instead of sitting still",
+    "      thickness: 0.004,",
+    "      drip: 0.01,",
+    "      dieOff: 0.95,",
+    "    });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // The "Ramp -> Lookup" palette-mapping trick, TouchDesigner-style: build
   // a multi-stop gradient by hand with Canvas2D (more control than
   // Ramp's plain 2-color version), then recolor src entirely from it -
