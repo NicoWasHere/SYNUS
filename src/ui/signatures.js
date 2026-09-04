@@ -224,10 +224,13 @@ export const SIGNATURES = {
   Melt: {
     ctor: "new Melt(filter = 'linear')",
     tick:
-      "melt.tick(src, { axis = 'y', line = 0.5, thickness = 0.004, drip = 0.01, dieOff = 0.95 })\n" +
+      "melt.tick(src, { axis = 'y', line = 0.5, sections = 1, jitter = 0.2, seed = 0,\n" +
+      '                  thickness = 0.004, drip = 0.01, dieOff = 0.95 })\n' +
       "// axis: 'y' picks a horizontal line, 'x' a vertical one - line is its 0..1 position along that axis\n" +
       '// fake pixel sorting: feeds that single row/column back into itself every tick, sliding `drip`\n' +
-      '// further away and fading by `dieOff` each time - animate `line` yourself for a wandering source',
+      '// further away and fading by `dieOff` each time - animate `line` yourself for a wandering source\n' +
+      '// sections: splits the CROSS axis into that many independently-drifting drips instead of one\n' +
+      '// shared line - jitter (0..1) is how far each section\'s own line can land from `line`, seed reshuffles which',
   },
   Fill: {
     ctor: 'new Fill()',

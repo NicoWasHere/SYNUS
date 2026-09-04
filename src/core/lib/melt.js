@@ -27,22 +27,42 @@ out vec4 outColor;
 uniform sampler2D uSrc;
 uniform sampler2D uPrev;
 uniform float uAxis;      // 0 = horizontal line (pick a y), 1 = vertical line (pick an x)
-uniform float uLine;      // 0..1 position of the line along that axis
+uniform float uLine;      // 0..1 BASE position of the line along that axis
+uniform float uSections;  // how many independent segments to split the CROSS axis into (1 = one shared line, the old behavior)
+uniform float uJitter;    // 0..1 max random offset from uLine each section's own line gets
+uniform float uSeed;      // change for a different random per-section pattern
 uniform float uThickness; // half-width (uv units) of the source strip - keep this near one texel for a clean "single row" look
 uniform float uDrip;      // uv units this tick's trail has slid away from the line, versus last tick's
 uniform float uDieOff;    // per-tick brightness/alpha multiplier on the trail - 1 = never fades, lower fades faster
 
+// Cheap deterministic 1D hash - same sin/fract trick lib/pattern.js's own
+// JS-side hash() uses, just GLSL-side here so it can run per-fragment.
+// Deterministic in SEED and section index alone (not time/position), so
+// a section's own line sits still tick to tick instead of flickering -
+// only changing uSeed reshuffles the pattern.
+float hash11(float n) {
+  return fract(sin(n * 127.1 + 311.7) * 43758.5453123);
+}
+
 void main() {
   float coord = mix(vUv.y, vUv.x, uAxis);
+  float cross = mix(vUv.x, vUv.y, uAxis); // the OTHER axis - which section this pixel falls into
 
-  if (abs(coord - uLine) <= uThickness) {
-    // The strip itself - always the line's OWN current position, not
+  // Each section gets its OWN line, jittered from the shared base uLine -
+  // this is what makes one section's drip start somewhere else entirely
+  // from its neighbor, instead of one clean line the whole width/height.
+  float section = floor(cross * max(uSections, 1.0));
+  float rand = hash11(section + uSeed * 97.13);
+  float lineHere = clamp(uLine + (rand * 2.0 - 1.0) * uJitter, 0.0, 1.0);
+
+  if (abs(coord - lineHere) <= uThickness) {
+    // The strip itself - always THIS section's own line position, not
     // wherever in the (thin) band this exact pixel happens to fall, so
-    // the whole band reads as one clean source row/column, not a smear
-    // of several adjacent ones.
-    vec2 stripUv = uAxis > 0.5 ? vec2(uLine, vUv.y) : vec2(vUv.x, uLine);
+    // each section's band reads as one clean source row/column, not a
+    // smear of several adjacent ones.
+    vec2 stripUv = uAxis > 0.5 ? vec2(lineHere, vUv.y) : vec2(vUv.x, lineHere);
     outColor = texture(uSrc, stripUv);
-  } else if (coord < uLine) {
+  } else if (coord < lineHere) {
     // The drip zone: this tick's trail is last tick's trail (uPrev, this
     // same shader's own previous output - see Melt.tick()'s feedback
     // texture below), sampled a little closer to the line than here, and
@@ -65,6 +85,15 @@ void main() {
 // animating `line` yourself (e.g. `line: 0.5 + Math.sin(t) * 0.3`) for a
 // line that wanders within a range instead of sitting still - the trail
 // keeps dripping from wherever the line currently is.
+//
+// sections (default 1, the original single-line behavior): splits the
+// CROSS axis into that many independent segments, each getting its own
+// randomly-jittered line instead of one shared line the whole width/
+// height - e.g. axis: 'y', sections: 12 gives 12 vertical columns, each
+// starting its drip from a different row. jitter (0..1) is how far from
+// `line` each section's own line can land; seed reshuffles which section
+// gets which offset (same seed -> same pattern every time, change it for
+// a different one).
 export class Melt {
   constructor(filter = 'linear') {
     this.gl = getGL();
@@ -104,7 +133,10 @@ export class Melt {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-  tick(src, { axis = 'y', line = 0.5, thickness = 0.004, drip = 0.01, dieOff = 0.95 } = {}) {
+  tick(
+    src,
+    { axis = 'y', line = 0.5, sections = 1, jitter = 0.2, seed = 0, thickness = 0.004, drip = 0.01, dieOff = 0.95 } = {}
+  ) {
     if (!src || !src.texture) return src;
     const width = src.width || this.gl.canvas.width;
     const height = src.height || this.gl.canvas.height;
@@ -116,6 +148,9 @@ export class Melt {
       uPrev,
       uAxis: axis === 'x' ? 1 : 0,
       uLine: line,
+      uSections: sections,
+      uJitter: jitter,
+      uSeed: seed,
       uThickness: thickness,
       uDrip: drip,
       uDieOff: dieOff,

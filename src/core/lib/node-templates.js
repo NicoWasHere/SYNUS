@@ -328,7 +328,9 @@ export const NODE_TEMPLATES = {
   // 'y') or column (axis: 'x') and feeds it back into itself every tick,
   // sliding a little further away (drip) and fading a little more
   // (dieOff) each time. Animate `line` yourself for a wandering source -
-  // see lib/melt.js.
+  // sections/jitter splits it into several independently-drifting drips
+  // instead of one shared line, each starting from a different (randomly
+  // jittered) point - see lib/melt.js.
   melt: () => [
     "{",
     "  in: { src: 'other.screen' },",
@@ -337,6 +339,8 @@ export const NODE_TEMPLATES = {
     "    const out = use(Melt).tick(inputs.src, {",
     "      axis: 'y',",
     "      line: 0.5 + Math.sin(t * 0.3) * 0.3, // wanders instead of sitting still",
+    "      sections: 10, // independent drips, not one shared line",
+    "      jitter: 0.3, // how far each section's own line can land from `line`",
     "      thickness: 0.004,",
     "      drip: 0.01,",
     "      dieOff: 0.95,",
