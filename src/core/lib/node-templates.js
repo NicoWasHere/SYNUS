@@ -353,6 +353,26 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // Flashes/fades the screen every time you hit Send - trigger: newPatch
+  // (see lib/patch-flag.js) is what notices the send; Transition itself
+  // never reaches for that on its own, same as any other effect that
+  // needs t/mouse()/keyPulse() passed in explicitly rather than assumed.
+  // See lib/transition.js.
+  transition: () => [
+    "{",
+    "  in: { src: 'other.screen' },",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const out = use(Transition).tick(inputs.src, {",
+    "      trigger: newPatch,",
+    "      mode: 'flash', // or 'fade' for a smoother crossfade instead of a quick bright pop",
+    "      duration: 0.4,",
+    "    });",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // The "Ramp -> Lookup" palette-mapping trick, TouchDesigner-style: build
   // a multi-stop gradient by hand with Canvas2D (more control than
   // Ramp's plain 2-color version), then recolor src entirely from it -

@@ -221,6 +221,15 @@ export const SIGNATURES = {
       '// feedback=0.85 tightBaseRadius=1 tightGain=2 - t is needed for wobble/feedback to animate.\n' +
       '// Heavy (~30 draws/tick) - if tps drops more than you want, use Bloom instead.',
   },
+  Transition: {
+    ctor: "new Transition(filter = 'linear')",
+    tick:
+      "transition.tick(src, { trigger = false, mode = 'flash', color, duration = 0.4 })\n" +
+      '// blends FROM a solid color TO src over `duration` seconds, restarting every time `trigger`\n' +
+      '// goes from false to true - pass trigger: newPatch for a flash/fade on every Send\n' +
+      "// mode: 'flash' (default color white, fast snap-back) | 'fade' (default color black, linear\n" +
+      '// crossfade) - color overrides either mode\'s default',
+  },
   Melt: {
     ctor: "new Melt(filter = 'linear')",
     tick:

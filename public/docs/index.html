@@ -208,6 +208,7 @@
       <li><a href="#generators">Generators: Ramp / Gradient / Noise / Colors / Colormap</a></li>
       <li><a href="#bloom">Bloom / Flow</a></li>
       <li><a href="#melt">Melt</a></li>
+      <li><a href="#transition">Transition</a></li>
       <li><a href="#fill">Fill</a></li>
     </ul>
 
@@ -912,6 +913,36 @@ out = use(Scale, <span class="str">'nearest'</span>).tick(out, { x: 1.01, y: 1.0
       </div>
     </section>
 
+    <section id="transition">
+      <h2>Transition</h2>
+      <p>
+        Flashes or fades the screen every time a patch sends — blends FROM a solid
+        color TO <code>src</code> over <code>duration</code> seconds, restarting every
+        time <code>trigger</code> goes from false to true.
+      </p>
+      <pre><code><span class="tag">const</span> out = use(Transition).tick(src, {
+  trigger: newPatch, mode: <span class="str">'flash'</span>, duration: 0.4,
+});</code></pre>
+      <p>
+        <code>trigger</code> is a plain boolean you pass in — same as <code>t</code> or
+        <code>mouse()</code>, <code>Transition</code> never reaches for anything on its own.
+        Pass <a href="#state"><code>newPatch</code></a> to get a flash/fade on every Send;
+        pass a <code>button()</code> or <code>keyPulse()</code> instead for a manually-triggered
+        one.
+      </p>
+      <table>
+        <tr><th>Option</th><th>Meaning</th></tr>
+        <tr><td><code>mode</code></td><td><code>'flash'</code> (default) — white by default, fast cubic snap-back (a quick bright pop that settles almost immediately). <code>'fade'</code> — black by default, plain linear crossfade over the whole duration (a smooth dissolve).</td></tr>
+        <tr><td><code>color</code></td><td>Overrides either mode's own default color.</td></tr>
+        <tr><td><code>duration</code></td><td>Seconds the transition takes to fully settle back to <code>src</code>.</td></tr>
+      </table>
+      <div class="note">
+        Tracks real elapsed wall-clock time itself (like <code>VideoSource</code>'s reverse
+        mode) rather than depending on <code>t</code> — so it settles correctly regardless
+        of how <code>t</code> itself behaves.
+      </div>
+    </section>
+
     <section id="fill">
       <h2>Fill</h2>
       <p>
@@ -1607,6 +1638,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
         <tr><td><code>mask</code></td><td>Cuts a hole in <code>src</code> using a second shape's alpha.</td></tr>
         <tr><td><code>chroma_key</code></td><td>Green-screen style keying starter.</td></tr>
         <tr><td><code>melt</code></td><td><code>Melt</code> fake-pixel-sorting drip starter, with a wandering line.</td></tr>
+        <tr><td><code>transition</code></td><td><code>Transition</code> flash-on-Send starter.</td></tr>
         <tr><td><code>gradient_map</code></td><td>The Ramp → Lookup palette-recolor starter (<code>GradientMap</code>).</td></tr>
         <tr><td><code>kaleidoscope</code></td><td><code>Kaleidoscope</code> effect starter.</td></tr>
         <tr><td><code>spiral</code></td><td>A working feedback loop — rotates/shrinks/drifts its own previous frame through <code>Lag</code>, compositing fresh content on top each tick, building a spiral/tunnel over time.</td></tr>
@@ -1753,7 +1785,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       </p>
 
       <h4>Feedback &amp; glow</h4>
-      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code>, <code>Melt</code>, <code>Fill</code></p>
+      <p style="color:#aac"><code>Lag</code>, <code>Delay</code>, <code>Bloom</code>, <code>Flow</code>, <code>Melt</code>, <code>Transition</code>, <code>Fill</code></p>
 
       <h4>Generators &amp; color</h4>
       <p style="color:#aac">
