@@ -255,10 +255,12 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
 
   // Highlights an arbitrary [start,end) char-offset span - not just
   // whole lines like backdropLayer above - over whatever showErrors()
-  // (main.js) currently considers wrong: an auto-fixed typo, a validate-
-  // before-swap rejection, or an ordinary per-node runtime error. Sits
-  // right after `pre` (below the textarea, above the highlighted text)
-  // so its tinted boxes read as "around" the flagged source.
+  // (main.js) currently considers wrong: a structural issue from
+  // ui/node-parser.js's findNodeIssues() (missing colon, unexpected
+  // text, an unclosed brace, ...), a validate-before-swap rejection, or
+  // an ordinary per-node runtime error. Sits right after `pre` (below
+  // the textarea, above the highlighted text) so its tinted boxes read
+  // as "around" the flagged source.
   const highlightLayer = document.createElement('div');
   highlightLayer.className = 'highlight-layer';
 
@@ -885,30 +887,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     onSend(textarea.value);
   }
 
-  // Swaps the ENTIRE document for `fixedSource` - used by main.js's send()
-  // right after the prepatch auto-fixer (ui/node-parser.js's
-  // scanAndFixNodeSource) rewrites the text, so what's actually sent (and
-  // left in the editor afterward) is the corrected version, not what was
-  // originally typed.
-  //
-  // Deliberately NOT routed through replaceRange()'s execCommand path,
-  // unlike every other text-changing shortcut in this file - a full-
-  // document replaceRange(0, textarea.value.length, ...) called from
-  // inside the Send button's own click handler was observed to silently
-  // no-op (execCommand('insertText') returning truthy without actually
-  // changing the textarea's value at all), even though the exact same
-  // call works fine from an ordinary script/microtask context. Direct
-  // assignment sidesteps that unreliable legacy API entirely - a full-
-  // document swap doesn't need execCommand's fine-grained undo-stack
-  // preservation as delicately as a small in-place edit does anyway;
-  // the auto-fix is already its own distinct, undoable action via the
-  // browser's native undo on this value change.
-  function replaceSource(fixedSource) {
-    textarea.value = fixedSource;
-    textarea.setSelectionRange(fixedSource.length, fixedSource.length);
-    handleChange();
-  }
-
   textarea.addEventListener('input', handleChange);
   // Text-changing keys already refresh the tip via handleChange() above -
   // this covers caret movement that ISN'T a text change (arrow keys,
@@ -1017,7 +995,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     previewLayer,
     getValue: () => textarea.value,
     send,
-    replaceSource,
     showHighlights,
     textarea, // so main.js can tell when focus is "actively typing code" (see keyPulse's own doc comment)
   };

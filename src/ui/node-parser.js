@@ -25,10 +25,10 @@
 // skipOpaqueSpan(source, i) - if `source[i]` starts a string, template
 // literal, or comment, returns the index right after that whole span;
 // otherwise returns null (nothing to skip here). Shared by
-// parseNodeBlocks and scanAndFixNodeSource below so the two scans can
-// never disagree about what counts as "inside a string/comment" - a
-// prepatch fix landing INSIDE what parseNodeBlocks would treat as opaque
-// (or vice versa) would silently corrupt either scan.
+// parseNodeBlocks and findNodeIssues below so the two scans can never
+// disagree about what counts as "inside a string/comment" - a flagged
+// span landing INSIDE what parseNodeBlocks would treat as opaque (or
+// vice versa) would misreport where the real problem is.
 function skipOpaqueSpan(source, i) {
   const ch = source[i];
   if (ch === '`' || ch === "'" || ch === '"') {
@@ -118,52 +118,45 @@ export function offsetToLine(source, offset) {
   return line;
 }
 
-// scanAndFixNodeSource(source) - the "prepatch" pass: catches and
-// auto-fixes the two most common hand-typing mistakes in a `nodes`
-// object, before the text is ever handed to the real module loader.
-// Mirrors parseNodeBlocks's own scan (same opaque-span skipping, same
-// depth counter, same identifier-lookahead at depth 1) with two
-// additions:
+// findNodeIssues(source) - a read-only diagnostic pass: reports anything
+// in the `nodes` object that doesn't match the expected shape of an
+// entry (`key: { ... }`), for the editor to highlight - never modifies
+// the text (an earlier version of this auto-fixed two of these; that
+// silently rewriting the user's own text turned out to be more
+// surprising than helpful, so now it only ever reports, never changes
+// anything). Mirrors parseNodeBlocks's own scan (opaque-span skipping,
+// depth counter, identifier-lookahead at depth 1). Flags:
 //
-// 1. Missing colon: `someKey { ... }` where `someKey: { ... }` was
-//    clearly meant - a bare identifier directly followed by '{' (only
-//    whitespace between) has no other legal meaning inside an object
-//    literal, so this is unambiguous. Inserts ':' right after the
-//    identifier and keeps scanning as if it had been there all along -
-//    depth tracking and "closest node" both stay correct for everything
-//    downstream.
-// 2. Stray text after '}': once a recognized node's own '}' closes back
-//    to depth 1, whatever follows (after whitespace/comments, which are
-//    left alone) MUST be ',' or the outer '}' that ends the whole
-//    `nodes` object - anything else is stray leftover text, deleted up
-//    to the next real ',' or '}' (comments/strings inside the stray span
-//    are treated as opaque too, so their own characters can't be
-//    mistaken for that boundary). Deliberately NOT auto-fixed: an actual
-//    mismatched/extra brace character itself - that's structural, not
-//    "stray text," and not safe to guess at.
-//
-// Built as a single left-to-right pass over the UNTOUCHED original
-// `source` (so nothing about scanning/detection ever has to account for
-// earlier fixes shifting offsets), with the fixed text assembled
-// separately, append-only, via a `copiedUpTo` cursor - inserting text
-// just appends without advancing it, deleting text advances it past
-// whatever's being skipped without copying it. Nothing ever needs
-// re-indexing.
-export function scanAndFixNodeSource(source) {
+// - Missing colon: `someKey { ... }` - a bare identifier directly
+//   followed by '{' (only whitespace between) has no other legal
+//   meaning inside an object literal.
+// - Non-object value: `someKey: 5` or `someKey: somethingElse` - every
+//   top-level entry's value must itself be a `{ ... }` object (a node's
+//   own `{ in, code(...) {...} }` shape) - anything else means this key
+//   isn't actually set up as a node.
+// - Unexpected text after a node's own '}': whatever follows (past
+//   whitespace/comments, which are left alone) must be ',' or the outer
+//   '}' that ends the whole `nodes` object - anything else (often a
+//   missing comma before the next key) gets flagged, ending at the next
+//   real ',' or '}' (nested strings/comments inside that span are
+//   treated as opaque too, so their own characters can't be mistaken
+//   for that boundary).
+// - Unclosed structure: depth never returns to 0 by the end of the file
+//   (a genuine unclosed '{' or missing '}' somewhere) - reported as one
+//   issue spanning from whichever node was still open (or the last one
+//   that successfully closed, if none was) to the end of the file,
+//   since there's no way to know exactly where the missing brace
+//   belongs, only that something after that point never closed.
+export function findNodeIssues(source) {
   const anchorMatch = /nodes\s*=\s*\{/.exec(source);
-  if (!anchorMatch) return { fixedSource: source, warnings: [] };
+  if (!anchorMatch) return [];
 
-  const warnings = [];
-  let out = '';
-  let copiedUpTo = 0;
-  function flushTo(pos) {
-    out += source.slice(copiedUpTo, pos);
-    copiedUpTo = pos;
-  }
-
+  const issues = [];
   let i = anchorMatch.index + anchorMatch[0].length;
   let depth = 1;
   let currentKey = null;
+  let currentStart = null;
+  let lastCloseEnd = i; // fallback anchor for the "unclosed" report if no node ever closed
 
   while (i < source.length && depth > 0) {
     const skipped = skipOpaqueSpan(source, i);
@@ -176,6 +169,7 @@ export function scanAndFixNodeSource(source) {
     if (depth === 1 && currentKey === null && (ch === '_' || ch === '$' || /[a-zA-Z]/.test(ch))) {
       const idMatch = /^[\w$]+/.exec(source.slice(i));
       if (idMatch) {
+        const idStart = i;
         const afterId = i + idMatch[0].length;
         let j = afterId;
         while (j < source.length && /\s/.test(source[j])) j++;
@@ -184,22 +178,27 @@ export function scanAndFixNodeSource(source) {
           while (j < source.length && /\s/.test(source[j])) j++;
           if (source[j] === '{') {
             currentKey = idMatch[0];
+            currentStart = idStart;
             i = j;
             continue;
           }
-        } else if (source[j] === '{') {
-          // Missing colon - identifier directly followed by '{'.
-          flushTo(afterId);
-          out += ':';
-          const fixStart = out.length - 1;
-          warnings.push({
-            type: 'missing-colon',
+          issues.push({
             nodeId: idMatch[0],
-            message: `auto-fixed: added a missing ':' after \`${idMatch[0]}\``,
-            fixedRange: [fixStart, fixStart + 1],
+            message: `\`${idMatch[0]}\` isn't set up as a node - expected \`${idMatch[0]}: { in, code(...) {...} }\``,
+            range: [idStart, j],
+          });
+          i = j;
+          continue;
+        }
+        if (source[j] === '{') {
+          issues.push({
+            nodeId: idMatch[0],
+            message: `\`${idMatch[0]}\` is missing a ':' before its '{'`,
+            range: [idStart, afterId],
           });
           currentKey = idMatch[0];
-          i = j; // the original '{'
+          currentStart = idStart;
+          i = j;
           continue;
         }
       }
@@ -211,11 +210,12 @@ export function scanAndFixNodeSource(source) {
       depth--;
       if (depth === 1 && currentKey !== null) {
         const closedNodeId = currentKey;
+        const closeEnd = i + 1;
         currentKey = null;
-        const afterBrace = i + 1;
+        currentStart = null;
+        lastCloseEnd = closeEnd;
 
-        // Peek past whitespace/comments for the next real token.
-        let p = afterBrace;
+        let p = closeEnd;
         while (p < source.length) {
           if (/\s/.test(source[p])) {
             p++;
@@ -229,10 +229,7 @@ export function scanAndFixNodeSource(source) {
           break;
         }
 
-        if (source[p] !== ',' && source[p] !== '}') {
-          // Stray text - find where it ends (the next depth-1 ',' or '}'),
-          // treating nested strings/comments as opaque so their own
-          // characters can't be mistaken for that boundary.
+        if (p < source.length && source[p] !== ',' && source[p] !== '}') {
           let end = p;
           while (end < source.length) {
             const s = skipOpaqueSpan(source, end);
@@ -243,13 +240,10 @@ export function scanAndFixNodeSource(source) {
             if (source[end] === ',' || source[end] === '}') break;
             end++;
           }
-          flushTo(afterBrace);
-          copiedUpTo = end; // skip [afterBrace, end) - the stray text itself is never copied
-          warnings.push({
-            type: 'stray-text',
+          issues.push({
             nodeId: closedNodeId,
-            message: `auto-fixed: removed stray text after \`${closedNodeId}\`'s closing '}'`,
-            fixedRange: [out.length, out.length], // deleted, not moved - nothing left to point at but where it was
+            message: `unexpected text after \`${closedNodeId}\`'s closing '}' - missing a comma?`,
+            range: [closeEnd, end],
           });
           i = end;
           continue;
@@ -260,6 +254,15 @@ export function scanAndFixNodeSource(source) {
     i++;
   }
 
-  flushTo(source.length);
-  return { fixedSource: out, warnings };
+  if (depth > 0) {
+    issues.push({
+      nodeId: currentKey,
+      message: currentKey
+        ? `\`${currentKey}\` (or something inside it) is missing a closing '}'`
+        : `a '{' somewhere after this point is never closed`,
+      range: [currentStart ?? lastCloseEnd, source.length],
+    });
+  }
+
+  return issues;
 }

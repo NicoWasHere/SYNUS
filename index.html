@@ -28,10 +28,11 @@
       .error-line { cursor: pointer; }
       .error-line:hover { text-decoration: underline; }
       .error-node-id { color: #ff9d5c; font-weight: bold; }
-      /* A "warning" entry (see main.js's showErrors()) - the prepatch
-         auto-fixer changed something and the patch still ran, distinct
-         from a hard failure - so it gets its own softer amber tone
-         instead of the error-red above. */
+      /* A "warning" entry (see main.js's showErrors()) - a structural
+         issue flagged by ui/node-parser.js's findNodeIssues() (something
+         doesn't match the expected node shape), distinct from a hard
+         failure - it's purely informational, so it gets its own softer
+         amber tone instead of the error-red above. */
       .error-line.warning-line { color: #e0a030; }
       .error-line.warning-line .error-node-id { color: #e0a030; }
       /* The canvas (see main.js's resizeCanvas()) is a square sized to
@@ -379,11 +380,12 @@
       /* Highlights an arbitrary [start,end) char span (see editor.js's
          showHighlights()) over whatever main.js's showErrors() currently
          flags - always on, not Perform-mode-only like .line-backdrop-layer
-         above, and generalized to any error/warning, not just the
-         prepatch auto-fixer's two typo fixes. Sits above the highlighted
-         text (so the tinted box reads as "around" the flagged source)
-         but below the textarea's own z-index, so the real caret/selection
-         stay the topmost, unobscured layer. */
+         above, and covering any error/warning: a structural issue from
+         ui/node-parser.js's findNodeIssues(), a validate-before-swap
+         rejection, or an ordinary per-node runtime error. Sits above the
+         highlighted text (so the tinted box reads as "around" the
+         flagged source) but below the textarea's own z-index, so the
+         real caret/selection stay the topmost, unobscured layer. */
       .highlight-layer {
         position: absolute;
         top: 0;

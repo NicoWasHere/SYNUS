@@ -20,7 +20,7 @@ import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
 import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
-import { parseNodeBlocks, offsetToLine, scanAndFixNodeSource } from './ui/node-parser.js';
+import { parseNodeBlocks, offsetToLine, findNodeIssues } from './ui/node-parser.js';
 import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
 
 const appEl = document.getElementById('app');
@@ -122,23 +122,26 @@ function jumpToNode(nodeId) {
 // panel's json-tree cards hit earlier - see ui/json-tree.js's own note).
 let lastErrorsKey = null;
 
-// autoFixWarnings: set fresh in send() every time the prepatch scanner
-// (ui/node-parser.js's scanAndFixNodeSource) finds something to fix -
-// same "warning" tier as a per-node error, but a lighter kind() so it
-// reads as "this ran, here's what I changed" rather than a failure.
-let autoFixWarnings = [];
+// structuralIssues: refreshed on every text change (see
+// updatePreviewPositions() below, called from onDocChanged - so this
+// updates live as you type, not just at Send) by ui/node-parser.js's
+// findNodeIssues() - a read-only scan for anything that doesn't match
+// the expected `key: { in, code(...) {...} }` node shape (a missing
+// colon, a value that isn't an object, unexpected text after a node's
+// '}', an unclosed brace). Purely informational, same "warning" tier as
+// an auto-fix used to be - it never blocks or changes what gets sent,
+// it just flags where things look wrong.
+let structuralIssues = [];
 
 // Every entry showErrors() displays - a load failure, a validate-before-
 // swap rejection (see graph.js's applyAndValidate), an ordinary per-node
-// runtime error, or an auto-fix warning - gets its source span
-// highlighted in the editor too, not just listed in the panel: per
-// explicit request, this isn't special-cased to the two auto-fixed
-// typos. An auto-fix warning already knows its own precise range
-// (fixedRange, from the scanner); anything else attributed to a node id
-// uses that node's whole block span from nodeSpans. A file-level
-// loadError (id null - e.g. a raw SyntaxError with no reliable node
-// attribution) has nothing to highlight and is simply left out of the
-// overlay, same as before.
+// runtime error, or a structural issue from findNodeIssues() - gets its
+// source span highlighted in the editor too, not just listed in the
+// panel. A structural issue already knows its own precise range (from
+// the scanner); anything else attributed to a node id uses that node's
+// whole block span from nodeSpans. A file-level loadError (id null -
+// e.g. a raw SyntaxError with no reliable node attribution) has nothing
+// to highlight and is simply left out of the overlay.
 function highlightRangeFor(entry) {
   if (entry.range) return { kind: entry.kind, start: entry.range[0], end: entry.range[1] };
   const span = entry.id && nodeSpans.get(entry.id);
@@ -148,8 +151,8 @@ function highlightRangeFor(entry) {
 function showErrors() {
   const entries = [];
   if (loadError) entries.push({ id: null, text: loadError, kind: 'error' });
-  for (const w of autoFixWarnings) {
-    entries.push({ id: w.nodeId, text: w.message, kind: 'warning', range: w.fixedRange });
+  for (const issue of structuralIssues) {
+    entries.push({ id: issue.nodeId, text: issue.message, kind: 'warning', range: issue.range });
   }
   for (const node of graph.nodes.values()) {
     if (node.error) entries.push({ id: node.id, text: node.error, kind: 'error' });
@@ -188,6 +191,7 @@ function showErrors() {
 function updatePreviewPositions(source) {
   const positions = new Map();
   nodeSpans = new Map();
+  structuralIssues = findNodeIssues(source);
   for (const block of parseNodeBlocks(source)) {
     positions.set(block.id, lineTop(offsetToLine(source, block.start)));
     nodeSpans.set(block.id, { start: block.start, end: block.end });
@@ -240,17 +244,7 @@ function flashSendResult(ok) {
   flashTimer = setTimeout(() => sendBtn.classList.remove('flash-ok', 'flash-error'), 600);
 }
 
-// Prepatch step: scanAndFixNodeSource() runs ONLY on hand-typed text sent
-// through this exact function - never on reload()/sendCompiledPatch()
-// directly (the mobile block-patch mode's own compiler-generated JS
-// can't have these two typos in the first place, so it skips this).
 async function send(text) {
-  const { fixedSource, warnings } = scanAndFixNodeSource(text);
-  if (warnings.length) {
-    view.replaceSource(fixedSource); // just the text swap - showErrors() owns highlighting, see below
-    text = fixedSource;
-  }
-  autoFixWarnings = warnings; // folded into showErrors()'s panel + highlight overlay on the next tick
   const ok = await reload(text);
   if (ok) setPatchInUrl(text); // keep the URL's own shareable copy in sync with whatever's actually running
   flashSendResult(ok);
