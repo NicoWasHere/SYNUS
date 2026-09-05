@@ -86,6 +86,53 @@ export const SIGNATURES = {
       "three.toTexture(value, { width, height, key = 'default' })  // -> THREE.CanvasTexture\n" +
       "// projects one of this project's own texture-bearing values onto a mesh's material.map",
   },
+  Scene3D: {
+    ctor: 'new Scene3D(width = 512, height = 512)',
+    tick:
+      'three.tick([shape1, shape2, ...], cameraOpts)  // shapes: use(Sphere)/use(Box)/a use(CSG) result/...\n' +
+      '// adds/removes them from its own scene automatically - no state.added bookkeeping needed\n' +
+      'three.orbit({ azimuth = 0, elevation = 0, radius = 3, target = [0,0,0] })  // same as orbitCamera(three.camera, ...)\n' +
+      "three.toTexture(value, { width, height, key = 'default' })  // -> THREE.CanvasTexture, same as ThreeSource\n" +
+      '// three.scene / three.camera are the real THREE.Scene/PerspectiveCamera, for anything not covered above',
+  },
+  Sphere: {
+    ctor: 'new Sphere()',
+    tick:
+      'sphere.tick({ radius = 0.8, widthSegments = 32, heightSegments = 32, color = 0x4488ff, wireframe = false,\n' +
+      '  map, position: { x, y, z }, rotation: { x, y, z }, scale: number | { x, y, z } })\n' +
+      '// -> this (pass straight into Scene3D.tick([...]) or use(CSG)) - sphere.mesh is the real THREE.Mesh',
+  },
+  Box: {
+    ctor: 'new Box()',
+    tick:
+      'box.tick({ size = 1, width, height, depth, color = 0x4488ff, wireframe = false, map,\n' +
+      '  position: { x, y, z }, rotation: { x, y, z }, scale: number | { x, y, z } })  // width/height/depth override size per-axis',
+  },
+  Torus: {
+    ctor: 'new Torus()',
+    tick:
+      'torus.tick({ radius = 0.7, tube = 0.25, radialSegments = 16, tubularSegments = 48, color = 0x4488ff,\n' +
+      '  wireframe = false, map, position: { x, y, z }, rotation: { x, y, z }, scale: number | { x, y, z } })',
+  },
+  Plane: {
+    ctor: 'new Plane()',
+    tick:
+      'plane.tick({ width = 1.6, height = 1, color = 0x4488ff, wireframe = false, map,\n' +
+      '  position: { x, y, z }, rotation: { x, y, z }, scale: number | { x, y, z } })  // always THREE.DoubleSide',
+  },
+  Cylinder: {
+    ctor: 'new Cylinder()',
+    tick:
+      'cylinder.tick({ radiusTop = 0.6, radiusBottom = 0.6, height = 1.2, radialSegments = 32, color = 0x4488ff,\n' +
+      '  wireframe = false, map, position: { x, y, z }, rotation: { x, y, z }, scale: number | { x, y, z } })',
+  },
+  CSG: {
+    ctor: 'new CSG()',
+    tick:
+      'csg.subtract(a, b) / csg.union(a, b) / csg.intersect(a, b)  // a, b: shape wrappers or raw THREE.Mesh\n' +
+      '// -> this (csg.mesh is the real result THREE.Mesh) - feed it into Scene3D.tick([...]) or chain\n' +
+      '// another subtract()/union() call on it. Re-run every tick if either input moves.',
+  },
   ModelSource: {
     ctor: 'new ModelSource()',
     tick:
@@ -485,6 +532,12 @@ const GLOBALS = {
     'orbitCamera(camera, { azimuth = 0, elevation = 0, radius = 3, target = [0,0,0] })\n' +
     '// positions camera on a sphere around target and calls camera.lookAt() - just the ordinary\n' +
     '// THREE.Camera position/lookAt API, spelled out once. See the three/three_sphere/three_text templates.',
+  position3d:
+    'position3d(target, { x = 0, y = 0, z = 0 })  // target.position.set(x, y, z) - target: a shape wrapper\n' +
+    '// (use(Sphere)/use(Box)/...), or any raw THREE.Object3D (mesh/camera/light). Returns target.',
+  scale3d:
+    'scale3d(target, number | { x = 1, y = 1, z = 1 })  // target.scale.set(...) - same target types as position3d.\n' +
+    '// A bare number scales all 3 axes evenly.',
   useInstances: 'useInstances(state)  // -> use(Ctor, ...ctorArgs), construct-once-per-call-order',
   nodeFunction:
     'nodeFunction((use, ...args) => result)  // -> a reusable callable with its OWN persistent state\n' +

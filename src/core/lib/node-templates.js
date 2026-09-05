@@ -539,40 +539,30 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
-  // Real three.js - build the scene/camera/mesh however you like with
-  // the THREE global, same API as any other three.js project. Scene/
-  // camera/mesh are built inside a plain `if (!state.x)` guard, not
-  // useInstances - there's no single class to hand use() here, just a
-  // handful of separate THREE objects - reused every tick; only their
-  // rotation (and the camera, via orbitCamera below) updates. `|| newPatch`
-  // means editing what's INSIDE that guard (swapping BoxGeometry for
-  // SphereGeometry, say) takes effect on your next Send instead of needing
-  // a node reset button click or a rename - see lib/patch-flag.js.
+  // Real three.js, the simple way - use(Scene3D) owns the scene/camera/
+  // lights (the boilerplate every three.js project needs) and use(Box)
+  // is a plain stateful shape - build its geometry+material lazily,
+  // update color/rotation/etc every tick. Nothing here needs its own
+  // `if (!state.x)` setup guard or a `state.added` flag - Scene3D.tick()
+  // adds/removes whatever you pass it automatically. See lib/scene3d.js
+  // and lib/shape3d.js.
   //
-  // orbitCamera(camera, { azimuth, elevation, radius, target }) (see
-  // lib/three-camera.js) just wraps the camera's own ordinary
-  // position/lookAt calls - moving azimuth over time (t * 0.3 here) orbits
-  // around the mesh; drop it entirely (and set camera.position once
-  // inside the guard, like before) for a fixed camera. See lib/three-source.js.
+  // three.orbit({ azimuth, elevation, radius, target }) (same as the
+  // orbitCamera global, just as a method) orbits the camera around the
+  // scene's origin over time (t * 0.3 here); drop it (and call
+  // three.camera.position.set(...) once instead, outside code()'s hot
+  // path via a `newPatch` guard if you want it settable) for a fixed camera.
   three: () => [
     "{",
     "  in: {},",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
-    "    if (!state.scene || newPatch) {", // newPatch: rebuild on every send too, not just the first time - see lib/patch-flag.js
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
-    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
-    "      state.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x4488ff }));",
-    "      state.scene.add(state.mesh);",
-    "    }",
-    "    state.mesh.rotation.x = t;",
-    "    state.mesh.rotation.y = t * 0.7;",
-    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    const three = use(Scene3D, width, height);",
+    "    const box = use(Box);",
+    "    box.tick({ size: 1, color: 0x4488ff, rotation: { x: t, y: t * 0.7 } });",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([box]);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -580,29 +570,20 @@ export const NODE_TEMPLATES = {
 
   // A flat plane in 3D - "rectangle" in the sense of a 2D shape you can
   // still position/rotate/light in a real 3D scene, as opposed to a full
-  // BoxGeometry (see the three template above). side: THREE.DoubleSide
-  // is what keeps it visible from the back once it rotates past edge-on.
+  // Box (see the three template above). use(Plane) is always
+  // THREE.DoubleSide, so it stays visible from the back once it rotates
+  // past edge-on.
   three_rect: () => [
     "{",
     "  in: {},",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
-    "    if (!state.scene || newPatch) {",
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
-    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
-    "      state.mesh = new THREE.Mesh(",
-    "        new THREE.PlaneGeometry(1.6, 1),",
-    "        new THREE.MeshStandardMaterial({ color: 0x4488ff, side: THREE.DoubleSide })",
-    "      );",
-    "      state.scene.add(state.mesh);",
-    "    }",
-    "    state.mesh.rotation.y = t;",
-    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    const three = use(Scene3D, width, height);",
+    "    const plane = use(Plane);",
+    "    plane.tick({ width: 1.6, height: 1, color: 0x4488ff, rotation: { y: t } });",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([plane]);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -621,25 +602,13 @@ export const NODE_TEMPLATES = {
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
+    "    const three = use(Scene3D, width, height);",
+    "    const sphere = use(Sphere);",
     "    const noise = use(Noise).tick({ scale: 4, seed: t * 0.2 });",
     "    const colored = use(Colorize).tick(noise, COLORS.CYAN);", // punches up contrast so the projection is obvious at a glance - toTexture() itself works with any texture, plain or processed
-    "    if (!state.scene || newPatch) {",
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
-    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
-    "      state.mesh = new THREE.Mesh(",
-    "        new THREE.SphereGeometry(0.8, 32, 32),",
-    "        new THREE.MeshStandardMaterial({ color: 0xffffff })",
-    "      );",
-    "      state.scene.add(state.mesh);",
-    "    }",
-    "    state.mesh.material.map = three.toTexture(colored);",
-    "    state.mesh.material.needsUpdate = true;",
-    "    state.mesh.rotation.y = t;",
-    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    sphere.tick({ radius: 0.8, color: 0xffffff, map: three.toTexture(colored), rotation: { y: t } });",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([sphere]);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -649,29 +618,20 @@ export const NODE_TEMPLATES = {
   // filename for your own, picked via the "Load file(s)" button (so
   // files.get('your-model.glb') finds it) or a plain URL string instead.
   // Loading is async, so the model doesn't exist for the first several
-  // ticks - guard adding it to the scene on it actually being ready.
+  // ticks - three.tick([model]) below just skips a falsy entry, no
+  // separate "have I added it yet" flag needed (unlike the old version of
+  // this template, which needed its own state.added for exactly that).
   three_model: () => [
     "{",
     "  in: {},",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
+    "    const three = use(Scene3D, width, height);",
     "    const model = use(ModelSource).tick(files.get('your-model.glb'));",
-    "    if (!state.scene || newPatch) {",
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
-    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
-    "      state.added = false;",
-    "    }",
-    "    if (model && !state.added) {",
-    "      state.scene.add(model);",
-    "      state.added = true;",
-    "    }",
-    "    if (state.added) model.rotation.y = t;",
-    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    if (model) model.rotation.y = t;",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([model]);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -681,19 +641,23 @@ export const NODE_TEMPLATES = {
   // over the network, which this project doesn't bundle - drawing the
   // label with Canvas2D (already built in) and mapping it onto a plane
   // instead needs no external asset, and is far cheaper to render besides.
-  // Both the text-drawing and the scene setup live in the SAME `if` guard
-  // here (not two separate ones) so the CanvasTexture is always built
-  // from whatever the canvas already has drawn onto it, never one tick
-  // stale.
+  // Both the text-drawing and the THREE.CanvasTexture are built together
+  // inside the SAME `if (newPatch)` guard (a plain THREE.CanvasTexture
+  // straight off label.canvas, not three.toTexture() - that path is for
+  // projecting a texture that changes every tick, and re-reads the GPU
+  // every call; this label is static after being drawn, so build it once)
+  // so the texture is always built from whatever the canvas has just
+  // drawn, never one tick stale.
   three_text: () => [
     "{",
     "  in: {},",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
+    "    const three = use(Scene3D, width, height);",
+    "    const plane = use(Plane);",
     "    const label = use(Canvas2D, 512, 128);",
-    "    if (!state.scene || newPatch) {",
+    "    if (!state.texture || newPatch) {", // newPatch: redraw on every send too, not just the first time - see lib/patch-flag.js
     "      const { ctx } = label;",
     "      ctx.clearRect(0, 0, 512, 128);",
     "      ctx.fillStyle = 'white';",
@@ -701,20 +665,36 @@ export const NODE_TEMPLATES = {
     "      ctx.textAlign = 'center';",
     "      ctx.textBaseline = 'middle';",
     "      ctx.fillText('hello', 256, 64);",
-    "      label.upload();",
-    "",
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
     "      state.texture = new THREE.CanvasTexture(label.canvas);",
-    "      state.mesh = new THREE.Mesh(",
-    "        new THREE.PlaneGeometry(2.4, 0.6),",
-    "        new THREE.MeshBasicMaterial({ map: state.texture, transparent: true })",
-    "      );",
-    "      state.scene.add(state.mesh);",
     "    }",
-    "    state.mesh.rotation.y = Math.sin(t) * 0.4;",
-    "    orbitCamera(state.camera, { azimuth: Math.sin(t * 0.3) * 0.6, elevation: 0.15, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    plane.tick({ width: 2.4, height: 0.6, map: state.texture, rotation: { y: Math.sin(t) * 0.4 } });",
+    "    three.orbit({ azimuth: Math.sin(t * 0.3) * 0.6, elevation: 0.15, radius: 3 });",
+    "    let out = three.tick([plane]);",
+    "    return { screen: out };",
+    "  },",
+    "},",
+  ].join('\n'),
+
+  // Real boolean geometry - use(CSG).subtract(a, b) cuts b's shape out of
+  // a, returning a new mesh-shaped thing you can drop straight into
+  // three.tick([...]) like any other shape (see lib/csg3d.js). Re-run
+  // every tick since the two inputs can move (hole's position here does).
+  three_csg: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const { width, height } = screenSize();",
+    "    const three = use(Scene3D, width, height);",
+    "    const csg = use(CSG);",
+    "    const box = use(Box);",
+    "    const hole = use(Sphere);",
+    "    box.tick({ size: 1.2, color: 0x4488ff });",
+    "    hole.tick({ radius: 0.7, position: { x: Math.sin(t) * 0.5 } });",
+    "    const cut = csg.subtract(box, hole);",
+    "    cut.mesh.rotation.set(t * 0.3, t * 0.5, 0);",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([cut]);",
     "    return { screen: out };",
     "  },",
     "},",
@@ -725,27 +705,22 @@ export const NODE_TEMPLATES = {
   // grid and builds one small extruded box per covered cell (a
   // "voxel-relief" look, not a smooth silhouette - much cheaper to rebuild
   // every tick than real contour tracing). Takes any alpha-bearing texture
-  // in (inputs.src) - $star$ makes a good source to try it with.
+  // in (inputs.src) - $star$ makes a good source to try it with. extrude.tick()
+  // returns a plain THREE.Mesh (not one of this file's shape wrappers,
+  // since its geometry is rebuilt from the source every tick, not
+  // options), so it goes into three.tick([...]) directly.
   extrude: () => [
     "{",
     "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    const { width, height } = screenSize();",
-    "    const three = use(ThreeSource, width, height);",
+    "    const three = use(Scene3D, width, height);",
     "    const extrude = use(Extrude);",
-    "    if (!state.scene || newPatch) {",
-    "      state.scene = new THREE.Scene();",
-    "      state.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);",
-    "      state.scene.add(new THREE.DirectionalLight(0xffffff, 2).translateZ(5));",
-    "      state.scene.add(new THREE.AmbientLight(0xffffff, 0.3));",
-    "      state.added = false;",
-    "    }",
     "    const mesh = extrude.tick(inputs.src, { depth: 0.3, resolution: 32 });",
-    "    if (!state.added) { state.scene.add(mesh); state.added = true; }",
     "    mesh.rotation.y = t * 0.5;",
-    "    orbitCamera(state.camera, { azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
-    "    let out = three.tick(state.scene, state.camera);",
+    "    three.orbit({ azimuth: t * 0.3, elevation: 0.3, radius: 3 });",
+    "    let out = three.tick([mesh]);",
     "    return { screen: out };",
     "  },",
     "},",

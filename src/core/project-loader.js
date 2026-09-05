@@ -35,6 +35,9 @@ import { ModelSource } from './lib/model-source.js';
 import { Extrude } from './lib/extrude.js';
 import { PhysicsWorld } from './lib/physics-world.js';
 import { orbitCamera } from './lib/three-camera.js';
+import { Scene3D } from './lib/scene3d.js';
+import { Sphere, Box, Torus, Plane, Cylinder, position3d, scale3d } from './lib/shape3d.js';
+import { CSG } from './lib/csg3d.js';
 import * as THREE from 'three';
 import { render } from './lib/render-sink.js';
 import { preview } from './lib/preview-sink.js';
@@ -97,6 +100,7 @@ import { explode } from './lib/explode.js';
 // GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
 // beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Melt / Transition / Fill / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / ModelSource / Extrude / PhysicsWorld / orbitCamera / THREE /
+// Scene3D / Sphere / Box / Torus / Plane / Cylinder / position3d / scale3d / CSG /
 // screenSize / viewportSize / mouse / keyPulse / midi / midiKnob / midiPad / midiVelocity /
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
@@ -149,6 +153,15 @@ export async function loadProject(gl, source) {
   window.Extrude = Extrude;
   window.PhysicsWorld = PhysicsWorld;
   window.orbitCamera = orbitCamera;
+  window.Scene3D = Scene3D;
+  window.Sphere = Sphere;
+  window.Box = Box;
+  window.Torus = Torus;
+  window.Plane = Plane;
+  window.Cylinder = Cylinder;
+  window.position3d = position3d;
+  window.scale3d = scale3d;
+  window.CSG = CSG;
   window.THREE = THREE;
   window.files = files;
   window.screenSize = screenSize;
