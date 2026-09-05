@@ -21,7 +21,7 @@
 // resend, because the code that would apply it never runs again. Adding
 // `|| newPatch` to that same guard is the opt-in escape hatch: rebuild
 // on every patch, not just the first one - a coarser, no-DOM alternative
-// to clicking a node's own reset button (see ui/reset-panel.js), for
+// to clicking a node's own reset button (see ui/node-toolbar.js), for
 // when you'd rather bake "rebuild on edit" into the node itself.
 let newPatch = false;
 

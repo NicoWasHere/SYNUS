@@ -9,6 +9,7 @@ import { downscaleVideo } from '../core/lib/video-downscale.js';
 import { openDrawTool } from './draw-tool.js';
 import { openComposeAtTool } from './compose-at-tool.js';
 import { findSignatureAt, findUseCompletions, findColormapCompletions } from './signatures.js';
+import { formatSource } from './format.js';
 
 // Every raw GLSL string in this codebase (see gl-context.js, screen-
 // output.js, fx/shaders.js, node-templates.js) is a template literal that
@@ -263,6 +264,20 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   const highlightLayer = document.createElement('div');
   highlightLayer.className = 'highlight-layer';
 
+  // Covers a node's collapsed code body (see ui/node-toolbar.js's ▸/▾
+  // button and main.js's updateFolds()) with an opaque box + a one-line
+  // "in: ... -> out: ..." label, entirely REPLACING that region's own
+  // real text ONLY VISUALLY - the textarea's actual value is completely
+  // untouched, same non-destructive philosophy as highlightLayer above.
+  // Unlike highlightLayer (pointer-events: none throughout, purely
+  // decorative), each individual .fold-box opts back INTO pointer events
+  // so clicking it can toggle the fold back off - sits ABOVE the
+  // textarea in the stacking order (see index.html's z-index) so it can
+  // actually receive that click instead of the textarea (which owns
+  // every OTHER click) swallowing it first.
+  const foldLayer = document.createElement('div');
+  foldLayer.className = 'fold-layer';
+
   const textarea = document.createElement('textarea');
   textarea.className = 'code-input';
   textarea.spellcheck = false;
@@ -299,7 +314,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // handler below to fill in the top match without re-deriving it.
   let activeUseCompletion = null;
 
-  wrap.append(backdropLayer, pre, highlightLayer, textarea, previewLayer, signatureTip, useAutocomplete);
+  wrap.append(backdropLayer, pre, highlightLayer, textarea, foldLayer, previewLayer, signatureTip, useAutocomplete);
   parent.appendChild(wrap);
 
   function highlight() {
@@ -393,6 +408,43 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     }
   }
 
+  function clearFolds() {
+    foldLayer.innerHTML = '';
+  }
+
+  // showFolds(ranges) - ranges: [{ start, end, label, onClick }], one per
+  // currently-collapsed node (main.js's updateFolds() rebuilds this list
+  // from ui/node-toolbar.js's own collapsed Set every time positions/
+  // folds might need refreshing). Only covers the lines STRICTLY BETWEEN
+  // start and end (both already point at just inside the code() body's
+  // braces - see node-parser.js's findCodeBodySpan) - the FIRST line
+  // (start's own line, the `code(...) {` header) and the LAST line (end's
+  // own line, the closing `}`) are deliberately left uncovered, so what's
+  // collapsed still visibly reads as "this node's code, folded" rather
+  // than swallowing the very braces that prove where it is. A body that's
+  // entirely on one line (nothing between those two boundary lines) has
+  // nothing worth folding and is silently skipped.
+  function showFolds(ranges) {
+    clearFolds();
+    for (const { start, end, label, onClick } of ranges) {
+      const from = offsetToLineCol(start);
+      const to = offsetToLineCol(Math.max(end, start + 1));
+      const firstHidden = from.line + 1;
+      const lastHidden = to.line - 1;
+      if (firstHidden > lastHidden) continue;
+      const box = document.createElement('div');
+      box.className = 'fold-box';
+      box.style.top = `${lineTop(firstHidden)}px`;
+      box.style.height = `${(lastHidden - firstHidden + 1) * EDITOR_METRICS.lineHeight}px`;
+      const labelEl = document.createElement('span');
+      labelEl.className = 'fold-label';
+      labelEl.textContent = label;
+      box.appendChild(labelEl);
+      box.addEventListener('click', onClick);
+      foldLayer.appendChild(box);
+    }
+  }
+
   // Shows/hides whichever popup (if either) applies at the caret -
   // findUseCompletions()/findColormapCompletions() (live autocomplete
   // while typing use(...)'s first argument, or COLORMAPS.<name>) take
@@ -448,6 +500,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     previewLayer.style.height = textarea.style.height;
     backdropLayer.style.height = textarea.style.height;
     highlightLayer.style.height = textarea.style.height;
+    foldLayer.style.height = textarea.style.height;
   }
 
   // Replaces [from, to) with `replacement` via execCommand('insertText') -
@@ -464,6 +517,31 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       textarea.setSelectionRange(from + replacement.length, from + replacement.length);
       handleChange();
     }
+  }
+
+  // formatDocument() - re-indents the whole file via formatSource() (see
+  // format.js) and applies it the same undo-preserving way as any other
+  // text replacement here. Tries to keep the caret on the same LINE it
+  // was on before formatting (not the same character offset, which
+  // formatting itself changes) - good enough to not feel disorienting,
+  // without needing a full position-mapping between old and new text.
+  function formatDocument() {
+    // execCommand('insertText') (inside replaceRange below) only actually
+    // applies to whichever element currently has real focus - fine when
+    // this is triggered by the Shift+Alt+F keydown (already firing FROM
+    // the focused textarea), but a toolbar button click moves focus to
+    // that BUTTON first, which would otherwise make the whole reformat
+    // silently a no-op. Focusing here makes formatDocument() work the
+    // same regardless of which of those triggered it.
+    textarea.focus();
+    const before = textarea.value.slice(0, textarea.selectionStart);
+    const line = (before.match(/\n/g) || []).length;
+    const formatted = formatSource(textarea.value);
+    replaceRange(0, textarea.value.length, formatted);
+    const lines = formatted.split('\n');
+    const clampedLine = Math.min(line, lines.length - 1);
+    const newPos = lines.slice(0, clampedLine).reduce((sum, l) => sum + l.length + 1, 0);
+    textarea.setSelectionRange(newPos, newPos);
   }
 
   // A completed $explode(name)$ - either an effect's raw shader source or
@@ -899,6 +977,14 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       return;
     }
 
+    // Shift+Alt+F re-indents the whole file - same convention VS Code
+    // and most other editors use for "format document".
+    if (e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f')) {
+      e.preventDefault();
+      formatDocument();
+      return;
+    }
+
     // Ctrl+/ / Cmd+/ toggles `//` on every non-blank line the selection
     // touches (whole current line if the selection is just a caret) - on
     // if any of those lines aren't commented yet, off only if every one
@@ -941,9 +1027,35 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
         activeUseCompletion = null;
         return;
       }
+
+      const { selectionStart: s, selectionEnd: en } = textarea;
+      // A real selection (or Shift+Tab on a bare caret, same as every
+      // other code editor) indents/dedents every line it touches instead
+      // of replacing the selection with two spaces - same block-boundary
+      // math as the Ctrl+/ comment toggle above (blockStart/blockEnd),
+      // just adding/stripping 2 leading spaces per line instead of `// `.
+      if (s !== en || e.shiftKey) {
+        const text = textarea.value;
+        const blockStart = text.lastIndexOf('\n', s - 1) + 1;
+        const nextBreak = text.indexOf('\n', Math.max(en - 1, blockStart));
+        const blockEnd = nextBreak === -1 ? text.length : nextBreak;
+        const block = text.slice(blockStart, blockEnd);
+        const lines = block.split('\n');
+        if (e.shiftKey) {
+          const dedented = lines.map((line) => line.replace(/^ {1,2}/, ''));
+          const toggled = dedented.join('\n');
+          replaceRange(blockStart, blockEnd, toggled);
+          textarea.setSelectionRange(blockStart, blockStart + toggled.length);
+        } else {
+          const indented = lines.map((line) => (line ? `  ${line}` : line)).join('\n');
+          replaceRange(blockStart, blockEnd, indented);
+          textarea.setSelectionRange(blockStart, blockStart + indented.length);
+        }
+        return;
+      }
+
       const inserted = document.execCommand && document.execCommand('insertText', false, '  ');
       if (!inserted) {
-        const { selectionStart: s, selectionEnd: en } = textarea;
         textarea.value = textarea.value.slice(0, s) + '  ' + textarea.value.slice(en);
         textarea.setSelectionRange(s + 2, s + 2);
         handleChange();
@@ -989,7 +1101,9 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     previewLayer,
     getValue: () => textarea.value,
     send,
+    formatDocument,
     showHighlights,
+    showFolds,
     textarea, // so main.js can tell when focus is "actively typing code" (see keyPulse's own doc comment)
   };
 }

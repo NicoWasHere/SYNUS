@@ -18,6 +18,35 @@
       #app.block-mode #mobile-pane { display: flex; }
       #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
                 border-top: 1px solid #333; min-height: 1.2em; }
+
+      /* Toggleable read-only node-connection map (see ui/connection-map.js)
+         - covers the whole editor pane rather than living inline in the
+         scrolling code (a real box-and-arrow diagram needs its own space
+         to lay out in, not a strip squeezed between lines of text).
+         #editor-pane needs its own position: relative for this absolute
+         overlay to anchor to just that pane, not the whole page. */
+      #editor-pane { position: relative; }
+      .connection-map {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        background: rgba(17, 17, 17, 0.97);
+        overflow: auto;
+      }
+      .connection-map svg { display: block; }
+      .cm-edge { stroke: #555; stroke-width: 1.5; fill: none; }
+      .cm-arrowhead { fill: #555; }
+      .cm-node { cursor: pointer; }
+      .cm-box { fill: #222; stroke: #4a90d9; stroke-width: 1.5; }
+      .cm-node:hover .cm-box { fill: #2c2c2c; }
+      .cm-box-error { stroke: #d9534f; }
+      .cm-box-bypassed { stroke: #e0a030; }
+      .cm-node text {
+        fill: #ddd;
+        font: 12px 'SF Mono', Menlo, Consolas, monospace;
+        text-anchor: middle;
+        pointer-events: none;
+      }
       /* Solid background only while there's actually something to show
          (see main.js's showErrors(), which toggles this class) - an empty
          errors strip shouldn't sit there as a visible dark bar. */
@@ -73,6 +102,25 @@
         font-size: 14px;
       }
       #mode-toggle:hover { background: #2c2c2c; }
+
+      /* Same right column as mode-toggle/fullscreen-btn, below the tps/t
+         counters - toggles .connection-map below (see ui/connection-map.js). */
+      #map-toggle {
+        position: fixed;
+        top: 154px;
+        right: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 10px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      #map-toggle:hover { background: #2c2c2c; }
+      #map-toggle.active { border-color: #4a90d9; color: #4a90d9; }
 
       /* Block mode: a touch node-graph editor (src/ui-mobile/) as an
          alternate authoring surface alongside the code editor, not a
@@ -154,6 +202,25 @@
         line-height: 1;
       }
       #reset-patch-btn:hover { background: #2c2c2c; }
+
+      /* Stacked below reset-patch-btn, same left column - re-indents the
+         whole file (ui/format.js) via a click instead of only the
+         Shift+Alt+F keybinding. */
+      #format-btn {
+        position: fixed;
+        top: 154px;
+        left: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 10px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      #format-btn:hover { background: #2c2c2c; }
       #send-btn.flash-ok { background: #1f5c2e; border-color: #2fae52; }
       #send-btn.flash-error { background: #5c1f1f; border-color: #ae2f2f; }
       #tps-counter {
@@ -398,6 +465,42 @@
         background: rgba(217, 83, 79, 0.15);
       }
 
+      /* Covers a collapsed node's code body (see editor.js's showFolds(),
+         ui/node-toolbar.js's ▸/▾ button) - unlike highlight-layer above,
+         this sits ABOVE the textarea (z-index 3 > 2) so an individual
+         .fold-box can actually receive the click that expands it back;
+         the layer itself stays pointer-events: none so every OTHER
+         (uncollapsed) part of the textarea keeps working normally. */
+      .fold-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .fold-box {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        box-sizing: border-box;
+        border-radius: 4px;
+        border: 1px solid #3a3a3a;
+        background: #1a1a1a;
+        pointer-events: auto;
+        cursor: pointer;
+        display: flex;
+        align-items: flex-start;
+        overflow: hidden;
+      }
+      .fold-box:hover { border-color: #666; }
+      .fold-label {
+        margin: 3px 8px;
+        color: #888;
+        font: 12px 'SF Mono', Menlo, Consolas, monospace;
+        white-space: nowrap;
+      }
+
       /* custom token palette - deliberately not a stock Prism theme */
       .token.comment { color: #6a7280; font-style: italic; }
       .token.punctuation { color: #9aa0a6; }
@@ -503,14 +606,20 @@
       .json-tree-key { color: #999; }
       .json-tree-val { color: #b6f2b6; }
 
-      /* Per-node "reset state" button (see ui/reset-panel.js) - sits in
-         the editor's otherwise-unused left padding margin, next to that
-         node's opening line. Same floating-overlay/pointer-events trick
-         as .control-widget below. */
-      .node-reset-btn {
+      /* Per-node reset/bypass/collapse row (see ui/node-toolbar.js) - sits
+         in the editor's otherwise-unused left padding margin, next to
+         that node's opening line. Same floating-overlay/pointer-events
+         trick as .control-widget below. */
+      .node-toolbar {
         position: absolute;
         left: 0px;
         z-index: 4;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        pointer-events: auto;
+      }
+      .node-toolbar-btn {
         width: 14px;
         height: 14px;
         line-height: 12px;
@@ -524,7 +633,8 @@
         border-radius: 3px;
         cursor: pointer;
       }
-      .node-reset-btn:hover { color: #eee; border-color: #888; }
+      .node-toolbar-btn:hover { color: #eee; border-color: #888; }
+      .node-toolbar-btn.active { color: #e0a030; border-color: #e0a030; }
 
       /* $slider$/$button$/$input$ widgets (see ui/control-panel.js) -
          anchored to the same top-right-of-node column as .node-preview
@@ -626,8 +736,10 @@
   <body>
     <button id="mode-toggle" type="button">Perform mode</button>
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
+    <button id="format-btn" type="button" title="Re-indent the whole file (Shift+Alt+F)">Format</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
+    <button id="map-toggle" type="button" title="Toggle a read-only node-connection map">Map</button>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>

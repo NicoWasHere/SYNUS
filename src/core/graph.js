@@ -178,7 +178,23 @@ export class Graph {
       }
       setCurrentNode(node.id); // so a preview() call inside code() knows whose row it's for
       try {
-        const outputs = node.code(inputs, node.state, t, tickCount) || {};
+        // node.bypassed: a live UI toggle (see ui/node-toolbar.js), not
+        // part of the saved patch text - lives directly on the node
+        // object (like .error/.state already do) so it survives ordinary
+        // edits AND applyAndValidate()'s rollback for free (rollback only
+        // ever restores .code/.inputs). Skips code() entirely and just
+        // forwards this node's first input value as every output key it
+        // last successfully produced (falling back to a plain `screen`
+        // key if it's never produced output yet) - "pass it through" for
+        // any node, without knowing its particular output shape.
+        const outputs = node.bypassed
+          ? Object.fromEntries(
+              (Object.keys(node.lastOutputs).length ? Object.keys(node.lastOutputs) : ['screen']).map((key) => [
+                key,
+                Object.values(inputs)[0],
+              ])
+            )
+          : node.code(inputs, node.state, t, tickCount) || {};
         for (const [portName, value] of Object.entries(outputs)) {
           this.bus.publish(`${node.id}.${portName}`, value);
         }

@@ -27,7 +27,7 @@
 // otherwise returns null (nothing to skip here). Used by parseNodeBlocks
 // below so a node's own shader source (a template literal, often full of
 // '{'/'}' from GLSL) doesn't corrupt its brace-depth counting.
-function skipOpaqueSpan(source, i) {
+export function skipOpaqueSpan(source, i) {
   const ch = source[i];
   if (ch === '`' || ch === "'" || ch === '"') {
     const quote = ch;
@@ -104,6 +104,45 @@ export function parseNodeBlocks(source) {
   }
 
   return results;
+}
+
+// findCodeBodySpan(source, nodeSpan) - within one node's own {start, end}
+// span (from parseNodeBlocks above), finds the { start, end } of just its
+// code(...) { ... } BODY - the characters strictly between the opening
+// brace and its matching closing brace, so both the `code(inputs, state,
+// t) {` header line and the final `}` stay outside the returned span
+// (and so visible) - used by ui/node-toolbar.js's collapse toggle to know
+// what to visually fold away without touching the header/footer that
+// still identify what's collapsed. Every node template in this project
+// writes its method literally as `code(...)  {`, so a plain regex finds
+// it; the matching closing brace still needs the same skipOpaqueSpan-
+// aware depth scan parseNodeBlocks uses, since the body can (and for a
+// GLSL/Hydra node, does) contain template-literal braces of its own.
+// Returns null if this node has no code() method to speak of (malformed,
+// or a scan that ran off the end of nodeSpan without balancing).
+export function findCodeBodySpan(source, nodeSpan) {
+  const text = source.slice(nodeSpan.start, nodeSpan.end);
+  const header = /\bcode\s*\([^)]*\)\s*\{/.exec(text);
+  if (!header) return null;
+
+  const bodyStart = nodeSpan.start + header.index + header[0].length; // just past the opening '{'
+  let depth = 1;
+  let i = bodyStart;
+  while (i < nodeSpan.end && depth > 0) {
+    const skipped = skipOpaqueSpan(source, i);
+    if (skipped != null) {
+      i = skipped;
+      continue;
+    }
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+    i++;
+  }
+  if (depth !== 0) return null;
+  return { start: bodyStart, end: i };
 }
 
 // Character offset -> 0-indexed line number, for positioning a node's
