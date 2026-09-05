@@ -28,13 +28,6 @@
       .error-line { cursor: pointer; }
       .error-line:hover { text-decoration: underline; }
       .error-node-id { color: #ff9d5c; font-weight: bold; }
-      /* A "warning" entry (see main.js's showErrors()) - a structural
-         issue flagged by ui/node-parser.js's findNodeIssues() (something
-         doesn't match the expected node shape), distinct from a hard
-         failure - it's purely informational, so it gets its own softer
-         amber tone instead of the error-red above. */
-      .error-line.warning-line { color: #e0a030; }
-      .error-line.warning-line .error-node-id { color: #e0a030; }
       /* The canvas (see main.js's resizeCanvas()) is a square sized to
          the LARGER of this box's width/height and displayed at that same
          size, so it fills the box edge to edge on the longer axis and
@@ -378,14 +371,17 @@
       .code-input::-moz-selection { background: #3a5a78; color: #fff; }
 
       /* Highlights an arbitrary [start,end) char span (see editor.js's
-         showHighlights()) over whatever main.js's showErrors() currently
-         flags - always on, not Perform-mode-only like .line-backdrop-layer
-         above, and covering any error/warning: a structural issue from
-         ui/node-parser.js's findNodeIssues(), a validate-before-swap
-         rejection, or an ordinary per-node runtime error. Sits above the
-         highlighted text (so the tinted box reads as "around" the
-         flagged source) but below the textarea's own z-index, so the
-         real caret/selection stay the topmost, unobscured layer. */
+         showHighlights()) over whichever node main.js's showErrors()
+         currently blames - a validate-before-swap rejection, or an
+         ordinary per-node runtime error - always on, not Perform-mode-
+         only like .line-backdrop-layer above. Only ever evaluated in
+         response to an actual patch send (never a live, as-you-type
+         scan), but repositioned every tick regardless so it tracks the
+         node's own line/column staying accurate as you keep typing
+         afterward. Sits above the highlighted text (so the tinted box
+         reads as "around" the flagged source) but below the textarea's
+         own z-index, so the real caret/selection stay the topmost,
+         unobscured layer. */
       .highlight-layer {
         position: absolute;
         top: 0;
@@ -398,9 +394,9 @@
         position: absolute;
         border-radius: 3px;
         box-sizing: border-box;
+        border: 1.5px solid #d9534f;
+        background: rgba(217, 83, 79, 0.15);
       }
-      .highlight-box.kind-warning { border: 1.5px solid #e0a030; background: rgba(224, 160, 48, 0.15); }
-      .highlight-box.kind-error { border: 1.5px solid #d9534f; background: rgba(217, 83, 79, 0.15); }
 
       /* custom token palette - deliberately not a stock Prism theme */
       .token.comment { color: #6a7280; font-style: italic; }

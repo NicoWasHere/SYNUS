@@ -254,13 +254,12 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   pre.appendChild(code);
 
   // Highlights an arbitrary [start,end) char-offset span - not just
-  // whole lines like backdropLayer above - over whatever showErrors()
-  // (main.js) currently considers wrong: a structural issue from
-  // ui/node-parser.js's findNodeIssues() (missing colon, unexpected
-  // text, an unclosed brace, ...), a validate-before-swap rejection, or
-  // an ordinary per-node runtime error. Sits right after `pre` (below
-  // the textarea, above the highlighted text) so its tinted boxes read
-  // as "around" the flagged source.
+  // whole lines like backdropLayer above - over whatever node showErrors()
+  // (main.js) currently blames: a validate-before-swap rejection, or an
+  // ordinary per-node runtime error - both only ever evaluated in
+  // response to an actual patch send, never a live, as-you-type scan.
+  // Sits right after `pre` (below the textarea, above the highlighted
+  // text) so its tinted box reads as "around" the flagged source.
   const highlightLayer = document.createElement('div');
   highlightLayer.className = 'highlight-layer';
 
@@ -355,9 +354,9 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     return { line, col };
   }
 
-  function addHighlightBox(kind, line, col, len) {
+  function addHighlightBox(line, col, len) {
     const box = document.createElement('div');
-    box.className = `highlight-box kind-${kind}`;
+    box.className = 'highlight-box';
     box.style.top = `${lineTop(line)}px`;
     box.style.left = `${EDITOR_METRICS.paddingLeft + col * EDITOR_METRICS.charWidth}px`;
     box.style.width = `${Math.max(1, len) * EDITOR_METRICS.charWidth}px`;
@@ -369,25 +368,27 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     highlightLayer.innerHTML = '';
   }
 
-  // showHighlights(ranges) - ranges: [{ kind: 'warning'|'error', start, end }].
-  // A span crossing multiple lines gets one box per visual line it
-  // touches (a single absolutely-positioned div can't bend around a
-  // line wrap the way a real text-selection highlight can). Called by
-  // main.js's showErrors() every time its own entries actually change -
-  // see clearHighlights() below for why nothing here needs its own timer.
+  // showHighlights(ranges) - ranges: [{ start, end }], one per node/error
+  // main.js's showErrors() currently attributes to a real span. A span
+  // crossing multiple lines gets one box per visual line it touches (a
+  // single absolutely-positioned div can't bend around a line wrap the
+  // way a real text-selection highlight can). Called every time
+  // showErrors() runs (not gated behind its own dedup check - see that
+  // function's own comment for why), so positions stay live-accurate as
+  // the user types even when the underlying error set hasn't changed.
   function showHighlights(ranges) {
     clearHighlights();
     const text = textarea.value;
     const lines = text.split('\n');
-    for (const { kind, start, end } of ranges) {
+    for (const { start, end } of ranges) {
       const from = offsetToLineCol(start);
       const to = offsetToLineCol(Math.max(end, start + 1));
       if (from.line === to.line) {
-        addHighlightBox(kind, from.line, from.col, to.col - from.col);
+        addHighlightBox(from.line, from.col, to.col - from.col);
       } else {
-        addHighlightBox(kind, from.line, from.col, (lines[from.line] || '').length - from.col);
-        for (let l = from.line + 1; l < to.line; l++) addHighlightBox(kind, l, 0, (lines[l] || '').length);
-        addHighlightBox(kind, to.line, 0, to.col);
+        addHighlightBox(from.line, from.col, (lines[from.line] || '').length - from.col);
+        for (let l = from.line + 1; l < to.line; l++) addHighlightBox(l, 0, (lines[l] || '').length);
+        addHighlightBox(to.line, 0, to.col);
       }
     }
   }
@@ -848,13 +849,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     resize();
     updateLineBackdrops();
     updateSignatureTip();
-    // Any local edit makes every existing highlight's offsets stale
-    // (even one typed character shifts everything after it) - clear
-    // immediately rather than leaving a highlight box pointing at the
-    // wrong text. showErrors() (main.js) re-establishes it, correctly
-    // repositioned, only once something actually changes again (the
-    // next send/reload) - see showHighlights()'s own comment.
-    clearHighlights();
     onDocChanged(textarea.value);
     // tryExpandLoad opens a file picker, which the browser only allows
     // in direct response to a real user gesture ("transient activation")

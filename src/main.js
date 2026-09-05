@@ -20,7 +20,7 @@ import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
 import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
-import { parseNodeBlocks, offsetToLine, findNodeIssues } from './ui/node-parser.js';
+import { parseNodeBlocks, offsetToLine } from './ui/node-parser.js';
 import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
 
 const appEl = document.getElementById('app');
@@ -122,41 +122,43 @@ function jumpToNode(nodeId) {
 // panel's json-tree cards hit earlier - see ui/json-tree.js's own note).
 let lastErrorsKey = null;
 
-// structuralIssues: refreshed on every text change (see
-// updatePreviewPositions() below, called from onDocChanged - so this
-// updates live as you type, not just at Send) by ui/node-parser.js's
-// findNodeIssues() - a read-only scan for anything that doesn't match
-// the expected `key: { in, code(...) {...} }` node shape (a missing
-// colon, a value that isn't an object, unexpected text after a node's
-// '}', an unclosed brace). Purely informational, same "warning" tier as
-// an auto-fix used to be - it never blocks or changes what gets sent,
-// it just flags where things look wrong.
-let structuralIssues = [];
+// rejectedErrors: set in reload() whenever applyAndValidate() rejects a
+// send - the SAME {id, message} pairs the aggregate loadError summary
+// below is built from, kept separately (with each one's real node id
+// intact) specifically so showErrors() can attribute and highlight each
+// one individually, the same way an ordinary node.error already does.
+// Cleared the moment a send actually succeeds.
+let rejectedErrors = [];
 
-// Every entry showErrors() displays - a load failure, a validate-before-
-// swap rejection (see graph.js's applyAndValidate), an ordinary per-node
-// runtime error, or a structural issue from findNodeIssues() - gets its
-// source span highlighted in the editor too, not just listed in the
-// panel. A structural issue already knows its own precise range (from
-// the scanner); anything else attributed to a node id uses that node's
-// whole block span from nodeSpans. A file-level loadError (id null -
-// e.g. a raw SyntaxError with no reliable node attribution) has nothing
-// to highlight and is simply left out of the overlay.
+// Every entry showErrors() displays - an ordinary per-node runtime
+// error, or one of rejectedErrors above - gets its node's whole block
+// highlighted in the editor too (via nodeSpans), not just listed in the
+// panel. Only evaluated in response to an actual patch send/eval (see
+// reload() below and Graph.tick()'s own per-node try/catch) - never a
+// live, as-you-type scan. A file-level loadError (id null - e.g. a raw
+// SyntaxError with no reliable node attribution) has nothing to
+// highlight and is simply left out of the overlay.
 function highlightRangeFor(entry) {
-  if (entry.range) return { kind: entry.kind, start: entry.range[0], end: entry.range[1] };
   const span = entry.id && nodeSpans.get(entry.id);
-  return span ? { kind: entry.kind, start: span.start, end: span.end } : null;
+  return span ? { start: span.start, end: span.end } : null;
 }
 
 function showErrors() {
   const entries = [];
-  if (loadError) entries.push({ id: null, text: loadError, kind: 'error' });
-  for (const issue of structuralIssues) {
-    entries.push({ id: issue.nodeId, text: issue.message, kind: 'warning', range: issue.range });
-  }
+  if (loadError) entries.push({ id: null, text: loadError });
+  for (const e of rejectedErrors) entries.push({ id: e.id, text: `reverted - ${e.message}` });
   for (const node of graph.nodes.values()) {
-    if (node.error) entries.push({ id: node.id, text: node.error, kind: 'error' });
+    if (node.error) entries.push({ id: node.id, text: node.error });
   }
+
+  // Highlight positions are recomputed and redrawn EVERY call, dedup
+  // guard or not - nodeSpans (a node's own line/column) keeps shifting
+  // as the user types even when the error SET itself hasn't changed, so
+  // skipping this alongside the (more expensive) panel rebuild below
+  // would leave a highlight box drawn over wherever the flagged node
+  // USED to be instead of tracking it live.
+  view.showHighlights(entries.map(highlightRangeFor).filter(Boolean));
+
   const key = JSON.stringify(entries);
   if (key === lastErrorsKey) return;
   lastErrorsKey = key;
@@ -169,7 +171,6 @@ function showErrors() {
       line.textContent = entry.text;
     } else {
       line.className = 'error-line';
-      line.classList.toggle('warning-line', entry.kind === 'warning');
       line.title = 'Click to jump to this node';
       const id = document.createElement('span');
       id.className = 'error-node-id';
@@ -179,8 +180,6 @@ function showErrors() {
     }
     errorsEl.appendChild(line);
   }
-
-  view.showHighlights(entries.map(highlightRangeFor).filter(Boolean));
 }
 
 // Recomputes where each node's preview card should float, from the
@@ -191,7 +190,6 @@ function showErrors() {
 function updatePreviewPositions(source) {
   const positions = new Map();
   nodeSpans = new Map();
-  structuralIssues = findNodeIssues(source);
   for (const block of parseNodeBlocks(source)) {
     positions.set(block.id, lineTop(offsetToLine(source, block.start)));
     nodeSpans.set(block.id, { start: block.start, end: block.end });
@@ -212,16 +210,20 @@ async function reload(source) {
     const projectNodes = await loadProject(gl, source);
     const result = graph.applyAndValidate(projectNodes, performance.now() / 1000, clock.frame);
     if (!result.ok) {
-      const detail = result.errors.map((e) => `${e.id}: ${e.message}`).join('; ');
-      loadError = `patch reverted to previous working version - ${detail}`;
+      // The per-node detail shows up as its own highlighted entry below
+      // (rejectedErrors) - this is just the general "what happened" notice.
+      loadError = 'patch reverted to previous working version';
+      rejectedErrors = result.errors;
       return false;
     }
     updatePreviewPositions(source);
     loadError = null;
+    rejectedErrors = [];
     markNewPatch(); // newPatch reads true for the one tick right after this - see lib/patch-flag.js
     return true;
   } catch (e) {
     loadError = `project failed to load: ${e.message}`;
+    rejectedErrors = [];
     console.error('project load failed', e);
     return false;
   }
