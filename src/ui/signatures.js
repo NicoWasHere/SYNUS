@@ -134,6 +134,13 @@ export const SIGNATURES = {
     ctor: 'new Translate()',
     tick: 'translate.tick(src, { x = 0, y = 0, wrap = false })  // 0..1 uv units; wrap: true loops content around instead of leaving it transparent',
   },
+  Position: {
+    ctor: 'new Position()',
+    tick:
+      'position.tick(src, { x = 0.5, y = 0.5, wrap = false })\n' +
+      "// x/y: 0..1, where src's own center should land (0.5, 0.5 = dead center, untouched) - same as\n" +
+      "// Translate but an ABSOLUTE destination instead of a relative shift (offset = x - 0.5, y - 0.5)",
+  },
   ChannelMix: {
     ctor: 'new ChannelMix()',
     tick: 'channelMix.tick(src, { r = [1,0,0], g = [0,1,0], b = [0,0,1] })',

@@ -47,6 +47,18 @@ export const EFFECTS = {
     toUniforms: ({ x = 0, y = 0, wrap = false } = {}) => ({ uOffset: [x, y], uWrap: wrap ? 1 : 0 }),
   },
 
+  position: {
+    frag: shaders.TRANSLATE,
+    // position(src, { x = 0.5, y = 0.5, wrap = false })  -  x/y in 0..1,
+    // where src's own center should land (0.5, 0.5 = dead center, its
+    // natural/untouched spot). Same shader as translate - just an
+    // absolute destination instead of a relative shift, so you place
+    // something directly (position(src, {x: 0.8, y: 0.2})) instead of
+    // working out translate's offset from center by hand (offset =
+    // target - 0.5).
+    toUniforms: ({ x = 0.5, y = 0.5, wrap = false } = {}) => ({ uOffset: [x - 0.5, y - 0.5], uWrap: wrap ? 1 : 0 }),
+  },
+
   channelMix: {
     frag: shaders.CHANNEL_MIX,
     // channelMix(src, { r: [1,0,0], g: [0,1,0], b: [0,0,1] })

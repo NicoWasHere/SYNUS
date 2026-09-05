@@ -51,6 +51,7 @@ import {
   Scale,
   Flip,
   Translate,
+  Position,
   ChannelMix,
   Brightness,
   Contrast,
@@ -101,7 +102,7 @@ import { explode } from './lib/explode.js';
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
 // Instance / particle2d / ascii2d / dot / pixel / AudioSource / explode /
 // files, plus every effect
-// class (Rotate, Scale, Flip, Translate, ChannelMix, Brightness,
+// class (Rotate, Scale, Flip, Translate, Position, ChannelMix, Brightness,
 // Contrast, Saturation, HueShift, Grade, Blur, LensBlur, Threshold,
 // Edge, Emboss, Mirror, Tile, Kaleidoscope, Modulate, Displace,
 // ModulateScale, ModulateRotate, Vignette, Pixelate, Posterize, ColorLookup, Mask, ChromaKey,
@@ -187,6 +188,7 @@ export async function loadProject(gl, source) {
   window.Scale = Scale;
   window.Flip = Flip;
   window.Translate = Translate;
+  window.Position = Position;
   window.ChannelMix = ChannelMix;
   window.Brightness = Brightness;
   window.Contrast = Contrast;

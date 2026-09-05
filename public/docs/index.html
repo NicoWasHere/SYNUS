@@ -523,6 +523,7 @@ html.tick(<span class="str">`&lt;div style='color:white;font:32px sans-serif'&gt
         <tr><td><code>Scale.tick(src, {x,y})</code> or <code>(src, factor)</code></td><td>1.0 = no change per axis.</td></tr>
         <tr><td><code>Flip.tick(src, {x,y,point,fill})</code></td><td>Booleans, mirror that axis around <code>point</code> (default center). An off-center point can push content outside 0..1 — <code>fill</code> decides what shows there.</td></tr>
         <tr><td><code>Translate.tick(src, {x,y})</code></td><td>Offset in 0..1 uv units.</td></tr>
+        <tr><td><code>Position.tick(src, {x,y})</code></td><td>Same as <code>Translate</code>, but an ABSOLUTE destination — where <code>src</code>'s own center should land (0.5, 0.5 = dead center) — instead of a relative shift.</td></tr>
         <tr><td><code>ChannelMix.tick(src, {r,g,b})</code></td><td>Each a <code>[r,g,b]</code> mix vector for that output channel.</td></tr>
         <tr><td><code>Brightness.tick(src, amount)</code></td><td>Additive, -1..1.</td></tr>
         <tr><td><code>Contrast.tick(src, amount)</code></td><td>1.0 = no change.</td></tr>
@@ -1762,7 +1763,7 @@ h.tick(<span class="str">`osc(10, 0.1, 1.2).out()`</span>);
       <h4>Effects (FX) — use(Name).tick(src, ...)</h4>
       <p style="color:#aac">
         <code>FX</code>, <code>Rotate</code>, <code>Scale</code>, <code>Flip</code>,
-        <code>Translate</code>, <code>ChannelMix</code>, <code>Brightness</code>,
+        <code>Translate</code>, <code>Position</code>, <code>ChannelMix</code>, <code>Brightness</code>,
         <code>Contrast</code>, <code>Saturation</code>, <code>HueShift</code>,
         <code>Grade</code>, <code>Blur</code>, <code>LensBlur</code>,
         <code>Threshold</code>, <code>Edge</code>, <code>Emboss</code>,

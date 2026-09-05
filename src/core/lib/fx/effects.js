@@ -79,6 +79,7 @@ export const Rotate = FX.rotate;
 export const Scale = FX.scale;
 export const Flip = FX.flip;
 export const Translate = FX.translate;
+export const Position = FX.position;
 export const ChannelMix = FX.channelMix;
 export const Brightness = FX.brightness;
 export const Contrast = FX.contrast;
