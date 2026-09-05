@@ -315,21 +315,11 @@ export const EFFECTS = {
 
   crt: {
     frag: shaders.CRT,
-    // crt(src, { amount = 1, t = 0, bars = 1, barSize = 16 })  -  chromatic
-    // aberration + scanlines + vignette + `bars` simultaneous horizontal
-    // tear bars (0 for none), each `barSize` texels thick - capped at 8
-    // regardless of how high `bars` is set (see MAX_BARS in shaders.js).
-    // `t` is needed for the tear positions/timing to actually animate -
-    // pass the node's own `t`. barSize's default was 4 (a couple texels,
-    // easy to lose entirely against real content/scaling - the mechanism
-    // was firing correctly at that size, it just wasn't visible), bumped
-    // to 16 so a plain crt(src, { t }) actually shows a tear on-screen.
-    toUniforms: ({ amount = 1, t = 0, bars = 1, barSize = 16 } = {}) => ({
-      uAmount: amount,
-      uTime: t,
-      uBarCount: bars,
-      uBarSize: barSize,
-    }),
+    // crt(src, 1)  -  chromatic aberration + scanlines + vignette, scaled
+    // by amount (0 = off, 1 = full intensity, default). Used to also have
+    // a simulated glitch "tear bar" - dropped it, it never looked
+    // convincingly glitchy no matter how it was tuned.
+    toUniforms: (amount = 1) => ({ uAmount: amount }),
   },
 
   filmGrain: {

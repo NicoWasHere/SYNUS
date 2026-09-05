@@ -96,8 +96,12 @@ void main() {
 // gives 200 individually-dripping columns instead of one clean edge.
 // jitter (0..1) is how far from `line` each section's own line can land;
 // seed reshuffles which section gets which offset (same seed -> same
-// pattern every time, change it for a different one). Pass sections: 1
-// for the original single-shared-line behavior.
+// pattern every time, change it for a different one). Defaults to `t`
+// (pass your own node's t if you want it) - the pattern keeps subtly
+// reshuffling as t moves rather than freezing at whatever it started
+// at; pass a fixed seed yourself (e.g. seed: 0) for a still pattern
+// instead. Pass sections: 1 for the original single-shared-line
+// behavior.
 //
 // output: 'comp' (default) shows the untouched side as plain live src,
 // same as any other effect - 'trail' makes that side fully transparent
@@ -149,7 +153,8 @@ export class Melt {
       line = 0.6,
       sections = 200,
       jitter = 0.01,
-      seed = 0,
+      t = 0,
+      seed = t,
       thickness = 0.004,
       drip = 0.01,
       dieOff = 0.99,

@@ -620,46 +620,24 @@ void main() {
   outColor = vec4(uColor * luma, c.a);
 }`;
 
-// A tiny cheap hash, reused by both CRT (for its per-band glitch offset)
-// and FilmGrain (for its per-pixel noise) - not the same shape as
-// Noise.js's actual value-noise generator, this is just meant to look
-// like static/dirt, not smooth clouds.
+// A tiny cheap hash, used by FilmGrain for its per-pixel noise - not the
+// same shape as Noise.js's actual value-noise generator, this is just
+// meant to look like static/dirt, not smooth clouds.
 const HASH = `
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 `;
 
 // Glitchy CRT: chromatic aberration (R/G/B sampled with a slight x
-// offset), horizontal scanlines, a vignette, and `uBarCount` simultaneous
-// horizontal tear bars (each `uBarSize` texels thick, uv.x kicked
-// sideways for anything inside one) - an explicit count/size per tick,
-// not a per-row probability roll, so "0 bars" is really none and "1 bar"
-// is really exactly one. MAX_BARS caps the loop at compile time (GLSL
-// needs a constant upper bound); uBarCount can still be 0..anything, the
-// loop just breaks early once it's satisfied.
-const MAX_BARS = 8;
-
-export const CRT = `${HEADER}${SAMPLE_CLAMPED}${HASH}
+// offset), horizontal scanlines, and a vignette. Used to also have a
+// simulated horizontal "tear bar" glitch (uv.x kicked sideways in a band
+// or two per tick) - dropped it: the effect never read as convincingly
+// "glitchy" regardless of tuning, just a source of confusion.
+export const CRT = `${HEADER}${SAMPLE_CLAMPED}
 uniform sampler2D uSrc;
-uniform vec2 uTexel;
 uniform float uAmount; // 0 = off, 1 = full intensity (default)
-uniform float uTime;
-uniform float uBarCount; // how many simultaneous tear bars this tick (capped at ${MAX_BARS})
-uniform float uBarSize;  // each bar's thickness, in texels
 
 void main() {
   vec2 uv = vUv;
-  float glitchStep = floor(uTime * 6.0);
-  float barThickness = uBarSize * uTexel.y;
-
-  for (int i = 0; i < ${MAX_BARS}; i++) {
-    if (float(i) >= uBarCount) break;
-    float seed = float(i) * 17.0 + glitchStep * 100.0;
-    float barY = hash(vec2(seed, 1.0));
-    if (abs(uv.y - barY) < barThickness * 0.5) {
-      float dir = hash(vec2(seed, 2.0)) - 0.5;
-      uv.x += dir * 0.3 * uAmount;
-    }
-  }
 
   float aberration = 0.004 * uAmount;
   float r = sampleClamped(uSrc, uv + vec2(aberration, 0.0)).r;

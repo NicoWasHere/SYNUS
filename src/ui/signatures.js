@@ -233,13 +233,15 @@ export const SIGNATURES = {
   Melt: {
     ctor: "new Melt(filter = 'linear')",
     tick:
-      "melt.tick(src, { axis = 'y', line = 0.6, sections = 200, jitter = 0.01, seed = 0,\n" +
+      "melt.tick(src, { axis = 'y', line = 0.6, sections = 200, jitter = 0.01, t = 0, seed = t,\n" +
       "                  thickness = 0.004, drip = 0.01, dieOff = 0.99, output = 'comp' })\n" +
       "// axis: 'y' picks a horizontal line, 'x' a vertical one - line is its 0..1 position along that axis\n" +
       '// fake pixel sorting: feeds that single row/column back into itself every tick, sliding `drip`\n' +
       '// further away and fading by `dieOff` each time - animate `line` yourself for a wandering source\n' +
       '// sections: splits the CROSS axis into that many independently-drifting drips instead of one\n' +
-      '// shared line - jitter (0..1) is how far each section\'s own line can land from `line`, seed reshuffles which\n' +
+      '// shared line - jitter (0..1) is how far each section\'s own line can land from `line`\n' +
+      '// seed defaults to t (pass your own node\'s t), so the pattern keeps subtly reshuffling as t moves -\n' +
+      '// pass a fixed seed yourself (e.g. seed: 0) for a still pattern instead\n' +
       "// output: 'comp' (default) shows the untouched side as plain src - 'trail' makes it transparent,\n" +
       '// returning just the drip on its own to composite yourself',
   },
@@ -291,9 +293,8 @@ export const SIGNATURES = {
   CRT: {
     ctor: 'new CRT()',
     tick:
-      'crt.tick(src, { amount = 1, t = 0, bars = 1, barSize = 4 })\n' +
-      '// chromatic aberration + scanlines + vignette + `bars` simultaneous tear bars (0 = none),\n' +
-      '// each barSize texels thick (capped at 8 bars). t animates the tear positions/timing',
+      'crt.tick(src, 1)  // amount: 0 = off, 1 = full intensity (default)\n' +
+      '// chromatic aberration + scanlines + vignette',
   },
   FilmGrain: {
     ctor: 'new FilmGrain()',
