@@ -26,3 +26,28 @@ export function disposeState(state) {
     }
   }
 }
+
+// disposeNewInstances(state, keysBefore) - frees only the useInstances()
+// entries that were CREATED SINCE `keysBefore` was snapshotted (a plain
+// Set of state._instances' own keys, taken before some tentative work
+// happened), leaving anything that already existed at that point
+// completely untouched. Used by graph.js's applyAndValidate() to clean
+// up after a rolled-back trial tick: a node surviving the rollback keeps
+// every instance it already had (its shader programs, canvases, etc. -
+// exactly the persistence useInstances exists to provide across an
+// ordinary edit), but anything the trial's (ultimately rejected) code
+// freshly allocated - a brand-new use(X, ...) call that only existed in
+// the code being rolled back - needs to be freed rather than silently
+// leaked as unreachable GPU/media resources.
+export function disposeNewInstances(state, keysBefore) {
+  if (!state || !state._instances) return;
+  for (const key of Object.keys(state._instances)) {
+    if (keysBefore && keysBefore.has(key)) continue;
+    try {
+      state._instances[key].dispose?.();
+    } catch (e) {
+      console.error('disposeNewInstances: failed to dispose an instance', e);
+    }
+    delete state._instances[key];
+  }
+}

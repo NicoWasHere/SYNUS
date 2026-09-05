@@ -253,6 +253,15 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   const code = document.createElement('code');
   pre.appendChild(code);
 
+  // Highlights an arbitrary [start,end) char-offset span - not just
+  // whole lines like backdropLayer above - over whatever showErrors()
+  // (main.js) currently considers wrong: an auto-fixed typo, a validate-
+  // before-swap rejection, or an ordinary per-node runtime error. Sits
+  // right after `pre` (below the textarea, above the highlighted text)
+  // so its tinted boxes read as "around" the flagged source.
+  const highlightLayer = document.createElement('div');
+  highlightLayer.className = 'highlight-layer';
+
   const textarea = document.createElement('textarea');
   textarea.className = 'code-input';
   textarea.spellcheck = false;
@@ -289,7 +298,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // handler below to fill in the top match without re-deriving it.
   let activeUseCompletion = null;
 
-  wrap.append(backdropLayer, pre, textarea, previewLayer, signatureTip, useAutocomplete);
+  wrap.append(backdropLayer, pre, highlightLayer, textarea, previewLayer, signatureTip, useAutocomplete);
   parent.appendChild(wrap);
 
   function highlight() {
@@ -333,6 +342,52 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     const col = pos - (before.lastIndexOf('\n') + 1);
     el.style.top = `${lineTop(line) + EDITOR_METRICS.lineHeight + 2}px`;
     el.style.left = `${EDITOR_METRICS.paddingLeft + col * EDITOR_METRICS.charWidth}px`;
+  }
+
+  // Same offset -> line/column math as positionPopupAtCaret above, just
+  // for an arbitrary [start,end) range instead of a single caret point.
+  function offsetToLineCol(pos) {
+    const before = textarea.value.slice(0, pos);
+    const line = (before.match(/\n/g) || []).length;
+    const col = pos - (before.lastIndexOf('\n') + 1);
+    return { line, col };
+  }
+
+  function addHighlightBox(kind, line, col, len) {
+    const box = document.createElement('div');
+    box.className = `highlight-box kind-${kind}`;
+    box.style.top = `${lineTop(line)}px`;
+    box.style.left = `${EDITOR_METRICS.paddingLeft + col * EDITOR_METRICS.charWidth}px`;
+    box.style.width = `${Math.max(1, len) * EDITOR_METRICS.charWidth}px`;
+    box.style.height = `${EDITOR_METRICS.lineHeight}px`;
+    highlightLayer.appendChild(box);
+  }
+
+  function clearHighlights() {
+    highlightLayer.innerHTML = '';
+  }
+
+  // showHighlights(ranges) - ranges: [{ kind: 'warning'|'error', start, end }].
+  // A span crossing multiple lines gets one box per visual line it
+  // touches (a single absolutely-positioned div can't bend around a
+  // line wrap the way a real text-selection highlight can). Called by
+  // main.js's showErrors() every time its own entries actually change -
+  // see clearHighlights() below for why nothing here needs its own timer.
+  function showHighlights(ranges) {
+    clearHighlights();
+    const text = textarea.value;
+    const lines = text.split('\n');
+    for (const { kind, start, end } of ranges) {
+      const from = offsetToLineCol(start);
+      const to = offsetToLineCol(Math.max(end, start + 1));
+      if (from.line === to.line) {
+        addHighlightBox(kind, from.line, from.col, to.col - from.col);
+      } else {
+        addHighlightBox(kind, from.line, from.col, (lines[from.line] || '').length - from.col);
+        for (let l = from.line + 1; l < to.line; l++) addHighlightBox(kind, l, 0, (lines[l] || '').length);
+        addHighlightBox(kind, to.line, 0, to.col);
+      }
+    }
   }
 
   // Shows/hides whichever popup (if either) applies at the caret -
@@ -389,6 +444,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     textarea.style.height = `${textarea.scrollHeight}px`;
     previewLayer.style.height = textarea.style.height;
     backdropLayer.style.height = textarea.style.height;
+    highlightLayer.style.height = textarea.style.height;
   }
 
   // Replaces [from, to) with `replacement` via execCommand('insertText') -
@@ -790,6 +846,13 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     resize();
     updateLineBackdrops();
     updateSignatureTip();
+    // Any local edit makes every existing highlight's offsets stale
+    // (even one typed character shifts everything after it) - clear
+    // immediately rather than leaving a highlight box pointing at the
+    // wrong text. showErrors() (main.js) re-establishes it, correctly
+    // repositioned, only once something actually changes again (the
+    // next send/reload) - see showHighlights()'s own comment.
+    clearHighlights();
     onDocChanged(textarea.value);
     // tryExpandLoad opens a file picker, which the browser only allows
     // in direct response to a real user gesture ("transient activation")
@@ -820,6 +883,30 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
 
   function send() {
     onSend(textarea.value);
+  }
+
+  // Swaps the ENTIRE document for `fixedSource` - used by main.js's send()
+  // right after the prepatch auto-fixer (ui/node-parser.js's
+  // scanAndFixNodeSource) rewrites the text, so what's actually sent (and
+  // left in the editor afterward) is the corrected version, not what was
+  // originally typed.
+  //
+  // Deliberately NOT routed through replaceRange()'s execCommand path,
+  // unlike every other text-changing shortcut in this file - a full-
+  // document replaceRange(0, textarea.value.length, ...) called from
+  // inside the Send button's own click handler was observed to silently
+  // no-op (execCommand('insertText') returning truthy without actually
+  // changing the textarea's value at all), even though the exact same
+  // call works fine from an ordinary script/microtask context. Direct
+  // assignment sidesteps that unreliable legacy API entirely - a full-
+  // document swap doesn't need execCommand's fine-grained undo-stack
+  // preservation as delicately as a small in-place edit does anyway;
+  // the auto-fix is already its own distinct, undoable action via the
+  // browser's native undo on this value change.
+  function replaceSource(fixedSource) {
+    textarea.value = fixedSource;
+    textarea.setSelectionRange(fixedSource.length, fixedSource.length);
+    handleChange();
   }
 
   textarea.addEventListener('input', handleChange);
@@ -930,6 +1017,8 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     previewLayer,
     getValue: () => textarea.value,
     send,
+    replaceSource,
+    showHighlights,
     textarea, // so main.js can tell when focus is "actively typing code" (see keyPulse's own doc comment)
   };
 }

@@ -51,6 +51,22 @@ export function disposeAsciiForNode(nodeId) {
   }
 }
 
+// snapshotAsciiKeys()/disposeNewAsciiKeys(before) - same rollback pairing
+// as instance.js's snapshotParticleKeys()/disposeNewParticleKeys(), see
+// there for why this cache needs its own (call-site-keyed, not
+// useInstances-based) cleanup path.
+export function snapshotAsciiKeys() {
+  return new Set(asciiCache.keys());
+}
+
+export function disposeNewAsciiKeys(before) {
+  for (const [key, canvas] of asciiCache) {
+    if (before.has(key)) continue;
+    canvas.dispose();
+    asciiCache.delete(key);
+  }
+}
+
 export function ascii2d(source, cols, rows, options = {}) {
   const { channel = 'lightness', ramp = RAMP, color = 'white', fontSize } = options;
 

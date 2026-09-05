@@ -20,7 +20,7 @@ import { ControlPanel } from './ui/control-panel.js';
 import { ResetPanel } from './ui/reset-panel.js';
 import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
-import { parseNodeBlocks, offsetToLine } from './ui/node-parser.js';
+import { parseNodeBlocks, offsetToLine, scanAndFixNodeSource } from './ui/node-parser.js';
 import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
 
 const appEl = document.getElementById('app');
@@ -99,17 +99,19 @@ const clock = new Clock();
 // invisible, not the (already-working) fallback itself.
 let loadError = null;
 
-// nodeId -> character offset of its own block, from the same parse
-// updatePreviewPositions() below already does - lets a per-node error's
-// own id jump the editor straight to it (see jumpToNode()) instead of
-// making you scroll/search a big file to find which node an id belongs to.
-let nodeOffsets = new Map();
+// nodeId -> { start, end } character offsets of its own block, from the
+// same parse updatePreviewPositions() below already does - lets a
+// per-node error's own id jump the editor straight to it (see
+// jumpToNode()) instead of making you scroll/search a big file to find
+// which node an id belongs to, and lets showErrors() highlight that
+// node's whole span for any error/warning attributed to it.
+let nodeSpans = new Map();
 
 function jumpToNode(nodeId) {
-  const offset = nodeOffsets.get(nodeId);
-  if (offset == null) return;
+  const span = nodeSpans.get(nodeId);
+  if (!span) return;
   view.textarea.focus();
-  view.textarea.setSelectionRange(offset, offset);
+  view.textarea.setSelectionRange(span.start, span.start);
 }
 
 // showErrors() runs every tick, but only actually touches the DOM when
@@ -120,11 +122,37 @@ function jumpToNode(nodeId) {
 // panel's json-tree cards hit earlier - see ui/json-tree.js's own note).
 let lastErrorsKey = null;
 
+// autoFixWarnings: set fresh in send() every time the prepatch scanner
+// (ui/node-parser.js's scanAndFixNodeSource) finds something to fix -
+// same "warning" tier as a per-node error, but a lighter kind() so it
+// reads as "this ran, here's what I changed" rather than a failure.
+let autoFixWarnings = [];
+
+// Every entry showErrors() displays - a load failure, a validate-before-
+// swap rejection (see graph.js's applyAndValidate), an ordinary per-node
+// runtime error, or an auto-fix warning - gets its source span
+// highlighted in the editor too, not just listed in the panel: per
+// explicit request, this isn't special-cased to the two auto-fixed
+// typos. An auto-fix warning already knows its own precise range
+// (fixedRange, from the scanner); anything else attributed to a node id
+// uses that node's whole block span from nodeSpans. A file-level
+// loadError (id null - e.g. a raw SyntaxError with no reliable node
+// attribution) has nothing to highlight and is simply left out of the
+// overlay, same as before.
+function highlightRangeFor(entry) {
+  if (entry.range) return { kind: entry.kind, start: entry.range[0], end: entry.range[1] };
+  const span = entry.id && nodeSpans.get(entry.id);
+  return span ? { kind: entry.kind, start: span.start, end: span.end } : null;
+}
+
 function showErrors() {
   const entries = [];
-  if (loadError) entries.push({ id: null, text: loadError });
+  if (loadError) entries.push({ id: null, text: loadError, kind: 'error' });
+  for (const w of autoFixWarnings) {
+    entries.push({ id: w.nodeId, text: w.message, kind: 'warning', range: w.fixedRange });
+  }
   for (const node of graph.nodes.values()) {
-    if (node.error) entries.push({ id: node.id, text: node.error });
+    if (node.error) entries.push({ id: node.id, text: node.error, kind: 'error' });
   }
   const key = JSON.stringify(entries);
   if (key === lastErrorsKey) return;
@@ -138,6 +166,7 @@ function showErrors() {
       line.textContent = entry.text;
     } else {
       line.className = 'error-line';
+      line.classList.toggle('warning-line', entry.kind === 'warning');
       line.title = 'Click to jump to this node';
       const id = document.createElement('span');
       id.className = 'error-node-id';
@@ -147,6 +176,8 @@ function showErrors() {
     }
     errorsEl.appendChild(line);
   }
+
+  view.showHighlights(entries.map(highlightRangeFor).filter(Boolean));
 }
 
 // Recomputes where each node's preview card should float, from the
@@ -156,23 +187,31 @@ function showErrors() {
 // node *lives in the file* only changes on edit.
 function updatePreviewPositions(source) {
   const positions = new Map();
-  nodeOffsets = new Map();
+  nodeSpans = new Map();
   for (const block of parseNodeBlocks(source)) {
     positions.set(block.id, lineTop(offsetToLine(source, block.start)));
-    nodeOffsets.set(block.id, block.start);
+    nodeSpans.set(block.id, { start: block.start, end: block.end });
   }
   previewPanel.setPositions(positions);
   resetPanel.setPositions(positions); // same per-node positions - see ui/reset-panel.js
 }
 
 // Returns whether the load succeeded, so callers (flashSendResult below)
-// can give feedback - on failure the graph is left exactly as it was
-// (syncFromProject is never reached), same as any other tick where a
-// node throws: the last good state just keeps running.
+// can give feedback - on failure the graph is left exactly as it was:
+// either loadProject() itself threw (a syntax/import error - applyAndValidate
+// is never reached at all), or applyAndValidate() ran a real trial tick
+// of the new patch and found something newly broken, in which case it
+// already rolled the graph back to exactly its pre-call state on its own
+// - either way, the last good patch just keeps running/rendering.
 async function reload(source) {
   try {
     const projectNodes = await loadProject(gl, source);
-    graph.syncFromProject(projectNodes);
+    const result = graph.applyAndValidate(projectNodes, performance.now() / 1000, clock.frame);
+    if (!result.ok) {
+      const detail = result.errors.map((e) => `${e.id}: ${e.message}`).join('; ');
+      loadError = `patch reverted to previous working version - ${detail}`;
+      return false;
+    }
     updatePreviewPositions(source);
     loadError = null;
     markNewPatch(); // newPatch reads true for the one tick right after this - see lib/patch-flag.js
@@ -201,7 +240,17 @@ function flashSendResult(ok) {
   flashTimer = setTimeout(() => sendBtn.classList.remove('flash-ok', 'flash-error'), 600);
 }
 
+// Prepatch step: scanAndFixNodeSource() runs ONLY on hand-typed text sent
+// through this exact function - never on reload()/sendCompiledPatch()
+// directly (the mobile block-patch mode's own compiler-generated JS
+// can't have these two typos in the first place, so it skips this).
 async function send(text) {
+  const { fixedSource, warnings } = scanAndFixNodeSource(text);
+  if (warnings.length) {
+    view.replaceSource(fixedSource); // just the text swap - showErrors() owns highlighting, see below
+    text = fixedSource;
+  }
+  autoFixWarnings = warnings; // folded into showErrors()'s panel + highlight overlay on the next tick
   const ok = await reload(text);
   if (ok) setPatchInUrl(text); // keep the URL's own shareable copy in sync with whatever's actually running
   flashSendResult(ok);

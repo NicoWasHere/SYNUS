@@ -299,6 +299,26 @@ export function disposeParticlesForNode(nodeId) {
   }
 }
 
+// snapshotParticleKeys()/disposeNewParticleKeys(before) - same rollback
+// pairing as dispose-state.js's disposeNewInstances(), for this cache
+// specifically (keyed by call site, not through useInstances, so a
+// node's own state-based rollback can't see it - see the comment above).
+// Used by graph.js's applyAndValidate(): snapshot before a trial tick,
+// and if that trial gets rolled back, dispose only whatever particle2d()
+// calls the (rejected) trial code freshly created, leaving every
+// instance that already existed untouched.
+export function snapshotParticleKeys() {
+  return new Set(particleCache.keys());
+}
+
+export function disposeNewParticleKeys(before) {
+  for (const [key, inst] of particleCache) {
+    if (before.has(key)) continue;
+    inst.dispose();
+    particleCache.delete(key);
+  }
+}
+
 export function particle2d(source, cols, rows, stamp, options = {}) {
   const { t = 0, min = 0.15, shakeSpeed = 0, shakeAmount = 0.006, channel = 'lightness' } = options;
 
