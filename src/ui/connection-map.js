@@ -1,4 +1,9 @@
-// createConnectionMap({ parent }) - a toggleable, read-only diagram of
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const BOX_W = 130; // must match .connection-map/.cm-box's own CSS width
+const ROUTE_LANE_W = 10; // horizontal gap between parallel routed lines
+const ROUTE_MARGIN = 24; // how far the innermost routed line juts left of the column
+
+// createConnectionMap({ parent }) - an always-on, read-only diagram of
 // every node and its `in: {...}` wiring, appended into the SAME
 // previewLayer node preview cards float in (see ui/preview-panel.js) -
 // pinned to the bottom of it (see index.html's .connection-map: right
@@ -9,19 +14,40 @@
 // in one column ordered by dependency depth (a node with no in-graph
 // inputs first, anything wired to it below that, and so on - the same
 // `sourceKey.split('.')[0]` parsing graph.js's own cookOrder() already
-// does to walk the dependency graph), with a thin connector line drawn
-// between each real `in` wire once box positions are known. Not a real
-// node editor - no dragging, no editing - click a box to jump to that
-// node in the code (see main.js's jumpToNode(), passed in as onNodeClick).
+// does to walk the dependency graph).
+//
+// Most wires just feed the box directly below them - those draw as a
+// plain straight connector (see .cm-edge). A wire that instead skips
+// past a node (its target isn't the very next one down) or runs
+// backwards (a feedback loop, where the target is ABOVE the source) is
+// drawn differently: routed out to the LEFT of the column with an
+// arrowhead, so it can never be mistaken for "connects to the node it
+// happens to be drawn across." Not a real node editor - no dragging, no
+// editing - click a box to jump to that node in the code (see main.js's
+// jumpToNode(), passed in as onNodeClick).
 export function createConnectionMap({ parent }) {
   const dom = document.createElement('div');
   dom.className = 'connection-map';
-  dom.hidden = true;
   parent.appendChild(dom);
 
-  function setVisible(visible) {
-    dom.hidden = !visible;
-  }
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'cm-routed');
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  const marker = document.createElementNS(SVG_NS, 'marker');
+  marker.setAttribute('id', 'cm-arrow');
+  marker.setAttribute('viewBox', '0 0 10 10');
+  marker.setAttribute('refX', '8');
+  marker.setAttribute('refY', '5');
+  marker.setAttribute('markerWidth', '6');
+  marker.setAttribute('markerHeight', '6');
+  marker.setAttribute('orient', 'auto-start-reverse');
+  const arrowHead = document.createElementNS(SVG_NS, 'path');
+  arrowHead.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+  arrowHead.setAttribute('class', 'cm-arrowhead');
+  marker.appendChild(arrowHead);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+  dom.appendChild(svg);
 
   // depth(id) - longest dependency path from a node with no (in-graph)
   // inputs, memoized across this one update() call. `seen` guards against
@@ -49,17 +75,16 @@ export function createConnectionMap({ parent }) {
     return (id) => depth(id, new Set());
   }
 
-  // update(graph, onNodeClick) - cheap to call every tick (main.js does)
-  // since it bails out immediately while hidden; only actually rebuilds
-  // the diagram while toggled on, so the map always reflects the CURRENT
-  // graph/errors the moment you open it rather than whatever it looked
-  // like the last time it was visible.
+  // update(graph, onNodeClick) - called every tick (main.js does); cheap
+  // enough (a handful of DOM nodes for any patch this project's actually
+  // used with) to just always rebuild rather than trying to diff.
   function update(graph, onNodeClick) {
-    if (dom.hidden) return;
-    dom.innerHTML = '';
+    dom.querySelectorAll('.cm-box, .cm-edge').forEach((el) => el.remove());
+    while (svg.lastChild !== defs) svg.removeChild(svg.lastChild);
 
     const depth = makeDepthFn(graph);
     const ids = [...graph.nodes.keys()].sort((a, b) => depth(a) - depth(b));
+    const orderOf = new Map(ids.map((id, i) => [id, i]));
 
     const boxes = new Map(); // id -> box element, for the edge pass below
     for (const id of ids) {
@@ -77,13 +102,12 @@ export function createConnectionMap({ parent }) {
       boxes.set(id, box);
     }
 
-    // Edges: a plain vertical connector between each real `in` wire's two
-    // boxes - offsetTop/offsetHeight only mean anything once the boxes
-    // above are actually in the DOM, so this has to be a second pass.
-    // Depth ordering means a source box is normally directly above its
-    // target, but not always adjacent (a value can skip several depths
-    // downstream) - a plain vertical line still reads fine either way,
-    // just taller.
+    // Two passes over the same edges: plain adjacent-forward connectors
+    // first (cheap div lines, unchanged from before), then everything
+    // else routed to the left via the svg - collected here so each
+    // routed line can be given its own lane (routedCount) without two
+    // unrelated loops racing to assign lanes.
+    const routed = [];
     for (const id of ids) {
       const node = graph.nodes.get(id);
       const toBox = boxes.get(id);
@@ -91,17 +115,54 @@ export function createConnectionMap({ parent }) {
         const srcId = sourceKey.split('.')[0];
         const fromBox = boxes.get(srcId);
         if (!fromBox) continue; // wired to something outside the current graph (e.g. a typo) - nothing to draw
-        const top = fromBox.offsetTop + fromBox.offsetHeight;
-        const height = toBox.offsetTop - top;
-        if (height <= 0) continue;
-        const line = document.createElement('div');
-        line.className = 'cm-edge';
-        line.style.top = `${top}px`;
-        line.style.height = `${height}px`;
-        dom.appendChild(line);
+        const sourceOrder = orderOf.get(srcId);
+        const targetOrder = orderOf.get(id);
+        if (targetOrder === sourceOrder + 1) {
+          const top = fromBox.offsetTop + fromBox.offsetHeight;
+          const height = toBox.offsetTop - top;
+          if (height <= 0) continue;
+          const line = document.createElement('div');
+          line.className = 'cm-edge';
+          line.style.top = `${top}px`;
+          line.style.height = `${height}px`;
+          dom.appendChild(line);
+        } else {
+          routed.push({ fromBox, toBox });
+        }
       }
     }
+
+    if (routed.length === 0) {
+      svg.setAttribute('width', '0');
+      svg.setAttribute('height', '0');
+      return;
+    }
+
+    const domHeight = dom.scrollHeight;
+    const leftExtent = ROUTE_MARGIN + (routed.length - 1) * ROUTE_LANE_W + 12;
+    svg.setAttribute('width', `${leftExtent + BOX_W}`);
+    svg.setAttribute('height', `${domHeight}`);
+    svg.style.left = `${-leftExtent}px`;
+    // Local x=0 in this svg lines up with the column's own left edge
+    // (dom-local x=0) - every path point below is expressed relative to
+    // that, then shifted by boxLeftX so it lands correctly once the svg
+    // itself is offset left by leftExtent.
+    const boxLeftX = leftExtent;
+
+    routed.forEach(({ fromBox, toBox }, i) => {
+      const jut = ROUTE_MARGIN + i * ROUTE_LANE_W;
+      const fromY = fromBox.offsetTop + fromBox.offsetHeight / 2;
+      const toY = toBox.offsetTop + toBox.offsetHeight / 2;
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute(
+        'd',
+        `M ${boxLeftX} ${fromY} H ${boxLeftX - jut} V ${toY} H ${boxLeftX - 4}`
+      );
+      path.setAttribute('class', 'cm-routed-edge');
+      path.setAttribute('marker-end', 'url(#cm-arrow)');
+      svg.appendChild(path);
+    });
   }
 
-  return { dom, setVisible, update };
+  return { dom, update };
 }

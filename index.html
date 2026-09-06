@@ -19,13 +19,14 @@
       #errors { padding: 8px 16px; color: #f66; font-size: 12px; white-space: pre-wrap;
                 border-top: 1px solid #333; min-height: 1.2em; }
 
-      /* Toggleable read-only node-connection map (see ui/connection-map.js)
+      /* Always-on read-only node-connection map (see ui/connection-map.js)
          - lives in the SAME floating column node preview cards do
          (view.previewLayer - see .node-preview below), pinned to the
          BOTTOM of it so it always sits below every node's own preview
          card rather than competing with them for space, growing upward
-         as more nodes are added. Hidden (via the `hidden` attribute,
-         toggled from the checkbox below) until switched on. */
+         as more nodes are added. overflow: visible (the default - not
+         overridden here) is what lets the routed-edge svg below actually
+         extend past this column's own left edge. */
       .connection-map {
         position: absolute;
         right: 8px;
@@ -39,9 +40,12 @@
       /* Same bare outline-and-label look as a node's own floating preview
          card (.node-preview below) and the SAME width, so this reads as
          a diagram of the code laid out in that same visual language,
-         not a competing UI element of its own. */
+         not a competing UI element of its own. z-index over .cm-routed
+         below (a sibling absolutely-positioned svg) so a routed line
+         passing near a box never paints on top of it. */
       .cm-box {
         position: relative;
+        z-index: 1;
         box-sizing: border-box;
         padding: 6px;
         border: 1px solid rgba(255, 255, 255, 0.3);
@@ -53,8 +57,11 @@
       .cm-box-error { border-color: #d9534f; }
       .cm-box-bypassed { border-color: #e0a030; }
       .cm-box-label { font-size: 10px; color: #999; }
-      /* Connects two boxes' real `in` wiring - positioned absolute so it
-         doesn't disturb the column's own flex flow above. */
+      /* Connects two ADJACENT, forward-flowing nodes (the common case -
+         see ui/connection-map.js) - a plain straight line needs no
+         arrowhead since the top-to-bottom order already shows direction.
+         Positioned absolute so it doesn't disturb the column's own flex
+         flow above. */
       .cm-edge {
         position: absolute;
         left: 50%;
@@ -62,6 +69,21 @@
         background: rgba(255, 255, 255, 0.3);
         pointer-events: none;
       }
+      /* Everything ELSE - a wire that skips past a node instead of
+         feeding the very next one, or runs backwards (a feedback loop) -
+         routed out to the left of the column instead of a straight line
+         that would either cut across an unrelated box or (for a
+         backwards wire) be impossible to read as a plain line at all.
+         Extends past the column's own left edge (negative `left`, wider
+         than 130px) - see ui/connection-map.js for the matching offset. */
+      .cm-routed {
+        position: absolute;
+        top: 0;
+        pointer-events: none;
+        overflow: visible;
+      }
+      .cm-routed-edge { stroke: rgba(255, 255, 255, 0.45); stroke-width: 1.5; fill: none; }
+      .cm-arrowhead { fill: rgba(255, 255, 255, 0.45); }
       /* Solid background only while there's actually something to show
          (see main.js's showErrors(), which toggles this class) - an empty
          errors strip shouldn't sit there as a visible dark bar. */
@@ -118,24 +140,6 @@
       }
       #mode-toggle:hover { background: #2c2c2c; }
 
-      /* Same right column as mode-toggle/fullscreen-btn, below the tps/t
-         counters - a plain checkbox (not a button) toggling
-         .connection-map below (see ui/connection-map.js). */
-      #map-toggle-label {
-        position: fixed;
-        top: 154px;
-        right: 10px;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #ccc;
-        font-family: inherit;
-        font-size: 14px;
-        cursor: pointer;
-        user-select: none;
-      }
-      #map-toggle { cursor: pointer; }
 
       /* Block mode: a touch node-graph editor (src/ui-mobile/) as an
          alternate authoring surface alongside the code editor, not a
@@ -477,23 +481,30 @@
       }
       .fold-box {
         position: absolute;
-        left: 8px;
-        right: 8px;
+        left: 0;
+        right: 0;
         box-sizing: border-box;
-        border-radius: 4px;
-        border: 1px solid #3a3a3a;
+        /* Matches #editor-mount's own background exactly (not a
+           distinctly-colored panel) - covering the hidden lines this way
+           reads as "there's nothing here" rather than "a box was drawn
+           over this," the same reason it has no border either. */
         background: #1a1a1a;
         pointer-events: auto;
         cursor: pointer;
-        display: flex;
-        align-items: flex-start;
-        overflow: hidden;
       }
-      .fold-box:hover { border-color: #666; }
+      /* Same font/size/line-height as the real code behind it
+         (EDITOR_METRICS in editor.js: 13px/20.8px 'SF Mono' at a 16px
+         left padding) and the exact color/style this project's own
+         Prism theme already uses for a comment (.token.comment below) -
+         a folded node's code reads as one dim, italic "elided" line
+         sitting in the code's own flow, not a separate UI label. */
       .fold-label {
-        margin: 3px 8px;
-        color: #888;
-        font: 12px 'SF Mono', Menlo, Consolas, monospace;
+        display: block;
+        padding-left: 16px;
+        line-height: 20.8px;
+        font: 13px 'SF Mono', Menlo, Consolas, monospace;
+        font-style: italic;
+        color: #6a7280;
         white-space: nowrap;
       }
 
@@ -734,10 +745,6 @@
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
-    <label id="map-toggle-label" title="Toggle a read-only node-connection map">
-      <input id="map-toggle" type="checkbox" />
-      Map
-    </label>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>

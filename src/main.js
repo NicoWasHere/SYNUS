@@ -358,11 +358,6 @@ const previewPanel = new PreviewPanel(view.previewLayer);
 const controlPanel = new ControlPanel(view.previewLayer, previewPanel);
 const nodeToolbar = new NodeToolbar(view.previewLayer, graph, { onToggleCollapse: updateFolds });
 const connectionMap = createConnectionMap({ parent: view.previewLayer });
-const mapToggleCheckbox = document.getElementById('map-toggle');
-mapToggleCheckbox.addEventListener('change', () => {
-  connectionMap.setVisible(mapToggleCheckbox.checked);
-  connectionMap.update(graph, jumpToNode);
-});
 
 modeToggle.addEventListener('click', () => {
   const isPerform = appEl.classList.toggle('perform-mode');
@@ -578,7 +573,7 @@ function updateTps() {
     graph.tick(t, tickCount); // newPatch reads true for exactly this one tick, if a send just succeeded
     clearNewPatch();
     showErrors();
-    connectionMap.update(graph, jumpToNode); // no-op while hidden - see connection-map.js
+    connectionMap.update(graph, jumpToNode); // always on - see connection-map.js
     updatePreviews();
     updateControls();
     updateTps();
