@@ -415,21 +415,18 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // showFolds(ranges) - ranges: [{ start, end, label, onClick }], one per
   // currently-collapsed node (main.js's updateFolds() rebuilds this list
   // from ui/node-toolbar.js's own collapsed Set every time positions/
-  // folds might need refreshing). Only covers the lines STRICTLY BETWEEN
-  // start and end (both already point at just inside the code() body's
-  // braces - see node-parser.js's findCodeBodySpan) - the FIRST line
-  // (start's own line, the `code(...) {` header) and the LAST line (end's
-  // own line, the closing `}`) are deliberately left uncovered, so what's
-  // collapsed still visibly reads as "this node's code, folded" rather
-  // than swallowing the very braces that prove where it is. A body that's
-  // entirely on one line (nothing between those two boundary lines) has
-  // nothing worth folding and is silently skipped.
+  // folds might need refreshing). `start` already points at the very
+  // START of the `code(...) {` line (see node-parser.js's findFoldSpan),
+  // so the box covers that line onward; `end` points at the node's own
+  // closing `}`, whose own line is deliberately left uncovered so the
+  // brace that proves where the node ends stays visible. A fold with
+  // nothing between those two lines is silently skipped (nothing to hide).
   function showFolds(ranges) {
     clearFolds();
     for (const { start, end, label, onClick } of ranges) {
       const from = offsetToLineCol(start);
       const to = offsetToLineCol(Math.max(end, start + 1));
-      const firstHidden = from.line + 1;
+      const firstHidden = from.line;
       const lastHidden = to.line - 1;
       if (firstHidden > lastHidden) continue;
       const box = document.createElement('div');
@@ -977,9 +974,15 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       return;
     }
 
-    // Shift+Alt+F re-indents the whole file - same convention VS Code
-    // and most other editors use for "format document".
-    if (e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f')) {
+    // Ctrl+Shift+F re-indents the whole file. Checks e.code (the
+    // physical key) rather than e.key (the character it produces) -
+    // e.key gets remapped by modifier/layout combinations in ways that
+    // made the previous Shift+Alt+F binding unreliable (Alt in particular
+    // is prone to both producing a different e.key on non-US layouts AND
+    // being intercepted by the OS itself, e.g. Windows' own Alt+Shift
+    // language-switch shortcut) - e.code stays 'KeyF' regardless of any
+    // of that.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyF') {
       e.preventDefault();
       formatDocument();
       return;

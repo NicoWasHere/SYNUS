@@ -20,31 +20,46 @@
                 border-top: 1px solid #333; min-height: 1.2em; }
 
       /* Toggleable read-only node-connection map (see ui/connection-map.js)
-         - covers the whole editor pane rather than living inline in the
-         scrolling code (a real box-and-arrow diagram needs its own space
-         to lay out in, not a strip squeezed between lines of text).
-         #editor-pane needs its own position: relative for this absolute
-         overlay to anchor to just that pane, not the whole page. */
-      #editor-pane { position: relative; }
+         - lives in the SAME floating column node preview cards do
+         (view.previewLayer - see .node-preview below), pinned to the
+         BOTTOM of it so it always sits below every node's own preview
+         card rather than competing with them for space, growing upward
+         as more nodes are added. Hidden (via the `hidden` attribute,
+         toggled from the checkbox below) until switched on. */
       .connection-map {
         position: absolute;
-        inset: 0;
-        z-index: 20;
-        background: rgba(17, 17, 17, 0.97);
-        overflow: auto;
+        right: 8px;
+        bottom: 0;
+        width: 130px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        pointer-events: auto;
       }
-      .connection-map svg { display: block; }
-      .cm-edge { stroke: #555; stroke-width: 1.5; fill: none; }
-      .cm-arrowhead { fill: #555; }
-      .cm-node { cursor: pointer; }
-      .cm-box { fill: #222; stroke: #4a90d9; stroke-width: 1.5; }
-      .cm-node:hover .cm-box { fill: #2c2c2c; }
-      .cm-box-error { stroke: #d9534f; }
-      .cm-box-bypassed { stroke: #e0a030; }
-      .cm-node text {
-        fill: #ddd;
-        font: 12px 'SF Mono', Menlo, Consolas, monospace;
-        text-anchor: middle;
+      /* Same bare outline-and-label look as a node's own floating preview
+         card (.node-preview below) and the SAME width, so this reads as
+         a diagram of the code laid out in that same visual language,
+         not a competing UI element of its own. */
+      .cm-box {
+        position: relative;
+        box-sizing: border-box;
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        font-family: 'SF Mono', Menlo, monospace;
+        cursor: pointer;
+      }
+      .cm-box:hover { border-color: rgba(255, 255, 255, 0.6); }
+      .cm-box-error { border-color: #d9534f; }
+      .cm-box-bypassed { border-color: #e0a030; }
+      .cm-box-label { font-size: 10px; color: #999; }
+      /* Connects two boxes' real `in` wiring - positioned absolute so it
+         doesn't disturb the column's own flex flow above. */
+      .cm-edge {
+        position: absolute;
+        left: 50%;
+        width: 1px;
+        background: rgba(255, 255, 255, 0.3);
         pointer-events: none;
       }
       /* Solid background only while there's actually something to show
@@ -104,23 +119,23 @@
       #mode-toggle:hover { background: #2c2c2c; }
 
       /* Same right column as mode-toggle/fullscreen-btn, below the tps/t
-         counters - toggles .connection-map below (see ui/connection-map.js). */
-      #map-toggle {
+         counters - a plain checkbox (not a button) toggling
+         .connection-map below (see ui/connection-map.js). */
+      #map-toggle-label {
         position: fixed;
         top: 154px;
         right: 10px;
         z-index: 100;
-        background: #222;
-        color: #eee;
-        border: 1px solid #444;
-        padding: 10px 14px;
-        border-radius: 4px;
-        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #ccc;
         font-family: inherit;
         font-size: 14px;
+        cursor: pointer;
+        user-select: none;
       }
-      #map-toggle:hover { background: #2c2c2c; }
-      #map-toggle.active { border-color: #4a90d9; color: #4a90d9; }
+      #map-toggle { cursor: pointer; }
 
       /* Block mode: a touch node-graph editor (src/ui-mobile/) as an
          alternate authoring surface alongside the code editor, not a
@@ -202,25 +217,6 @@
         line-height: 1;
       }
       #reset-patch-btn:hover { background: #2c2c2c; }
-
-      /* Stacked below reset-patch-btn, same left column - re-indents the
-         whole file (ui/format.js) via a click instead of only the
-         Shift+Alt+F keybinding. */
-      #format-btn {
-        position: fixed;
-        top: 154px;
-        left: 10px;
-        z-index: 100;
-        background: #222;
-        color: #eee;
-        border: 1px solid #444;
-        padding: 10px 14px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 14px;
-      }
-      #format-btn:hover { background: #2c2c2c; }
       #send-btn.flash-ok { background: #1f5c2e; border-color: #2fae52; }
       #send-btn.flash-error { background: #5c1f1f; border-color: #ae2f2f; }
       #tps-counter {
@@ -736,10 +732,12 @@
   <body>
     <button id="mode-toggle" type="button">Perform mode</button>
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
-    <button id="format-btn" type="button" title="Re-indent the whole file (Shift+Alt+F)">Format</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
-    <button id="map-toggle" type="button" title="Toggle a read-only node-connection map">Map</button>
+    <label id="map-toggle-label" title="Toggle a read-only node-connection map">
+      <input id="map-toggle" type="checkbox" />
+      Map
+    </label>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>

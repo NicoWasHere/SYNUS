@@ -21,7 +21,7 @@ import { NodeToolbar } from './ui/node-toolbar.js';
 import { createConnectionMap } from './ui/connection-map.js';
 import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
-import { parseNodeBlocks, offsetToLine, findCodeBodySpan } from './ui/node-parser.js';
+import { parseNodeBlocks, offsetToLine, findFoldSpan } from './ui/node-parser.js';
 import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
 
 const appEl = document.getElementById('app');
@@ -205,24 +205,27 @@ function updatePreviewPositions(source) {
 // collapsed Set) - called whenever nodeSpans might have shifted
 // (updatePreviewPositions, i.e. every keystroke) and right after the
 // collapse button itself is clicked (NodeToolbar's onToggleCollapse).
-// Input/output KEYS come straight from the live graph (node.inputs/
-// node.lastOutputs - already known, no text-parsing needed for either),
-// not from re-deriving them from source text.
+// findFoldSpan only covers the code() METHOD itself (see node-parser.js) -
+// the node's key and its real `in: {...}` stay as ordinary, untouched,
+// visible text, so what's collapsed reads like `delay: { in: {...},
+// [folded] },` rather than hiding the very thing you'd want to see at a
+// glance. The fold's own label shows output keys (node.lastOutputs -
+// already known live, no text-parsing needed) since that's the one thing
+// NOT otherwise visible once code() is folded away.
 function updateFolds() {
   const source = view.getValue();
   const ranges = [];
   for (const id of nodeToolbar.collapsed) {
     const span = nodeSpans.get(id);
     if (!span) continue;
-    const bodySpan = findCodeBodySpan(source, span);
-    if (!bodySpan) continue;
+    const foldSpan = findFoldSpan(source, span);
+    if (!foldSpan) continue;
     const node = graph.nodes.get(id);
-    const inKeys = node ? Object.keys(node.inputs) : [];
     const outKeys = node ? Object.keys(node.lastOutputs) : [];
-    const label = `▸ in: ${inKeys.join(', ') || '(none)'}  →  out: ${outKeys.join(', ') || '?'}`;
+    const label = `code(…) { … }  →  out: ${outKeys.join(', ') || '?'}`;
     ranges.push({
-      start: bodySpan.start,
-      end: bodySpan.end,
+      start: foldSpan.start,
+      end: foldSpan.end,
       label,
       onClick: () => {
         nodeToolbar.uncollapse(id);
@@ -330,7 +333,6 @@ const view = createEditor({
 });
 
 sendBtn.addEventListener('click', () => view.send());
-document.getElementById('format-btn').addEventListener('click', () => view.formatDocument());
 
 // mouse()/keyPulse() globals (see lib/input-state.js) - mouse position
 // is normalized against the render pane's own box (so it always means
@@ -355,11 +357,10 @@ window.addEventListener('keyup', (e) => {
 const previewPanel = new PreviewPanel(view.previewLayer);
 const controlPanel = new ControlPanel(view.previewLayer, previewPanel);
 const nodeToolbar = new NodeToolbar(view.previewLayer, graph, { onToggleCollapse: updateFolds });
-const connectionMap = createConnectionMap({ parent: document.getElementById('editor-pane') });
-const mapToggleBtn = document.getElementById('map-toggle');
-mapToggleBtn.addEventListener('click', () => {
-  const visible = connectionMap.toggle();
-  mapToggleBtn.classList.toggle('active', visible);
+const connectionMap = createConnectionMap({ parent: view.previewLayer });
+const mapToggleCheckbox = document.getElementById('map-toggle');
+mapToggleCheckbox.addEventListener('change', () => {
+  connectionMap.setVisible(mapToggleCheckbox.checked);
   connectionMap.update(graph, jumpToNode);
 });
 

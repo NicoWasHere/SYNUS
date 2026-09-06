@@ -1,46 +1,26 @@
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const COL_W = 170;
-const ROW_H = 46;
-const BOX_W = 140;
-const BOX_H = 28;
-
-// createConnectionMap({ parent }) - a toggleable, read-only SVG overlay
-// (hidden by default) showing every node as a box and every `in: {...}`
-// wire as an arrow, auto-laid-out into columns by dependency depth (a
-// node with no in-graph inputs sits in column 0; anything wired to it
-// sits one column to the right, and so on) - the same
+// createConnectionMap({ parent }) - a toggleable, read-only diagram of
+// every node and its `in: {...}` wiring, appended into the SAME
+// previewLayer node preview cards float in (see ui/preview-panel.js) -
+// pinned to the bottom of it (see index.html's .connection-map: right
+// 8px/bottom 0, same column preview cards anchor to) so it always sits
+// below every node's own preview card rather than competing with them
+// for space. Each node is one plain box styled exactly like a preview
+// card (.node-preview) - a bare outline and a label, no fill - stacked
+// in one column ordered by dependency depth (a node with no in-graph
+// inputs first, anything wired to it below that, and so on - the same
 // `sourceKey.split('.')[0]` parsing graph.js's own cookOrder() already
-// does to walk the dependency graph, just for drawing instead of
-// execution order. Not a real node editor - no dragging, no editing -
-// click a box to jump to that node in the code (see main.js's
-// jumpToNode(), passed in as onNodeClick).
+// does to walk the dependency graph), with a thin connector line drawn
+// between each real `in` wire once box positions are known. Not a real
+// node editor - no dragging, no editing - click a box to jump to that
+// node in the code (see main.js's jumpToNode(), passed in as onNodeClick).
 export function createConnectionMap({ parent }) {
   const dom = document.createElement('div');
   dom.className = 'connection-map';
   dom.hidden = true;
-
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  const defs = document.createElementNS(SVG_NS, 'defs');
-  const marker = document.createElementNS(SVG_NS, 'marker');
-  marker.setAttribute('id', 'cm-arrow');
-  marker.setAttribute('viewBox', '0 0 10 10');
-  marker.setAttribute('refX', '9');
-  marker.setAttribute('refY', '5');
-  marker.setAttribute('markerWidth', '6');
-  marker.setAttribute('markerHeight', '6');
-  marker.setAttribute('orient', 'auto-start-reverse');
-  const arrowHead = document.createElementNS(SVG_NS, 'path');
-  arrowHead.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-  arrowHead.setAttribute('class', 'cm-arrowhead');
-  marker.appendChild(arrowHead);
-  defs.appendChild(marker);
-  svg.appendChild(defs);
-  dom.appendChild(svg);
   parent.appendChild(dom);
 
-  function toggle() {
-    dom.hidden = !dom.hidden;
-    return !dom.hidden;
+  function setVisible(visible) {
+    dom.hidden = !visible;
   }
 
   // depth(id) - longest dependency path from a node with no (in-graph)
@@ -71,71 +51,57 @@ export function createConnectionMap({ parent }) {
 
   // update(graph, onNodeClick) - cheap to call every tick (main.js does)
   // since it bails out immediately while hidden; only actually rebuilds
-  // the SVG while toggled on, so the map always reflects the CURRENT
+  // the diagram while toggled on, so the map always reflects the CURRENT
   // graph/errors the moment you open it rather than whatever it looked
   // like the last time it was visible.
   function update(graph, onNodeClick) {
     if (dom.hidden) return;
-    while (svg.lastChild !== defs) svg.removeChild(svg.lastChild);
+    dom.innerHTML = '';
 
     const depth = makeDepthFn(graph);
-    const ids = [...graph.nodes.keys()];
-    const columns = new Map(); // depth -> [ids in that column]
-    for (const id of ids) {
-      const d = depth(id);
-      if (!columns.has(d)) columns.set(d, []);
-      columns.get(d).push(id);
-    }
+    const ids = [...graph.nodes.keys()].sort((a, b) => depth(a) - depth(b));
 
-    const positions = new Map(); // id -> { x, y } (box's own top-left)
-    for (const [d, colIds] of columns) {
-      colIds.forEach((id, row) => positions.set(id, { x: 12 + d * COL_W, y: 12 + row * ROW_H }));
-    }
-
-    const maxCol = Math.max(0, ...columns.keys());
-    const maxRows = Math.max(1, ...[...columns.values()].map((a) => a.length));
-    svg.setAttribute('viewBox', `0 0 ${24 + (maxCol + 1) * COL_W} ${24 + maxRows * ROW_H}`);
-
-    // Edges first, so node boxes draw on top of the lines feeding into them.
+    const boxes = new Map(); // id -> box element, for the edge pass below
     for (const id of ids) {
       const node = graph.nodes.get(id);
-      const to = positions.get(id);
+      const box = document.createElement('div');
+      box.className = 'cm-box';
+      if (node.error) box.classList.add('cm-box-error');
+      else if (node.bypassed) box.classList.add('cm-box-bypassed');
+      const label = document.createElement('div');
+      label.className = 'cm-box-label';
+      label.textContent = id;
+      box.appendChild(label);
+      box.addEventListener('click', () => onNodeClick(id));
+      dom.appendChild(box);
+      boxes.set(id, box);
+    }
+
+    // Edges: a plain vertical connector between each real `in` wire's two
+    // boxes - offsetTop/offsetHeight only mean anything once the boxes
+    // above are actually in the DOM, so this has to be a second pass.
+    // Depth ordering means a source box is normally directly above its
+    // target, but not always adjacent (a value can skip several depths
+    // downstream) - a plain vertical line still reads fine either way,
+    // just taller.
+    for (const id of ids) {
+      const node = graph.nodes.get(id);
+      const toBox = boxes.get(id);
       for (const sourceKey of Object.values(node.inputs)) {
         const srcId = sourceKey.split('.')[0];
-        const from = positions.get(srcId);
-        if (!from) continue; // wired to something outside the current graph (e.g. a typo) - nothing to draw
-        const line = document.createElementNS(SVG_NS, 'line');
-        line.setAttribute('class', 'cm-edge');
-        line.setAttribute('x1', from.x + BOX_W);
-        line.setAttribute('y1', from.y + BOX_H / 2);
-        line.setAttribute('x2', to.x);
-        line.setAttribute('y2', to.y + BOX_H / 2);
-        line.setAttribute('marker-end', 'url(#cm-arrow)');
-        svg.appendChild(line);
+        const fromBox = boxes.get(srcId);
+        if (!fromBox) continue; // wired to something outside the current graph (e.g. a typo) - nothing to draw
+        const top = fromBox.offsetTop + fromBox.offsetHeight;
+        const height = toBox.offsetTop - top;
+        if (height <= 0) continue;
+        const line = document.createElement('div');
+        line.className = 'cm-edge';
+        line.style.top = `${top}px`;
+        line.style.height = `${height}px`;
+        dom.appendChild(line);
       }
-    }
-
-    for (const id of ids) {
-      const node = graph.nodes.get(id);
-      const { x, y } = positions.get(id);
-      const g = document.createElementNS(SVG_NS, 'g');
-      g.setAttribute('class', 'cm-node');
-      const rect = document.createElementNS(SVG_NS, 'rect');
-      rect.setAttribute('x', x);
-      rect.setAttribute('y', y);
-      rect.setAttribute('width', BOX_W);
-      rect.setAttribute('height', BOX_H);
-      rect.setAttribute('rx', 4);
-      rect.setAttribute('class', node.error ? 'cm-box cm-box-error' : node.bypassed ? 'cm-box cm-box-bypassed' : 'cm-box');
-      const text = document.createElementNS(SVG_NS, 'text');
-      text.setAttribute('x', x + BOX_W / 2);
-      text.setAttribute('y', y + BOX_H / 2 + 4);
-      text.textContent = id;
-      g.append(rect, text);
-      g.addEventListener('click', () => onNodeClick(id));
-      svg.appendChild(g);
     }
   }
 
-  return { dom, toggle, update };
+  return { dom, setVisible, update };
 }
