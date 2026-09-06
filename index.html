@@ -465,49 +465,6 @@
         background: rgba(217, 83, 79, 0.15);
       }
 
-      /* Covers a collapsed node's code body (see editor.js's showFolds(),
-         ui/node-toolbar.js's ▸/▾ button) - unlike highlight-layer above,
-         this sits ABOVE the textarea (z-index 3 > 2) so an individual
-         .fold-box can actually receive the click that expands it back;
-         the layer itself stays pointer-events: none so every OTHER
-         (uncollapsed) part of the textarea keeps working normally. */
-      .fold-layer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 3;
-        pointer-events: none;
-      }
-      .fold-box {
-        position: absolute;
-        left: 0;
-        right: 0;
-        box-sizing: border-box;
-        /* Matches #editor-mount's own background exactly (not a
-           distinctly-colored panel) - covering the hidden lines this way
-           reads as "there's nothing here" rather than "a box was drawn
-           over this," the same reason it has no border either. */
-        background: #1a1a1a;
-        pointer-events: auto;
-        cursor: pointer;
-      }
-      /* Same font/size/line-height as the real code behind it
-         (EDITOR_METRICS in editor.js: 13px/20.8px 'SF Mono' at a 16px
-         left padding) and the exact color/style this project's own
-         Prism theme already uses for a comment (.token.comment below) -
-         a folded node's code reads as one dim, italic "elided" line
-         sitting in the code's own flow, not a separate UI label. */
-      .fold-label {
-        display: block;
-        padding-left: 16px;
-        line-height: 20.8px;
-        font: 13px 'SF Mono', Menlo, Consolas, monospace;
-        font-style: italic;
-        color: #6a7280;
-        white-space: nowrap;
-      }
-
       /* custom token palette - deliberately not a stock Prism theme */
       .token.comment { color: #6a7280; font-style: italic; }
       .token.punctuation { color: #9aa0a6; }

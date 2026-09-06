@@ -107,26 +107,45 @@ export function parseNodeBlocks(source) {
 }
 
 // findFoldSpan(source, nodeSpan) - within one node's own {start, end} span
-// (from parseNodeBlocks above), finds the { start, end } to visually fold
-// away for ui/node-toolbar.js's collapse toggle: from the START of the
-// line the `code(...) {` method begins on, through (but not including)
-// the node's own final closing `}`. That leaves the node's key, its
-// `in: {...}` (however many lines that actually takes), and the closing
-// `},` all as real, untouched, visible text - only the code() METHOD
-// ITSELF (signature and all, the "implementation," not the "interface")
-// gets covered. Every node template in this project writes its method
-// literally as `code(`, so a plain textual search finds it - no brace-
-// depth scan needed here (unlike parseNodeBlocks/findInSpan) since this
-// only needs to find where a LINE begins, not match a closing brace.
-// Returns null if this node has no code() method to speak of.
+// (from parseNodeBlocks above), finds the { start, end } of just its
+// code(...) { ... } BODY - the characters strictly between the opening
+// brace and its matching closing brace. main.js's collapseNode()/
+// expandNode() use this to do a REAL, VS Code-style fold: the body text
+// is actually removed from the document (replaced with a short `…`) and
+// restored later by re-finding this exact same span again (now spanning
+// the placeholder instead) - not an overlay sitting on top of untouched
+// text, since a plain textarea can't hide arbitrary lines without
+// changing what's actually there. `code(inputs, state, t) {` and the
+// closing `}` themselves stay outside the returned span (and so
+// untouched) - collapsing only ever removes the IMPLEMENTATION, never
+// the signature that identifies what's collapsed. The closing brace
+// still needs a skipOpaqueSpan-aware depth scan (not just a textual
+// search) since the body can (and for a GLSL/Hydra node, does) contain
+// template-literal braces of its own. Returns null if this node has no
+// code() method to speak of (malformed, or unbalanced).
 export function findFoldSpan(source, nodeSpan) {
   const text = source.slice(nodeSpan.start, nodeSpan.end);
-  const header = /\bcode\s*\(/.exec(text);
+  const header = /\bcode\s*\([^)]*\)\s*\{/.exec(text);
   if (!header) return null;
 
-  let start = nodeSpan.start + header.index;
-  while (start > nodeSpan.start && source[start - 1] !== '\n') start--;
-  return { start, end: nodeSpan.end - 1 }; // nodeSpan.end - 1 = index of the node's own closing '}'
+  const bodyStart = nodeSpan.start + header.index + header[0].length; // just past the opening '{'
+  let depth = 1;
+  let i = bodyStart;
+  while (i < nodeSpan.end && depth > 0) {
+    const skipped = skipOpaqueSpan(source, i);
+    if (skipped != null) {
+      i = skipped;
+      continue;
+    }
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+    i++;
+  }
+  if (depth !== 0) return null;
+  return { start: bodyStart, end: i };
 }
 
 // Character offset -> 0-indexed line number, for positioning a node's

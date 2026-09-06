@@ -197,43 +197,77 @@ function updatePreviewPositions(source) {
   }
   previewPanel.setPositions(positions);
   nodeToolbar.setPositions(positions); // same per-node positions - see ui/node-toolbar.js
-  updateFolds();
+  // A node that disappeared from the file entirely (deleted/renamed)
+  // can't still be collapsed - drop any leftover original body text for
+  // it too, same pruning nodeToolbar.setPositions() already does for its
+  // own `collapsed` Set.
+  for (const id of [...foldedBodies.keys()]) {
+    if (!nodeSpans.has(id)) foldedBodies.delete(id);
+  }
 }
 
-// Rebuilds the fold overlay (see ui/editor.js's showFolds()) from
-// whichever nodes are currently collapsed (ui/node-toolbar.js's own
-// collapsed Set) - called whenever nodeSpans might have shifted
-// (updatePreviewPositions, i.e. every keystroke) and right after the
-// collapse button itself is clicked (NodeToolbar's onToggleCollapse).
-// findFoldSpan only covers the code() METHOD itself (see node-parser.js) -
-// the node's key and its real `in: {...}` stay as ordinary, untouched,
-// visible text, so what's collapsed reads like `delay: { in: {...},
-// [folded] },` rather than hiding the very thing you'd want to see at a
-// glance. The fold's own label shows output keys (node.lastOutputs -
-// already known live, no text-parsing needed) since that's the one thing
-// NOT otherwise visible once code() is folded away.
-function updateFolds() {
-  const source = view.getValue();
-  const ranges = [];
-  for (const id of nodeToolbar.collapsed) {
+// collapseNode(id)/expandNode(id) - a REAL, VS Code-style fold: the
+// code() body is actually removed from the document (replaced with a
+// short `…`) rather than an overlay drawn on top of untouched text - a
+// plain textarea has no way to hide arbitrary lines without changing
+// what's actually there, and covering them with a box (an earlier
+// version of this) still took up all that vertical space, which wasn't
+// what was wanted. foldedBodies remembers the real removed text per
+// node id so expandNode() can restore it byte-for-byte; getExpandedSource()
+// below is what keeps this safe to actually SEND a patch with something
+// collapsed - see there.
+const foldedBodies = new Map(); // nodeId -> the real code() body text that got folded away
+
+function collapseNode(id) {
+  const span = nodeSpans.get(id);
+  if (!span) return;
+  const foldSpan = findFoldSpan(view.getValue(), span);
+  if (!foldSpan) return;
+  foldedBodies.set(id, view.getValue().slice(foldSpan.start, foldSpan.end));
+  view.replaceRange(foldSpan.start, foldSpan.end, '…');
+}
+
+function expandNode(id) {
+  const span = nodeSpans.get(id);
+  const original = foldedBodies.get(id);
+  if (!span || original == null) return;
+  // Re-finds the SAME span the exact same way collapseNode() did - it
+  // now spans the '…' placeholder instead of the original body, since
+  // nodeSpans/the document were both updated the moment collapseNode()'s
+  // replaceRange() ran (same live-reparse-on-every-keystroke pipeline
+  // every other edit already goes through).
+  const foldSpan = findFoldSpan(view.getValue(), span);
+  if (!foldSpan) return;
+  view.replaceRange(foldSpan.start, foldSpan.end, original);
+  foldedBodies.delete(id);
+}
+
+// getExpandedSource(source) - `source` is whatever's actually DISPLAYED
+// (possibly with one or more folds collapsed to '…') - this rebuilds the
+// REAL, fully-expanded text by splicing each folded node's remembered
+// original body back in, WITHOUT touching the displayed textarea itself,
+// so folds stay collapsed in the editor across a Send exactly like they
+// would in a real editor (VS Code doesn't unfold your code just because
+// you saved). Used by send() below - a patch must never actually be
+// compiled/shared with real code silently missing.
+//
+// All the fold spans are located FIRST, against this one unmodified
+// `source` snapshot, then applied back-to-front (highest offset first) -
+// otherwise splicing the first (lowest-offset) replacement would shift
+// every later offset out from under the next one.
+function getExpandedSource(source) {
+  if (foldedBodies.size === 0) return source;
+  const replacements = [];
+  for (const [id, original] of foldedBodies) {
     const span = nodeSpans.get(id);
     if (!span) continue;
     const foldSpan = findFoldSpan(source, span);
-    if (!foldSpan) continue;
-    const node = graph.nodes.get(id);
-    const outKeys = node ? Object.keys(node.lastOutputs) : [];
-    const label = `code(…) { … }  →  out: ${outKeys.join(', ') || '?'}`;
-    ranges.push({
-      start: foldSpan.start,
-      end: foldSpan.end,
-      label,
-      onClick: () => {
-        nodeToolbar.uncollapse(id);
-        updateFolds();
-      },
-    });
+    if (foldSpan) replacements.push({ start: foldSpan.start, end: foldSpan.end, text: original });
   }
-  view.showFolds(ranges);
+  replacements.sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const r of replacements) out = out.slice(0, r.start) + r.text + out.slice(r.end);
+  return out;
 }
 
 // Returns whether the load succeeded, so callers (flashSendResult below)
@@ -284,7 +318,12 @@ function flashSendResult(ok) {
   flashTimer = setTimeout(() => sendBtn.classList.remove('flash-ok', 'flash-error'), 600);
 }
 
-async function send(text) {
+async function send(rawText) {
+  // rawText is whatever's actually DISPLAYED - possibly with one or more
+  // node bodies folded away (see collapseNode() above). Expand those back
+  // to the real code FIRST - a patch must never actually run (or be
+  // shared via the URL) with real code silently replaced by '…'.
+  const text = getExpandedSource(rawText);
   const ok = await reload(text);
   if (ok) setPatchInUrl(text); // keep the URL's own shareable copy in sync with whatever's actually running
   flashSendResult(ok);
@@ -356,7 +395,9 @@ window.addEventListener('keyup', (e) => {
 
 const previewPanel = new PreviewPanel(view.previewLayer);
 const controlPanel = new ControlPanel(view.previewLayer, previewPanel);
-const nodeToolbar = new NodeToolbar(view.previewLayer, graph, { onToggleCollapse: updateFolds });
+const nodeToolbar = new NodeToolbar(view.previewLayer, graph, {
+  onToggleCollapse: (id, collapsing) => (collapsing ? collapseNode(id) : expandNode(id)),
+});
 const connectionMap = createConnectionMap({ parent: view.previewLayer });
 
 modeToggle.addEventListener('click', () => {

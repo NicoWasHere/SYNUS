@@ -12,10 +12,11 @@ import { disposeAsciiForNode } from '../core/lib/ascii.js';
 //   ⏸/▶ bypass - toggles node.bypassed (read directly by graph.js's
 //      tick(), see there) - a LIVE toggle, takes effect the very next
 //      tick, no resend needed. Not part of the saved patch text.
-//   ▸/▾ collapse - purely a local UI Set (this.collapsed), read by
-//      main.js to decide which nodes' code bodies to visually fold (see
-//      ui/editor.js's foldLayer/showFolds) - doesn't touch the graph at
-//      all, just how much of the node's own code is drawn on screen.
+//   ▸/▾ collapse - a REAL fold, VS Code-style: main.js's collapseNode()/
+//      expandNode() actually remove/restore the code() body's own text
+//      (see node-parser.js's findFoldSpan) rather than drawing something
+//      on top of it. this.collapsed is just this row's own local memory
+//      of which ids are currently folded, for the button's own icon.
 export class NodeToolbar {
   constructor(parent, graph, { onToggleCollapse } = {}) {
     this.parent = parent;
@@ -28,15 +29,6 @@ export class NodeToolbar {
 
   isCollapsed(id) {
     return this.collapsed.has(id);
-  }
-
-  // Lets a caller (main.js's fold-box click handler - see
-  // updateFolds()) collapse a node back off from OUTSIDE this row's own
-  // ▸/▾ button, keeping this.collapsed and that button's icon in sync
-  // without reaching into the private _refresh() directly.
-  uncollapse(id) {
-    this.collapsed.delete(id);
-    this._refresh(id);
   }
 
   setPositions(positions) {
@@ -113,12 +105,13 @@ export class NodeToolbar {
     const collapseBtn = document.createElement('button');
     collapseBtn.type = 'button';
     collapseBtn.className = 'node-toolbar-btn';
-    collapseBtn.title = `Collapse ${id}'s code down to just its in/out shape`;
+    collapseBtn.title = `Fold/unfold ${id}'s code() body`;
     collapseBtn.addEventListener('click', () => {
-      if (this.collapsed.has(id)) this.collapsed.delete(id);
-      else this.collapsed.add(id);
+      const collapsing = !this.collapsed.has(id);
+      if (collapsing) this.collapsed.add(id);
+      else this.collapsed.delete(id);
       this._refresh(id);
-      this.onToggleCollapse?.();
+      this.onToggleCollapse?.(id, collapsing);
     });
 
     row.append(resetBtn, bypassBtn, collapseBtn);

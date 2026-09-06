@@ -264,20 +264,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   const highlightLayer = document.createElement('div');
   highlightLayer.className = 'highlight-layer';
 
-  // Covers a node's collapsed code body (see ui/node-toolbar.js's ▸/▾
-  // button and main.js's updateFolds()) with an opaque box + a one-line
-  // "in: ... -> out: ..." label, entirely REPLACING that region's own
-  // real text ONLY VISUALLY - the textarea's actual value is completely
-  // untouched, same non-destructive philosophy as highlightLayer above.
-  // Unlike highlightLayer (pointer-events: none throughout, purely
-  // decorative), each individual .fold-box opts back INTO pointer events
-  // so clicking it can toggle the fold back off - sits ABOVE the
-  // textarea in the stacking order (see index.html's z-index) so it can
-  // actually receive that click instead of the textarea (which owns
-  // every OTHER click) swallowing it first.
-  const foldLayer = document.createElement('div');
-  foldLayer.className = 'fold-layer';
-
   const textarea = document.createElement('textarea');
   textarea.className = 'code-input';
   textarea.spellcheck = false;
@@ -314,7 +300,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // handler below to fill in the top match without re-deriving it.
   let activeUseCompletion = null;
 
-  wrap.append(backdropLayer, pre, highlightLayer, textarea, foldLayer, previewLayer, signatureTip, useAutocomplete);
+  wrap.append(backdropLayer, pre, highlightLayer, textarea, previewLayer, signatureTip, useAutocomplete);
   parent.appendChild(wrap);
 
   function highlight() {
@@ -408,40 +394,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     }
   }
 
-  function clearFolds() {
-    foldLayer.innerHTML = '';
-  }
-
-  // showFolds(ranges) - ranges: [{ start, end, label, onClick }], one per
-  // currently-collapsed node (main.js's updateFolds() rebuilds this list
-  // from ui/node-toolbar.js's own collapsed Set every time positions/
-  // folds might need refreshing). `start` already points at the very
-  // START of the `code(...) {` line (see node-parser.js's findFoldSpan),
-  // so the box covers that line onward; `end` points at the node's own
-  // closing `}`, whose own line is deliberately left uncovered so the
-  // brace that proves where the node ends stays visible. A fold with
-  // nothing between those two lines is silently skipped (nothing to hide).
-  function showFolds(ranges) {
-    clearFolds();
-    for (const { start, end, label, onClick } of ranges) {
-      const from = offsetToLineCol(start);
-      const to = offsetToLineCol(Math.max(end, start + 1));
-      const firstHidden = from.line;
-      const lastHidden = to.line - 1;
-      if (firstHidden > lastHidden) continue;
-      const box = document.createElement('div');
-      box.className = 'fold-box';
-      box.style.top = `${lineTop(firstHidden)}px`;
-      box.style.height = `${(lastHidden - firstHidden + 1) * EDITOR_METRICS.lineHeight}px`;
-      const labelEl = document.createElement('span');
-      labelEl.className = 'fold-label';
-      labelEl.textContent = label;
-      box.appendChild(labelEl);
-      box.addEventListener('click', onClick);
-      foldLayer.appendChild(box);
-    }
-  }
-
   // Shows/hides whichever popup (if either) applies at the caret -
   // findUseCompletions()/findColormapCompletions() (live autocomplete
   // while typing use(...)'s first argument, or COLORMAPS.<name>) take
@@ -497,7 +449,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     previewLayer.style.height = textarea.style.height;
     backdropLayer.style.height = textarea.style.height;
     highlightLayer.style.height = textarea.style.height;
-    foldLayer.style.height = textarea.style.height;
   }
 
   // Replaces [from, to) with `replacement` via execCommand('insertText') -
@@ -506,6 +457,15 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // splice only if execCommand is unavailable; that path has to drive the
   // render pipeline itself since no real 'input' event follows it.
   function replaceRange(from, to, replacement) {
+    // execCommand('insertText') only actually applies to whichever
+    // element currently has real focus - fine for every in-editor caller
+    // here (already typing in the focused textarea when triggered), but
+    // a caller reached from a toolbar button click (main.js's collapse/
+    // expand, formatDocument() below) would otherwise silently no-op,
+    // since clicking a <button> moves focus to that button first.
+    // Focusing here makes replaceRange work the same regardless of what
+    // triggered it.
+    textarea.focus();
     const text = textarea.value;
     textarea.setSelectionRange(from, to);
     const inserted = document.execCommand && document.execCommand('insertText', false, replacement);
@@ -523,14 +483,6 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
   // formatting itself changes) - good enough to not feel disorienting,
   // without needing a full position-mapping between old and new text.
   function formatDocument() {
-    // execCommand('insertText') (inside replaceRange below) only actually
-    // applies to whichever element currently has real focus - fine when
-    // this is triggered by the Shift+Alt+F keydown (already firing FROM
-    // the focused textarea), but a toolbar button click moves focus to
-    // that BUTTON first, which would otherwise make the whole reformat
-    // silently a no-op. Focusing here makes formatDocument() work the
-    // same regardless of which of those triggered it.
-    textarea.focus();
     const before = textarea.value.slice(0, textarea.selectionStart);
     const line = (before.match(/\n/g) || []).length;
     const formatted = formatSource(textarea.value);
@@ -1106,7 +1058,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     send,
     formatDocument,
     showHighlights,
-    showFolds,
+    replaceRange, // main.js's collapseNode()/expandNode() - see node-parser.js's findFoldSpan
     textarea, // so main.js can tell when focus is "actively typing code" (see keyPulse's own doc comment)
   };
 }
