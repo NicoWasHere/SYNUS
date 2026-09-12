@@ -27,6 +27,7 @@ out vec4 outColor;
 uniform sampler2D uSrc;
 uniform sampler2D uPrev;
 uniform float uAxis;      // 0 = horizontal line (pick a y), 1 = vertical line (pick an x)
+uniform float uDripSign;  // +1 or -1 - which side of the line drips, and which way (see Melt.tick()'s DIRECTIONS)
 uniform float uLine;      // 0..1 BASE position of the line along that axis
 uniform float uSections;  // how many independent segments to split the CROSS axis into (1 = one shared line, the old behavior)
 uniform float uJitter;    // 0..1 max random offset from uLine each section's own line gets
@@ -56,6 +57,13 @@ void main() {
   float rand = hash11(section + uSeed * 97.13);
   float lineHere = clamp(uLine + (rand * 2.0 - 1.0) * uJitter, 0.0, 1.0);
 
+  // Which side of the line is "away" (the drip zone) and which way the
+  // feedback samples both flip together with uDripSign (+1 or -1) - see
+  // Melt.tick()'s DIRECTIONS. At sign=+1 this is exactly "coord < lineHere",
+  // the original down/left behavior; sign=-1 flips it to "coord > lineHere"
+  // (up/right) without needing a whole separate branch structure.
+  float awayness = (lineHere - coord) * uDripSign;
+
   if (abs(coord - lineHere) <= uThickness) {
     // The strip itself - always THIS section's own line position, not
     // wherever in the (thin) band this exact pixel happens to fall, so
@@ -63,17 +71,15 @@ void main() {
     // smear of several adjacent ones.
     vec2 stripUv = uAxis > 0.5 ? vec2(lineHere, vUv.y) : vec2(vUv.x, lineHere);
     outColor = texture(uSrc, stripUv);
-  } else if (coord < lineHere) {
+  } else if (awayness > 0.0) {
     // The drip zone: this tick's trail is last tick's trail (uPrev, this
     // same shader's own previous output - see Melt.tick()'s feedback
     // texture below), sampled a little closer to the line than here, and
     // dimmed - so old content keeps sliding further away and fading with
     // every tick, exactly like Translate+decay inside a feedback loop,
-    // just baked into one pass instead of a chain of nodes. Below the
-    // line (lower vUv.y - this app's uv convention has y increasing
-    // upward) is "away" for a horizontal line, so a default axis: 'y'
-    // melt drips downward, matching how melting actually looks.
-    vec2 prevUv = uAxis > 0.5 ? vec2(vUv.x + uDrip, vUv.y) : vec2(vUv.x, vUv.y + uDrip);
+    // just baked into one pass instead of a chain of nodes.
+    float drip = uDrip * uDripSign;
+    vec2 prevUv = uAxis > 0.5 ? vec2(vUv.x + drip, vUv.y) : vec2(vUv.x, vUv.y + drip);
     outColor = texture(uPrev, prevUv) * uDieOff;
   } else {
     // The other side of the line - untouched, plain live src by default
@@ -84,6 +90,20 @@ void main() {
   }
 }`;
 
+// direction: 'down' (default) | 'up' | 'left' | 'right' - which way the
+// trail drips, same "pick a side" convention as Mirror's own `half`
+// option. 'down'/'up' both use a horizontal line (drip splits the frame
+// top/bottom); 'left'/'right' both use a vertical line (drip splits it
+// left/right) - line/sections/jitter all still measure along that same
+// line, only which side is "away" (and which way the feedback samples)
+// changes.
+const DIRECTIONS = {
+  down: { axis: 0, sign: 1 },
+  up: { axis: 0, sign: -1 },
+  left: { axis: 1, sign: 1 },
+  right: { axis: 1, sign: -1 },
+};
+
 // new Melt() inside a node's code(), or use(Melt) via useInstances.
 // tick(src, opts) - see MELT_FRAG above for what each option does. Try
 // animating `line` yourself (e.g. `line: 0.5 + Math.sin(t) * 0.3`) for a
@@ -92,8 +112,8 @@ void main() {
 //
 // sections splits the CROSS axis into that many independent segments,
 // each getting its own randomly-jittered line instead of one shared line
-// the whole width/height - e.g. axis: 'y', sections: 200 (the default)
-// gives 200 individually-dripping columns instead of one clean edge.
+// the whole width/height - e.g. direction: 'down', sections: 200 (the
+// default) gives 200 individually-dripping columns instead of one clean edge.
 // jitter (0..1) is how far from `line` each section's own line can land;
 // seed reshuffles which section gets which offset (same seed -> same
 // pattern every time, change it for a different one). Defaults to `t`
@@ -149,7 +169,7 @@ export class Melt {
   tick(
     src,
     {
-      axis = 'y',
+      direction = 'down',
       line = 0.6,
       sections = 200,
       jitter = 0.01,
@@ -166,11 +186,13 @@ export class Melt {
     const height = src.height || this.gl.canvas.height;
     this._ensureFeedback(width, height);
 
+    const { axis, sign } = DIRECTIONS[direction] ?? DIRECTIONS.down;
     const uPrev = this._hasFeedback ? { texture: this._feedbackTex, width, height } : src;
     this._pass.tick(MELT_FRAG, {
       uSrc: src,
       uPrev,
-      uAxis: axis === 'x' ? 1 : 0,
+      uAxis: axis,
+      uDripSign: sign,
       uLine: line,
       uSections: sections,
       uJitter: jitter,

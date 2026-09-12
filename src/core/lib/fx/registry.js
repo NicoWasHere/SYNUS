@@ -154,6 +154,18 @@ export const EFFECTS = {
     }),
   },
 
+  perspective: {
+    frag: shaders.PERSPECTIVE,
+    // perspective(src, edge = 'top', amount = 0.3)  -  edge: 'top' | 'bottom' | 'left' | 'right'
+    // (same pick-a-side convention as mirror's own `half`) - that edge narrows toward a point as
+    // amount goes 0 (no distortion) -> 1 (a full triangle). Everything outside the resulting
+    // trapezoid is transparent - composite it over something else (Composite/Mask/...).
+    toUniforms: (edge = 'top', amount = 0.3) => ({
+      uEdge: { top: 0, bottom: 1, left: 2, right: 3 }[edge] ?? 0,
+      uAmount: amount,
+    }),
+  },
+
   tile: {
     frag: shaders.TILE,
     // tile(src, { x: 2, y: 2 })  -  or tile(src, n) for both axes evenly

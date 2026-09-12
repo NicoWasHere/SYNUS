@@ -210,6 +210,32 @@ export const NODE_TEMPLATES = {
     "},",
   ].join('\n'),
 
+  // use(Text) - a batteries-included alternative to the $text$ template
+  // above for when you don't need hand-written ctx.* calls: real
+  // multi-line layout ('\n'-separated) and letter-spacing (kerning)
+  // built in, see lib/text.js. font just needs to already be loaded/
+  // available to the page (any web-safe name, or a web font you've
+  // loaded yourself via a <link>, same as $text$'s own ctx.font would
+  // need).
+  simple_text: () => [
+    "{",
+    "  in: {},",
+    "  code(inputs, state, t) {",
+    "    const use = useInstances(state);",
+    "    const label = use(Text);",
+    "    label.tick('wet\\ncarp', {",
+    "      font: 'sans-serif',",
+    "      size: 64,",
+    "      color: 'white',",
+    "      align: 'center',",
+    "      kerning: 0,",
+    "      lineHeight: 1.2,",
+    "    });",
+    "    return { screen: label };",
+    "  },",
+    "},",
+  ].join('\n'),
+
   // HTML/CSS instead of ctx.* drawing calls - see lib/html.js for how
   // (and where its real limits are: no cross-origin fonts/images inside
   // the HTML, and the texture updates one tick after the HTML changes,
@@ -324,22 +350,24 @@ export const NODE_TEMPLATES = {
   ].join('\n'),
 
   // Fake pixel sorting - a cheap "melting drip" instead of a real per-row
-  // sort (expensive, hard to do on a GPU at all). Picks one row (axis:
-  // 'y') or column (axis: 'x') and feeds it back into itself every tick,
-  // sliding a little further away (drip) and fading a little more
-  // (dieOff) each time. Defaults already give many independently-dripping
-  // sections (sections: 200), each starting from a slightly different
-  // (randomly jittered) point rather than one clean shared line. Animate
-  // `line` yourself for a wandering source - see lib/melt.js. output:
-  // 'trail' instead of the default 'comp' gets just the drip on its own
-  // (transparent elsewhere) if you'd rather composite it yourself.
+  // sort (expensive, hard to do on a GPU at all). Picks one row/column
+  // (direction: 'down' | 'up' | 'left' | 'right' - same "pick a side"
+  // convention as Mirror's own `half`) and feeds it back into itself
+  // every tick, sliding a little further away (drip) and fading a little
+  // more (dieOff) each time. Defaults already give many independently-
+  // dripping sections (sections: 200), each starting from a slightly
+  // different (randomly jittered) point rather than one clean shared
+  // line. Animate `line` yourself for a wandering source - see
+  // lib/melt.js. output: 'trail' instead of the default 'comp' gets just
+  // the drip on its own (transparent elsewhere) if you'd rather composite
+  // it yourself.
   melt: () => [
     "{",
     "  in: { src: 'other.screen' },",
     "  code(inputs, state, t) {",
     "    const use = useInstances(state);",
     "    let out = use(Melt).tick(inputs.src, {",
-    "      axis: 'y',",
+    "      direction: 'down',",
     "      line: 0.6 + Math.sin(t * 0.3) * 0.2, // wanders instead of sitting still",
     "      sections: 200,",
     "      jitter: 0.01,",

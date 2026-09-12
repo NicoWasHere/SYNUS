@@ -92,6 +92,7 @@ export const Threshold = FX.threshold;
 export const Edge = FX.edge;
 export const Emboss = FX.emboss;
 export const Mirror = FX.mirror;
+export const Perspective = FX.perspective;
 export const Tile = FX.tile;
 export const Kaleidoscope = FX.kaleidoscope;
 export const Modulate = FX.modulate;

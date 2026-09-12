@@ -20,6 +20,17 @@ export const SIGNATURES = {
   Canvas2D: {
     ctor: "new Canvas2D(width = screenSize(), height = screenSize(), filter = 'linear')  // filter: 'linear' | 'nearest'",
   },
+  Text: {
+    ctor: 'new Text(width = screenSize(), height = screenSize(), filter = \'linear\')',
+    tick:
+      "text.tick(str, { font = 'sans-serif', size = 64, weight = 400, color = 'white', align = 'center',\n" +
+      '  x = 0.5, y = 0.5, kerning = 0, lineHeight = 1.2 })\n' +
+      "// str can contain '\\n' for real multi-line layout - lineHeight spaces those lines (x size)\n" +
+      '// kerning: extra px between every character (canvas has no real per-pair kerning - this is\n' +
+      '// uniform letter-spacing, which is what most people mean by "kerning" anyway)\n' +
+      '// font just needs to already be loaded/available to the page - a web-safe name, or a web\n' +
+      '// font you\'ve loaded yourself (e.g. a Google Fonts <link>, same as raw ctx.font would need)',
+  },
   Html: {
     ctor: 'new Html(width = 512, height = 512)',
   },
@@ -220,6 +231,14 @@ export const SIGNATURES = {
       "// 70% and mirrors it into the rest. fill: 'clamp' | 'transparent' | 'wrap' for when an off-center\n" +
       '// point runs out of source before reaching the edge',
   },
+  Perspective: {
+    ctor: 'new Perspective()',
+    tick:
+      "perspective.tick(src, edge = 'top', amount = 0.3)  // edge: 'top' | 'bottom' | 'left' | 'right'\n" +
+      '// (same pick-a-side convention as mirror\'s own half) - that edge narrows toward a point as amount\n' +
+      '// goes 0 (no distortion) -> 1 (a full triangle) - the classic keystone/perspective-card look.\n' +
+      '// Everything outside the resulting trapezoid is transparent - composite it over something else',
+  },
   Tile: {
     ctor: 'new Tile()',
     tick: 'tile.tick(src, { x = 2, y = 2 })\n// or tile.tick(src, n) for both axes evenly',
@@ -287,9 +306,10 @@ export const SIGNATURES = {
   Melt: {
     ctor: "new Melt(filter = 'linear')",
     tick:
-      "melt.tick(src, { axis = 'y', line = 0.6, sections = 200, jitter = 0.01, t = 0, seed = t,\n" +
+      "melt.tick(src, { direction = 'down', line = 0.6, sections = 200, jitter = 0.01, t = 0, seed = t,\n" +
       "                  thickness = 0.004, drip = 0.01, dieOff = 0.99, output = 'comp' })\n" +
-      "// axis: 'y' picks a horizontal line, 'x' a vertical one - line is its 0..1 position along that axis\n" +
+      "// direction: 'down' | 'up' | 'left' | 'right' - which side the drip falls away from (same\n" +
+      "// pick-a-side convention as Mirror's own `half`) - line is its 0..1 position along that axis\n" +
       '// fake pixel sorting: feeds that single row/column back into itself every tick, sliding `drip`\n' +
       '// further away and fading by `dieOff` each time - animate `line` yourself for a wandering source\n' +
       '// sections: splits the CROSS axis into that many independently-drifting drips instead of one\n' +

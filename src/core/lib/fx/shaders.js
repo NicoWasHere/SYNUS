@@ -334,6 +334,47 @@ void main() {
   outColor = sampleFill(uSrc, uv, uFillMode);
 }`;
 
+// Squeezes one edge of the frame narrower than the opposite edge - a
+// classic "keystone"/perspective-card look (tilting a flat rectangle
+// away from the camera reads exactly like this: the far edge shrinks).
+// uEdge: 0 = top, 1 = bottom, 2 = left, 3 = right - THAT edge becomes
+// the narrow one; the OPPOSITE edge stays full width/height - same
+// "pick a side" convention as Mirror's own uHalf. uAmount: 0 = no
+// distortion (a plain rectangle), 1 = the named edge pinches all the
+// way to a point (a full triangle). Unlike Mirror/Modulate, there's no
+// fill mode here - everything outside the resulting trapezoid is
+// always fully transparent, since this is meant to be composited over
+// something else (Composite/Mask/...), not to stand alone as a
+// full-frame effect the way Mirror does.
+export const PERSPECTIVE = `${HEADER}
+uniform sampler2D uSrc;
+uniform float uEdge;
+uniform float uAmount;
+
+void main() {
+  // t: 0 at the full-size edge, 1 at the narrow (uEdge) edge.
+  // cross: the axis actually being squeezed - x for top/bottom, y for left/right.
+  float t, cross;
+  if (uEdge < 0.5) { t = vUv.y; cross = vUv.x; }             // top narrow (vUv.y = 1 is top)
+  else if (uEdge < 1.5) { t = 1.0 - vUv.y; cross = vUv.x; }  // bottom narrow
+  else if (uEdge < 2.5) { t = 1.0 - vUv.x; cross = vUv.y; }  // left narrow
+  else { t = vUv.x; cross = vUv.y; }                          // right narrow
+
+  float scale = mix(1.0, max(1.0 - uAmount, 0.0001), t);
+  float halfWidth = scale * 0.5;
+  float lo = 0.5 - halfWidth;
+  float hi = 0.5 + halfWidth;
+
+  if (cross < lo || cross > hi) {
+    outColor = vec4(0.0);
+    return;
+  }
+
+  float srcCross = (cross - lo) / scale;
+  vec2 srcUv = uEdge < 1.5 ? vec2(srcCross, vUv.y) : vec2(vUv.x, srcCross);
+  outColor = texture(uSrc, srcUv);
+}`;
+
 export const TILE = `${HEADER}
 uniform sampler2D uSrc;
 uniform vec2 uRepeat; // number of repeats per axis

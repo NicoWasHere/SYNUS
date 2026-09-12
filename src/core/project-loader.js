@@ -5,6 +5,7 @@ import { getNewPatch } from './lib/patch-flag.js';
 import { sampleTexture } from './lib/texture-sample.js';
 import { GLSL } from './lib/glsl.js';
 import { Canvas2D } from './lib/canvas2d.js';
+import { Text } from './lib/text.js';
 import { ScreenOutput } from './lib/screen-output.js';
 import { Html } from './lib/html.js';
 import { Composite, Matte } from './lib/composite.js';
@@ -67,6 +68,7 @@ import {
   Edge,
   Emboss,
   Mirror,
+  Perspective,
   Tile,
   Kaleidoscope,
   Modulate,
@@ -97,7 +99,7 @@ import { explode } from './lib/explode.js';
 // (required for `export const nodes = {...}`) and, later, arbitrary
 // `import` statements for user-supplied libraries loaded from a CDN.
 //
-// GLSL / Canvas2D / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
+// GLSL / Canvas2D / Text / ScreenOutput / Html / Composite / Matte / Layer / ComposeAt /
 // beatmatch / beatEnvelope / COLORS / COLORMAPS / Lag / Delay / Bloom / Flow / Melt / Transition / Fill / Ramp / Gradient / Noise / Warp / Ripple / Pattern / Scope / ImageSource /
 // VideoSource / WebcamSource / HydraSource / ThreeSource / ModelSource / Extrude / PhysicsWorld / orbitCamera / THREE /
 // Scene3D / Sphere / Box / Torus / Plane / Cylinder / position3d / scale3d / CSG /
@@ -108,7 +110,7 @@ import { explode } from './lib/explode.js';
 // files, plus every effect
 // class (Rotate, Scale, Flip, Translate, Position, ChannelMix, Brightness,
 // Contrast, Saturation, HueShift, Grade, Blur, LensBlur, Threshold,
-// Edge, Emboss, Mirror, Tile, Kaleidoscope, Modulate, Displace,
+// Edge, Emboss, Mirror, Perspective, Tile, Kaleidoscope, Modulate, Displace,
 // ModulateScale, ModulateRotate, Vignette, Pixelate, Posterize, ColorLookup, Mask, ChromaKey,
 // GradientMap, Fisheye, Invert, Colorize, CRT, FilmGrain, Bitmap,
 // ChannelThreshold, ScanLines, Crop), are exposed as plain
@@ -120,6 +122,7 @@ export async function loadProject(gl, source) {
   setGL(gl);
   window.GLSL = GLSL;
   window.Canvas2D = Canvas2D;
+  window.Text = Text;
   window.ScreenOutput = ScreenOutput;
   window.Html = Html;
   window.Composite = Composite;
@@ -214,6 +217,7 @@ export async function loadProject(gl, source) {
   window.Edge = Edge;
   window.Emboss = Emboss;
   window.Mirror = Mirror;
+  window.Perspective = Perspective;
   window.Tile = Tile;
   window.Kaleidoscope = Kaleidoscope;
   window.Modulate = Modulate;
