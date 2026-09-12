@@ -265,6 +265,75 @@
       }
       #fullscreen-btn:hover { background: #2c2c2c; }
 
+      /* Hides #editor-pane/#mobile-pane outright (not the semi-
+         transparent floating overlay Perform mode above gives them) -
+         ControlPanel/PreviewPanel/NodeToolbar/the connection map all
+         live INSIDE that DOM (see ui/editor.js's previewLayer), so this
+         one class takes every floating slider/button/preview card with
+         it for free. #render-pane is a flex sibling of #editor-pane
+         (flex: 1 1 45%) - removing its sibling from the flex flow is all
+         that's needed for it to expand and fill the freed space, no
+         extra sizing rule required. Purely cosmetic (no state reset) -
+         composes with .perform-mode independently; that class decides
+         HOW the editor overlays the render pane, this decides whether
+         it's there at all. */
+      #app.hide-editor #editor-pane,
+      #app.hide-editor #mobile-pane {
+        display: none;
+      }
+      #hide-ui-toggle {
+        position: fixed;
+        top: 106px;
+        left: 10px;
+        z-index: 100;
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 10px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      #hide-ui-toggle:hover { background: #2c2c2c; }
+      #hide-ui-toggle.active { border-color: #4a90d9; color: #4a90d9; }
+
+      /* Record/screenshot both pair a button with a small number input
+         (duration in seconds / resolution multiplier) - same fixed
+         left-column stack as send-btn/reset-patch-btn above. */
+      .export-controls {
+        position: fixed;
+        left: 10px;
+        z-index: 100;
+        display: flex;
+        gap: 4px;
+      }
+      #record-controls { top: 154px; }
+      #screenshot-controls { top: 202px; }
+      .export-controls button {
+        background: #222;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 10px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+      }
+      .export-controls button:hover { background: #2c2c2c; }
+      .export-controls button:disabled { opacity: 0.5; cursor: default; }
+      .export-controls button.recording { background: #5c1f1f; border-color: #ae2f2f; }
+      .export-controls input {
+        width: 44px;
+        background: #1a1a1a;
+        color: #eee;
+        border: 1px solid #444;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 14px;
+        text-align: center;
+      }
+
       /* Small, deliberately unobtrusive - docs are one click away but
          shouldn't compete with the actual controls above for attention. */
       #docs-link {
@@ -702,6 +771,15 @@
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
+    <button id="hide-ui-toggle" type="button" title="Hide the code editor and every floating control over it">Hide UI</button>
+    <div id="record-controls" class="export-controls">
+      <button id="record-btn" type="button" title="Record a video of the render output for the given duration">● Record</button>
+      <input id="record-seconds" type="number" min="1" max="120" step="1" value="10" title="Recording duration, in seconds" />
+    </div>
+    <div id="screenshot-controls" class="export-controls">
+      <button id="screenshot-btn" type="button" title="Save a single frame at a higher resolution than the current display - briefly resets all node state to rebuild everything at that resolution">⬇ PNG</button>
+      <input id="screenshot-scale" type="number" min="1" max="16" step="1" value="4" title="Resolution multiplier (e.g. 4 = 4x the render pane's current size)" />
+    </div>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>

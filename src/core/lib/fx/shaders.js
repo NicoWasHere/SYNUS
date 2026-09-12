@@ -817,18 +817,25 @@ void main() {
   outColor = vec4(uColor * visible, src.a * visible);
 }`;
 
-// Extracts a sub-rectangle of src and stretches it to fill the whole
-// frame - the "cut this part out and blow it up" meaning of crop, as
-// opposed to Mask (cuts a hole in place, doesn't reposition/rescale
-// anything) or Scale/Translate (moves the WHOLE frame, not a sub-region).
+// Keeps only a sub-rectangle of src - everything outside it goes fully
+// transparent, everything inside stays at its own original size AND
+// position (not repositioned/rescaled to fill the frame - that's a
+// DIFFERENT thing, "cut this part out and blow it up," which this used
+// to do and no longer does). Closest existing effect is Mask, but Mask
+// needs a whole second texture to define its shape - this is the
+// simple-rectangle-only case, cheap to specify with just 2 corner points.
 // uRect is x,y (top-left corner, 0..1, y=0 at the top - same convention
 // ComposeAt/compose-at.js uses) and w,h (size, 0..1).
-export const CROP = `${HEADER}${SAMPLE_CLAMPED}
+export const CROP = `${HEADER}
 uniform sampler2D uSrc;
 uniform vec4 uRect;
 
 void main() {
-  vec2 screenUv = vec2(vUv.x, 1.0 - vUv.y);
-  vec2 sourceUv = uRect.xy + screenUv * uRect.zw;
-  outColor = sampleClamped(uSrc, vec2(sourceUv.x, 1.0 - sourceUv.y));
+  vec2 screenUv = vec2(vUv.x, 1.0 - vUv.y); // same y=0-at-top convention uRect is defined in
+  if (screenUv.x < uRect.x || screenUv.x > uRect.x + uRect.z ||
+      screenUv.y < uRect.y || screenUv.y > uRect.y + uRect.w) {
+    outColor = vec4(0.0);
+    return;
+  }
+  outColor = texture(uSrc, vUv); // untouched - same position, same size, just outside-the-rect cut away
 }`;

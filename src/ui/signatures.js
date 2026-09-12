@@ -402,8 +402,8 @@ export const SIGNATURES = {
     ctor: 'new Crop()',
     tick:
       'crop.tick(src, { x1 = 0, y1 = 0, x2 = 1, y2 = 1 })\n' +
-      '// extracts the rectangle BETWEEN two corner points (0..1, either order) and stretches it to\n' +
-      "// fill the frame - NOT Mask (cuts a hole in place, doesn't move/rescale anything)",
+      '// keeps only the rectangle BETWEEN two corner points (0..1, either order) - everything outside\n' +
+      '// it goes transparent, everything inside stays at its own original size and position',
   },
   AudioSource: {
     ctor: 'new AudioSource(fftSize = 2048)  // fftSize must be a power of 2',

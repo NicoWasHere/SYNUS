@@ -1,6 +1,6 @@
 import defaultSource from './default-project.js?raw';
 import { createGLContext } from './gl/gl-context.js';
-import { setViewportSize } from './core/lib/context.js';
+import { setViewportSize, viewportSize } from './core/lib/context.js';
 import { DataBus } from './core/bus.js';
 import { Clock } from './core/clock.js';
 import { Graph } from './core/graph.js';
@@ -608,6 +608,204 @@ function updateTps() {
   }
 }
 
+// Hides #editor-pane/#mobile-pane (and, since ControlPanel/PreviewPanel/
+// NodeToolbar/the connection map all live inside that same DOM - see
+// ui/editor.js's previewLayer - every floating slider/button/preview
+// card with it) via a single CSS class - see index.html's .hide-editor.
+// Purely cosmetic, no state touched, composes independently with
+// Perform mode (that one decides HOW the editor overlays the render
+// pane; this decides whether it's there at all).
+const hideUiToggle = document.getElementById('hide-ui-toggle');
+hideUiToggle.addEventListener('click', () => {
+  const hidden = appEl.classList.toggle('hide-editor');
+  hideUiToggle.classList.toggle('active', hidden);
+  hideUiToggle.textContent = hidden ? 'Show UI' : 'Hide UI';
+});
+
+// downloadBlob(blob, filename) - shared by both export features below.
+// A plain <a download> click is the ordinary way to save a Blob without
+// a server round-trip; the element never needs to be attached to the
+// document for .click() to work.
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// pixelsToPngBlob(pixels, width, height) - `pixels` is a raw RGBA
+// Uint8Array straight from gl.readPixels(), which reads bottom-up (row 0
+// = the BOTTOM of the image) - opposite of Canvas2D/PNG's own top-down
+// row order, same flip readTextureToImageData() (lib/texture-preview.js)
+// already has to do for the same reason. Draws the flipped result onto a
+// throwaway <canvas> just to reuse its built-in PNG encoder
+// (toBlob) rather than writing one by hand.
+function pixelsToPngBlob(pixels, width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(width, height);
+  const rowBytes = width * 4;
+  for (let y = 0; y < height; y++) {
+    const srcStart = (height - 1 - y) * rowBytes;
+    imageData.data.set(pixels.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+// exportHighResPNG(multiplier) - a node's own Canvas2D/GLSL/etc buffer is
+// only ever sized ONCE, at construction (see context.js's screenSize()
+// comment) - just resizing the output canvas and re-ticking would merely
+// stretch whatever's already there across more pixels, not add real
+// detail. So this disposes every node's current state (same calls
+// ui/node-toolbar.js's own per-node ↺ reset button already makes, just
+// for the whole graph at once), bumps the canvas to the target
+// resolution, ticks ONCE (letting every node's useInstances() rebuild
+// fresh at the new size), reads that frame back, then disposes and
+// rebuilds AGAIN at the original resolution. This causes one visible
+// reset "flash" on the live output, both entering and leaving the high-
+// res frame (feedback trails/particle state momentarily clear) - an
+// accepted, inherent trade-off of actually getting more detail rather
+// than a blurrier upscale of the existing frame.
+function resetAllNodes() {
+  for (const node of graph.nodes.values()) {
+    disposeState(node.state);
+    disposeParticlesForNode(node.id);
+    disposeAsciiForNode(node.id);
+    node.state = {};
+  }
+}
+
+async function exportHighResPNG(multiplier) {
+  const wasRunning = clock.running;
+  clock.stop();
+
+  const rect = renderPane.getBoundingClientRect();
+  const size = Math.max(1, Math.round(Math.max(rect.width, rect.height) * multiplier));
+  const prevW = glCanvas.width;
+  const prevH = glCanvas.height;
+  const prevViewport = viewportSize();
+
+  try {
+    resetAllNodes();
+    glCanvas.width = size;
+    glCanvas.height = size;
+    const scale = size / Math.max(rect.width, rect.height);
+    setViewportSize(rect.width * scale, rect.height * scale); // same aspect ratio as the live viewport, just scaled up
+
+    graph.tick(performance.now() / 1000, clock.frame);
+
+    const pixels = new Uint8Array(size * size * 4);
+    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels); // safe: synchronous, same turn as the tick() that just rendered
+    const blob = await pixelsToPngBlob(pixels, size, size);
+    downloadBlob(blob, `synus-${Date.now()}.png`);
+  } finally {
+    resetAllNodes();
+    glCanvas.width = prevW;
+    glCanvas.height = prevH;
+    setViewportSize(prevViewport.width, prevViewport.height);
+    if (wasRunning) clock.start();
+  }
+}
+
+const screenshotBtn = document.getElementById('screenshot-btn');
+const screenshotScaleInput = document.getElementById('screenshot-scale');
+screenshotBtn.addEventListener('click', async () => {
+  const multiplier = Math.max(1, Number(screenshotScaleInput.value) || 4);
+  screenshotBtn.disabled = true;
+  screenshotBtn.textContent = 'Rendering…';
+  try {
+    await exportHighResPNG(multiplier);
+  } catch (e) {
+    console.error('high-res export failed', e);
+  } finally {
+    screenshotBtn.disabled = false;
+    screenshotBtn.textContent = '⬇ PNG';
+  }
+});
+
+// recordVideo(seconds) - real-time capture (not a faster/slower offline
+// render): plays the patch exactly as a viewer would see it, over the
+// SAME live Clock already running, so mouse/midi/audio-reactive patches
+// get captured as actually experienced. glCanvas.captureStream(0) means
+// "never grab a frame automatically" - frames are instead requested
+// manually, once per real tick, via the capture-frame clock.onTick
+// listener registered below (right after the main tick listener, so it
+// always runs AFTER that tick's render() already happened) - the GL
+// context has no preserveDrawingBuffer (see gl-context.js), so a frame
+// grabbed any other way (e.g. an independent timer) risks catching a
+// blank/already-cleared buffer instead of what was just drawn.
+let captureTrack = null;
+
+function pickVideoMimeType() {
+  const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  return candidates.find((type) => window.MediaRecorder?.isTypeSupported(type));
+}
+
+async function recordVideo(seconds, onProgress) {
+  const stream = glCanvas.captureStream(0);
+  captureTrack = stream.getVideoTracks()[0];
+  const mimeType = pickVideoMimeType();
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data);
+  };
+  const stopped = new Promise((resolve) => {
+    recorder.onstop = resolve;
+  });
+
+  recorder.start();
+  const startedAt = performance.now();
+  await new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const remaining = seconds - (performance.now() - startedAt) / 1000;
+      if (remaining <= 0) {
+        clearInterval(interval);
+        resolve();
+        return;
+      }
+      onProgress?.(remaining);
+    }, 200);
+  });
+  recorder.stop();
+  await stopped;
+  captureTrack = null;
+
+  downloadBlob(new Blob(chunks, { type: recorder.mimeType || 'video/webm' }), `synus-${Date.now()}.webm`);
+}
+
+const recordBtn = document.getElementById('record-btn');
+const recordSecondsInput = document.getElementById('record-seconds');
+const videoSupported = typeof window.MediaRecorder !== 'undefined' && typeof glCanvas.captureStream === 'function';
+if (!videoSupported) {
+  recordBtn.disabled = true;
+  recordBtn.title = "This browser doesn't support video recording (MediaRecorder/captureStream)";
+} else {
+  recordBtn.addEventListener('click', async () => {
+    const seconds = Math.max(1, Number(recordSecondsInput.value) || 10);
+    recordBtn.disabled = true;
+    recordSecondsInput.disabled = true;
+    recordBtn.classList.add('recording');
+    try {
+      await recordVideo(seconds, (remaining) => {
+        recordBtn.textContent = `● ${Math.ceil(remaining)}s`;
+      });
+    } catch (e) {
+      console.error('video recording failed', e);
+    } finally {
+      recordBtn.disabled = false;
+      recordSecondsInput.disabled = false;
+      recordBtn.classList.remove('recording');
+      recordBtn.textContent = '● Record';
+    }
+  });
+}
+
 (async () => {
   await reload(initialSource);
   clock.onTick((t, tickCount) => {
@@ -619,6 +817,12 @@ function updateTps() {
     updateControls();
     updateTps();
     tEl.textContent = `t=${t.toFixed(1)}`;
+  }, 1);
+  // Registered AFTER the listener above, so it always runs once that
+  // tick's real render() has already happened - see recordVideo()'s own
+  // comment for why the timing here matters.
+  clock.onTick(() => {
+    captureTrack?.requestFrame();
   }, 1);
   clock.start();
 })();

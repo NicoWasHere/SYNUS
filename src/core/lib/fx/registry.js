@@ -424,13 +424,13 @@ export const EFFECTS = {
 
   crop: {
     frag: shaders.CROP,
-    // crop(src, { x1 = 0, y1 = 0, x2 = 1, y2 = 1 })  -  extracts the
+    // crop(src, { x1 = 0, y1 = 0, x2 = 1, y2 = 1 })  -  keeps only the
     // rectangle BETWEEN two corner points (0..1, y=0 at top - same
-    // convention as ComposeAt) and stretches it to fill the whole frame.
-    // Either corner can be passed first - point order doesn't matter,
-    // this always sorts them into the actual [x,y,w,h] rect internally.
-    // NOT the same as Mask (cuts a hole in place, doesn't move or rescale
-    // anything).
+    // convention as ComposeAt) - everything outside it goes transparent,
+    // everything inside stays at its own original size and position (NOT
+    // repositioned/rescaled to fill the frame). Either corner can be
+    // passed first - point order doesn't matter, this always sorts them
+    // into the actual [x,y,w,h] rect internally.
     toUniforms: ({ x1 = 0, y1 = 0, x2 = 1, y2 = 1 } = {}) => ({
       uRect: [Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)],
     }),
