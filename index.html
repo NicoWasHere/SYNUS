@@ -283,8 +283,8 @@
       }
       #hide-ui-toggle {
         position: fixed;
-        top: 106px;
-        left: 10px;
+        top: 154px;
+        right: 10px;
         z-index: 100;
         background: #222;
         color: #eee;
@@ -300,16 +300,16 @@
 
       /* Record/screenshot both pair a button with a small number input
          (duration in seconds / resolution multiplier) - same fixed
-         left-column stack as send-btn/reset-patch-btn above. */
+         right column as mode-toggle/fullscreen-btn/hide-ui-toggle above. */
       .export-controls {
         position: fixed;
-        left: 10px;
+        right: 10px;
         z-index: 100;
         display: flex;
         gap: 4px;
       }
-      #record-controls { top: 154px; }
-      #screenshot-controls { top: 202px; }
+      #record-controls { top: 202px; }
+      #screenshot-controls { top: 250px; }
       .export-controls button {
         background: #222;
         color: #eee;
@@ -771,7 +771,7 @@
     <button id="send-btn" type="button">▶ Send (Ctrl+Enter)</button>
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
-    <button id="hide-ui-toggle" type="button" title="Hide the code editor and every floating control over it">Hide UI</button>
+    <button id="hide-ui-toggle" type="button" title="Hide the code editor and every floating control over it">Hide Code</button>
     <div id="record-controls" class="export-controls">
       <button id="record-btn" type="button" title="Record a video of the render output for the given duration">● Record</button>
       <input id="record-seconds" type="number" min="1" max="120" step="1" value="10" title="Recording duration, in seconds" />

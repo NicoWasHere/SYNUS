@@ -619,7 +619,7 @@ const hideUiToggle = document.getElementById('hide-ui-toggle');
 hideUiToggle.addEventListener('click', () => {
   const hidden = appEl.classList.toggle('hide-editor');
   hideUiToggle.classList.toggle('active', hidden);
-  hideUiToggle.textContent = hidden ? 'Show UI' : 'Hide UI';
+  hideUiToggle.textContent = hidden ? 'Show Code' : 'Hide Code';
 });
 
 // downloadBlob(blob, filename) - shared by both export features below.
@@ -680,15 +680,23 @@ function resetAllNodes() {
   }
 }
 
+// Comfortably under the ~8192-16384 MAX_TEXTURE_SIZE most real GPUs
+// report, and keeps every node's own high-res buffer (each one this
+// size, RGBA8 - a handful of nodes at 8000-square would already be
+// several hundred MB of VRAM apiece) from ballooning out of control on
+// a large monitor with a high multiplier.
+const MAX_EXPORT_SIZE = 4096;
+
 async function exportHighResPNG(multiplier) {
   const wasRunning = clock.running;
   clock.stop();
 
   const rect = renderPane.getBoundingClientRect();
-  const size = Math.max(1, Math.round(Math.max(rect.width, rect.height) * multiplier));
+  const size = Math.min(MAX_EXPORT_SIZE, Math.max(1, Math.round(Math.max(rect.width, rect.height) * multiplier)));
   const prevW = glCanvas.width;
   const prevH = glCanvas.height;
   const prevViewport = viewportSize();
+  let pixels;
 
   try {
     resetAllNodes();
@@ -699,17 +707,27 @@ async function exportHighResPNG(multiplier) {
 
     graph.tick(performance.now() / 1000, clock.frame);
 
-    const pixels = new Uint8Array(size * size * 4);
+    pixels = new Uint8Array(size * size * 4);
     gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels); // safe: synchronous, same turn as the tick() that just rendered
-    const blob = await pixelsToPngBlob(pixels, size, size);
-    downloadBlob(blob, `synus-${Date.now()}.png`);
   } finally {
+    // Restored immediately after reading the pixels back - NOT after
+    // encoding them to a PNG below, which is asynchronous (canvas.
+    // toBlob()) and can take a real, visible amount of time for a large
+    // image. `pixels` is a plain CPU-side copy at this point, completely
+    // independent of the GL context/canvas - encoding it can happen at
+    // leisure in the background with the live view already back to
+    // normal, instead of leaving the page visibly frozen (clock stopped,
+    // canvas stuck at the huge reset-state frame) for however long
+    // encoding takes.
     resetAllNodes();
     glCanvas.width = prevW;
     glCanvas.height = prevH;
     setViewportSize(prevViewport.width, prevViewport.height);
     if (wasRunning) clock.start();
   }
+
+  const blob = await pixelsToPngBlob(pixels, size, size);
+  downloadBlob(blob, `synus-${Date.now()}.png`);
 }
 
 const screenshotBtn = document.getElementById('screenshot-btn');
@@ -735,10 +753,12 @@ screenshotBtn.addEventListener('click', async () => {
 // "never grab a frame automatically" - frames are instead requested
 // manually, once per real tick, via the capture-frame clock.onTick
 // listener registered below (right after the main tick listener, so it
-// always runs AFTER that tick's render() already happened) - the GL
-// context has no preserveDrawingBuffer (see gl-context.js), so a frame
-// grabbed any other way (e.g. an independent timer) risks catching a
-// blank/already-cleared buffer instead of what was just drawn.
+// always runs AFTER that tick's render() already happened, not some
+// arbitrary later moment). Needs gl-context.js's preserveDrawingBuffer:
+// true to actually work at all - without it, MediaRecorder produced
+// nothing but a single empty chunk no matter how many real frames were
+// requested (confirmed while chasing this down - see that file's own
+// comment for why).
 let captureTrack = null;
 
 function pickVideoMimeType() {
@@ -820,10 +840,15 @@ if (!videoSupported) {
   }, 1);
   // Registered AFTER the listener above, so it always runs once that
   // tick's real render() has already happened - see recordVideo()'s own
-  // comment for why the timing here matters.
+  // comment for why the timing here matters. rate: 2 (~30fps at a normal
+  // 60tps, not every single tick) - requestFrame() on a large WebGL
+  // canvas isn't free, and capturing it 60 times a second was heavy
+  // enough on a real GPU/monitor size to visibly stutter the live view
+  // during recording; 30fps is still smooth for a recording and roughly
+  // halves that cost.
   clock.onTick(() => {
     captureTrack?.requestFrame();
-  }, 1);
+  }, 2);
   clock.start();
 })();
 

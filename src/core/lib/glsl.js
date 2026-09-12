@@ -58,9 +58,17 @@ export class GLSL {
   //   - a plain number                    -> uniform1f
   //   - a boolean                         -> uniform1f (0 or 1)
   //   - a JS array of length 2/3/4        -> uniform2fv/3fv/4fv
+  // Returns `this` (every effect class wrapping GLSL - Rotate, Scale, ...,
+  // see fx/effects.js - already returns its own internal GLSL instance
+  // for exactly this reason) so `const out = glsl.tick(...)` works too,
+  // not just the documented `glsl.tick(...); return { screen: glsl };`
+  // convention every template here actually uses - capturing tick()'s
+  // OWN return value used to silently give you `undefined` instead
+  // (this class was the one exception to every other class's own
+  // "tick() returns the texture-bearing thing" convention).
   tick(fragSrc, uniforms = {}) {
     this._compile(fragSrc);
-    if (!this.program) return;
+    if (!this.program) return this; // keeps showing the previous program's last frame - see _compile()'s own comment
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
     gl.viewport(0, 0, this.width, this.height);
@@ -107,6 +115,7 @@ export class GLSL {
       }
     }
     drawFullscreenQuad(gl, this.program);
+    return this;
   }
 
   // Frees this instance's own GPU resources (texture, framebuffer,
