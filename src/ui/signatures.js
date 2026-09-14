@@ -1,4 +1,5 @@
 import { COLORMAPS } from '../core/lib/colormaps.js';
+import { assets } from '../core/lib/asset-storage.js';
 
 // Lightweight signature-help: a static registry of every lib class's
 // constructor and tick() signature (hand-kept in sync with the real
@@ -488,6 +489,9 @@ const PATTERN_SHAPES = {
 // caret is inside one of these directly (no receiver to resolve).
 const GLOBALS = {
   render: 'render(value)  // last call this tick wins',
+  get:
+    "get('name')  // -> a File saved into persistent storage (the \"storage\" link, bottom right)\n" +
+    '// survives a reload, unlike files.get(...) - see $get$ to browse what\'s already saved',
   preview:
     'preview(value, options?)  // opts this node into a floating preview card\n' +
     '// a bare Pattern auto-plots (default range [0, 1]) - pass { range: [a, b] } to override',
@@ -679,6 +683,25 @@ export function findUseCompletions(text, pos) {
   const matches = [...starts, ...contains];
   if (typed !== '' && matches.length === 0) return null;
   return { matches: matches.slice(0, 4), typed };
+}
+
+// Same idea as findUseCompletions above, but for get('<name>' - the
+// storage-portal.js asset library (see asset-storage.js's `assets`
+// Map), not a class name, and the typed text sits INSIDE a string
+// literal (get's real argument is always a quoted name) rather than a
+// bare identifier - the quote character itself is matched but not part
+// of `typed`, so editor.js's existing Tab-fill (replace just the last
+// `typed.length` characters before the caret) still works unchanged,
+// leaving the quotes themselves alone.
+export function findGetCompletions(text, pos) {
+  const openParenIdx = findEnclosingOpenParen(text, pos);
+  if (openParenIdx == null) return null;
+  const { callee } = extractCallee(text, openParenIdx);
+  if (callee !== 'get') return null;
+  const argSoFar = text.slice(openParenIdx + 1, pos);
+  const m = argSoFar.match(/^\s*['"]([^'"]*)$/);
+  if (!m) return null;
+  return matchNames([...assets.keys()], m[1]);
 }
 
 // COLORMAPS_KEYS/COLORMAPS_LOOP_KEYS are just their own keys -

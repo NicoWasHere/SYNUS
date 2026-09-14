@@ -30,6 +30,7 @@ import { Pattern } from './lib/pattern.js';
 import { Scope } from './lib/scope.js';
 import { ImageSource, VideoSource, WebcamSource } from './lib/media.js';
 import { files } from './lib/file-registry.js';
+import { get } from './lib/asset-storage.js';
 import { HydraSource } from './lib/hydra-source.js';
 import { ThreeSource } from './lib/three-source.js';
 import { ModelSource } from './lib/model-source.js';
@@ -107,7 +108,7 @@ import { explode } from './lib/explode.js';
 // midiError / LPD8 / LPD8_MK2 / newPatch / sampleTexture / render /
 // preview / slider / button / input / colorPicker / useInstances / nodeFunction /
 // Instance / particle2d / ascii2d / dot / pixel / AudioSource / explode /
-// files, plus every effect
+// files / get, plus every effect
 // class (Rotate, Scale, Flip, Translate, Position, ChannelMix, Brightness,
 // Contrast, Saturation, HueShift, Grade, Blur, LensBlur, Threshold,
 // Edge, Emboss, Mirror, Perspective, Tile, Kaleidoscope, Modulate, Displace,
@@ -167,6 +168,7 @@ export async function loadProject(gl, source) {
   window.CSG = CSG;
   window.THREE = THREE;
   window.files = files;
+  window.get = get;
   window.screenSize = screenSize;
   window.viewportSize = viewportSize;
   window.mouse = mouse;

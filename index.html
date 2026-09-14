@@ -348,6 +348,25 @@
       }
       #docs-link:hover { color: #999; text-decoration: underline; }
 
+      /* Same unobtrusive style as #docs-link, right next to it - opens
+         the storage portal (see ui/storage-portal.js) instead of
+         navigating anywhere. */
+      #storage-link {
+        position: fixed;
+        bottom: 8px;
+        right: 48px;
+        z-index: 100;
+        color: #666;
+        font-family: inherit;
+        font-size: 11px;
+        text-decoration: none;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+      }
+      #storage-link:hover { color: #999; text-decoration: underline; }
+
       #app.perform-mode #render-pane {
         position: fixed;
         inset: 0;
@@ -791,6 +810,7 @@
       <div id="mobile-pane"></div>
       <div id="render-pane"></div>
     </div>
+    <button id="storage-link" type="button" title="Name and upload files that persist across reloads - see get('name')">storage</button>
     <a id="docs-link" href="docs/" target="_blank" rel="noopener">docs</a>
     <script type="module" src="/src/main.js"></script>
   </body>

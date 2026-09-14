@@ -8,7 +8,9 @@ import { addFile } from '../core/lib/file-registry.js';
 import { downscaleVideo } from '../core/lib/video-downscale.js';
 import { openDrawTool } from './draw-tool.js';
 import { openComposeAtTool } from './compose-at-tool.js';
-import { findSignatureAt, findUseCompletions, findColormapCompletions } from './signatures.js';
+import { openAssetExplorer } from './storage-portal.js';
+import { assets } from '../core/lib/asset-storage.js';
+import { findSignatureAt, findUseCompletions, findColormapCompletions, findGetCompletions } from './signatures.js';
 import { formatSource } from './format.js';
 
 // Every raw GLSL string in this codebase (see gl-context.js, screen-
@@ -114,6 +116,15 @@ const NODE_PATTERN = new RegExp(`\\$(${NODE_TEMPLATE_NAMES.join('|')})(?:\\((\\d
 // files.get(...) - see file-registry.js. Cancelling the picker just
 // removes the `$load$` text with nothing inserted.
 const LOAD_PATTERN = /\$load\$/;
+
+// $get$ - the same idea as $load$, but instead of the OS's native file
+// picker, opens ui/storage-portal.js's own "explorer" listing whatever's
+// already been named and saved into persistent storage (via the
+// "storage" link - see main.js). Picking a name inserts a complete node
+// wired to get('thatName') instead of files.get(...) - see
+// asset-storage.js. Cancelling removes the `$get$` text with nothing
+// inserted, same as $load$.
+const GET_PATTERN = /\$get\$/;
 
 // $downscale$ - like $load$, but for a video that's laggy because its
 // source file's resolution/bitrate is more than the browser can decode
@@ -411,7 +422,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
     const pos = textarea.selectionStart;
     const text = textarea.value;
 
-    const completion = findUseCompletions(text, pos) || findColormapCompletions(text, pos);
+    const completion = findUseCompletions(text, pos) || findColormapCompletions(text, pos) || findGetCompletions(text, pos);
     if (completion) {
       signatureTip.hidden = true;
       useAutocomplete.innerHTML = '';
@@ -623,6 +634,46 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       replaceRange(insertAt, insertAt, buildLoadedNodeEntry(file));
     };
     loadFileInput.click();
+  }
+
+  // Same shape as buildLoadedNodeEntry above, sourcing from asset-
+  // storage.js's `assets` (name -> File, already saved via the storage
+  // portal) instead of a freshly-picked File - the placeholder swap
+  // targets get('theStoredName') instead of files.get(...). `name` here
+  // is whatever the user chose to save it as (see storage-portal.js),
+  // not necessarily a real filename with a recognizable extension - the
+  // model-file check below reads the underlying File's own original
+  // .name instead, which still has one.
+  function buildGetNodeEntry(name) {
+    const file = assets.get(name);
+    if (!file) return null;
+    if (isModelFile(file)) {
+      const body = nodeTemplateBody('three_model').replace(/'your-model\.glb'/, JSON.stringify(name));
+      return `${keyFromFilename(name)}: ${body}`;
+    }
+    const kind = file.type.startsWith('video/') ? 'video' : 'image';
+    const body = nodeTemplateBody(kind)
+      .replace(/\n\s*\/\/ or a local file[\s\S]*?files\.get\('your-file-name\.\w+'\)\);/, '')
+      .replace(/'https:\/\/your-[\w-]+-url-here[^']*'/, `get(${JSON.stringify(name)})`);
+    return `${keyFromFilename(name)}: ${body}`;
+  }
+
+  // A completed $get$ - see GET_PATTERN above. No native-picker/gesture
+  // requirement (unlike $load$/$downscale$ above) since
+  // openAssetExplorer() is a plain overlay, not window.showOpenFilePicker/
+  // <input type=file>.click() - so, like $draw$/$compose_at$ below, this
+  // is fine to defer to the microtask batch in handleChange().
+  function tryExpandGet() {
+    const match = textarea.value.match(GET_PATTERN);
+    if (!match) return;
+    const insertAt = match.index;
+    replaceRange(insertAt, insertAt + match[0].length, '');
+    openAssetExplorer({
+      onPick: (name) => {
+        const entry = buildGetNodeEntry(name);
+        if (entry) replaceRange(insertAt, insertAt, entry);
+      },
+    });
   }
 
   // "shape1", "shape2", ... - counts existing `shapeN:` keys already in
@@ -899,6 +950,7 @@ export function createEditor({ parent, doc, onDocChanged, onSend, renderPane }) 
       tryExpandBeatmatchSnippet();
       tryExpandDraw(); // no file-picker/fullscreen gesture requirement, unlike Load/Downscale above
       tryExpandComposeAt(); // same reasoning as $draw$ above
+      tryExpandGet(); // same reasoning as $draw$ above - a plain overlay, not a native picker
       tryExpandFeedback(); // purely synchronous, no overlay/picker involved at all
       tryExpandSwitch(); // same reasoning as $feedback$ above
     });

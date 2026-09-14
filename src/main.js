@@ -23,6 +23,8 @@ import { renderJsonTree } from './ui/json-tree.js';
 import { getPatchFromUrl, getBlockPatchFromUrl, setPatchInUrl, setPatchAndBlocksInUrl } from './ui/patch-link.js';
 import { parseNodeBlocks, offsetToLine, findFoldSpan } from './ui/node-parser.js';
 import { DEFAULT_BLOCK_PATCH } from './ui-mobile/default-patch.js';
+import { restoreAssets } from './core/lib/asset-storage.js';
+import { openStoragePortal } from './ui/storage-portal.js';
 
 const appEl = document.getElementById('app');
 const editorMount = document.getElementById('editor-mount');
@@ -622,6 +624,8 @@ hideUiToggle.addEventListener('click', () => {
   hideUiToggle.textContent = hidden ? 'Show Code' : 'Hide Code';
 });
 
+document.getElementById('storage-link').addEventListener('click', () => openStoragePortal());
+
 // downloadBlob(blob, filename) - shared by both export features below.
 // A plain <a download> click is the ordinary way to save a Blob without
 // a server round-trip; the element never needs to be attached to the
@@ -827,6 +831,7 @@ if (!videoSupported) {
 }
 
 (async () => {
+  await restoreAssets(); // so a patch referencing get('name') has it on its very first tick
   await reload(initialSource);
   clock.onTick((t, tickCount) => {
     graph.tick(t, tickCount); // newPatch reads true for exactly this one tick, if a send just succeeded
