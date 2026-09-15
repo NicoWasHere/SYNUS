@@ -3,33 +3,7 @@
 // object with a .texture property.
 
 export function createGLContext(canvas) {
-  // preserveDrawingBuffer: true - without it, the browser is free to
-  // discard/clear the canvas's own backbuffer right after compositing
-  // each frame (a real perf optimization it otherwise takes advantage
-  // of). That's invisible for normal on-screen display, but breaks
-  // canvas.captureStream() (used for video export - see main.js's
-  // recordVideo()): even calling the resulting track's own
-  // requestFrame() manually, right after a render, produced zero real
-  // frame data without this.
-  //
-  // antialias: false - every node here draws through an intermediate
-  // offscreen texture+framebuffer (GLSL.tick() renders into its OWN fbo;
-  // ScreenOutput.tick() then draws THAT texture onto the canvas's actual
-  // default framebuffer) rather than drawing geometry straight to the
-  // canvas - with the default antialias: true, the canvas's own
-  // multisampled buffer needs an explicit resolve step before anything
-  // outside the GPU driver's own presentation path can read it, and that
-  // resolve wasn't happening in time for captureStream() to see real
-  // content: on-screen display looked completely correct throughout (the
-  // browser's own presentation path resolves it), but every recorded
-  // frame came back empty - confirmed directly by reproducing this exact
-  // offscreen-FBO-then-default-framebuffer shape in isolation and
-  // watching it start working the moment antialias was turned off. No
-  // real loss here - this app's content is fullscreen shader effects and
-  // 2D canvas drawing, not raw polygon edges that benefit from MSAA (the
-  // 3D shape primitives render in Three.js's own SEPARATE context/canvas
-  // entirely - see lib/scene3d.js - so they're unaffected either way).
-  const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+  const gl = canvas.getContext('webgl2');
   if (!gl) throw new Error('WebGL2 not supported in this browser');
   // A 2D canvas's pixel data has row 0 at the top; GL texture V=0 is the
   // bottom. Without this, every texImage2D upload FROM a canvas (Canvas2D,

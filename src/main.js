@@ -750,86 +750,6 @@ screenshotBtn.addEventListener('click', async () => {
   }
 });
 
-// recordVideo(seconds) - real-time capture (not a faster/slower offline
-// render): plays the patch exactly as a viewer would see it, over the
-// SAME live Clock already running, so mouse/midi/audio-reactive patches
-// get captured as actually experienced. glCanvas.captureStream(0) means
-// "never grab a frame automatically" - frames are instead requested
-// manually, once per real tick, via the capture-frame clock.onTick
-// listener registered below (right after the main tick listener, so it
-// always runs AFTER that tick's render() already happened, not some
-// arbitrary later moment). Needs gl-context.js's preserveDrawingBuffer:
-// true to actually work at all - without it, MediaRecorder produced
-// nothing but a single empty chunk no matter how many real frames were
-// requested (confirmed while chasing this down - see that file's own
-// comment for why).
-let captureTrack = null;
-
-function pickVideoMimeType() {
-  const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-  return candidates.find((type) => window.MediaRecorder?.isTypeSupported(type));
-}
-
-async function recordVideo(seconds, onProgress) {
-  const stream = glCanvas.captureStream(0);
-  captureTrack = stream.getVideoTracks()[0];
-  const mimeType = pickVideoMimeType();
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  const chunks = [];
-  recorder.ondataavailable = (e) => {
-    if (e.data.size) chunks.push(e.data);
-  };
-  const stopped = new Promise((resolve) => {
-    recorder.onstop = resolve;
-  });
-
-  recorder.start();
-  const startedAt = performance.now();
-  await new Promise((resolve) => {
-    const interval = setInterval(() => {
-      const remaining = seconds - (performance.now() - startedAt) / 1000;
-      if (remaining <= 0) {
-        clearInterval(interval);
-        resolve();
-        return;
-      }
-      onProgress?.(remaining);
-    }, 200);
-  });
-  recorder.stop();
-  await stopped;
-  captureTrack = null;
-
-  downloadBlob(new Blob(chunks, { type: recorder.mimeType || 'video/webm' }), `synus-${Date.now()}.webm`);
-}
-
-const recordBtn = document.getElementById('record-btn');
-const recordSecondsInput = document.getElementById('record-seconds');
-const videoSupported = typeof window.MediaRecorder !== 'undefined' && typeof glCanvas.captureStream === 'function';
-if (!videoSupported) {
-  recordBtn.disabled = true;
-  recordBtn.title = "This browser doesn't support video recording (MediaRecorder/captureStream)";
-} else {
-  recordBtn.addEventListener('click', async () => {
-    const seconds = Math.max(1, Number(recordSecondsInput.value) || 10);
-    recordBtn.disabled = true;
-    recordSecondsInput.disabled = true;
-    recordBtn.classList.add('recording');
-    try {
-      await recordVideo(seconds, (remaining) => {
-        recordBtn.textContent = `● ${Math.ceil(remaining)}s`;
-      });
-    } catch (e) {
-      console.error('video recording failed', e);
-    } finally {
-      recordBtn.disabled = false;
-      recordSecondsInput.disabled = false;
-      recordBtn.classList.remove('recording');
-      recordBtn.textContent = '● Record';
-    }
-  });
-}
-
 (async () => {
   await restoreAssets(); // so a patch referencing get('name') has it on its very first tick
   await reload(initialSource);
@@ -843,17 +763,6 @@ if (!videoSupported) {
     updateTps();
     tEl.textContent = `t=${t.toFixed(1)}`;
   }, 1);
-  // Registered AFTER the listener above, so it always runs once that
-  // tick's real render() has already happened - see recordVideo()'s own
-  // comment for why the timing here matters. rate: 2 (~30fps at a normal
-  // 60tps, not every single tick) - requestFrame() on a large WebGL
-  // canvas isn't free, and capturing it 60 times a second was heavy
-  // enough on a real GPU/monitor size to visibly stutter the live view
-  // during recording; 30fps is still smooth for a recording and roughly
-  // halves that cost.
-  clock.onTick(() => {
-    captureTrack?.requestFrame();
-  }, 2);
   clock.start();
 })();
 

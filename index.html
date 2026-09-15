@@ -126,7 +126,7 @@
          nothing about the editor or graph has to know which mode it's in. */
       #mode-toggle {
         position: fixed;
-        top: 58px;
+        top: 106px;
         right: 10px;
         z-index: 100;
         background: #222;
@@ -225,7 +225,7 @@
       #send-btn.flash-error { background: #5c1f1f; border-color: #ae2f2f; }
       #tps-counter {
         position: fixed;
-        top: 106px;
+        top: 154px;
         right: 10px;
         z-index: 100;
         color: #888;
@@ -235,7 +235,7 @@
       }
       #t-counter {
         position: fixed;
-        top: 122px;
+        top: 170px;
         right: 10px;
         z-index: 100;
         color: #888;
@@ -283,7 +283,7 @@
       }
       #hide-ui-toggle {
         position: fixed;
-        top: 154px;
+        top: 58px;
         right: 10px;
         z-index: 100;
         background: #222;
@@ -298,9 +298,9 @@
       #hide-ui-toggle:hover { background: #2c2c2c; }
       #hide-ui-toggle.active { border-color: #4a90d9; color: #4a90d9; }
 
-      /* Record/screenshot both pair a button with a small number input
-         (duration in seconds / resolution multiplier) - same fixed
-         right column as mode-toggle/fullscreen-btn/hide-ui-toggle above. */
+      /* Pairs a button with a small number input (resolution multiplier) -
+         same fixed right column as mode-toggle/fullscreen-btn/
+         hide-ui-toggle above. */
       .export-controls {
         position: fixed;
         right: 10px;
@@ -308,8 +308,7 @@
         display: flex;
         gap: 4px;
       }
-      #record-controls { top: 202px; }
-      #screenshot-controls { top: 250px; }
+      #screenshot-controls { top: 202px; }
       .export-controls button {
         background: #222;
         color: #eee;
@@ -322,7 +321,6 @@
       }
       .export-controls button:hover { background: #2c2c2c; }
       .export-controls button:disabled { opacity: 0.5; cursor: default; }
-      .export-controls button.recording { background: #5c1f1f; border-color: #ae2f2f; }
       .export-controls input {
         width: 44px;
         background: #1a1a1a;
@@ -791,10 +789,6 @@
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
     <button id="hide-ui-toggle" type="button" title="Hide the code editor and every floating control over it">Hide Code</button>
-    <div id="record-controls" class="export-controls">
-      <button id="record-btn" type="button" title="Record a video of the render output for the given duration">● Record</button>
-      <input id="record-seconds" type="number" min="1" max="120" step="1" value="10" title="Recording duration, in seconds" />
-    </div>
     <div id="screenshot-controls" class="export-controls">
       <button id="screenshot-btn" type="button" title="Save a single frame at a higher resolution than the current display - briefly resets all node state to rebuild everything at that resolution">⬇ PNG</button>
       <input id="screenshot-scale" type="number" min="1" max="16" step="1" value="4" title="Resolution multiplier (e.g. 4 = 4x the render pane's current size)" />
