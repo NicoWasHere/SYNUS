@@ -165,6 +165,16 @@ function showErrors() {
   const key = JSON.stringify(entries);
   if (key === lastErrorsKey) return;
   lastErrorsKey = key;
+  // The map's own box coloring depends on node.error (see connection-
+  // map.js's own signature) - this is the ONE place that can change
+  // without a new Send (a node erroring/recovering at runtime, not from
+  // an edit), so it gets its own update call here, gated behind the
+  // exact same "did the error set actually change" check as the panel
+  // rebuild below - reload()'s own success path (see there) covers
+  // every OTHER reason the map would need to change (wiring, new/
+  // removed nodes), which is the common case and needs no per-tick
+  // polling at all.
+  connectionMap.update(graph, jumpToNode);
 
   errorsEl.classList.toggle('has-errors', entries.length > 0);
   errorsEl.textContent = '';
@@ -294,6 +304,7 @@ async function reload(source) {
     loadError = null;
     rejectedErrors = [];
     markNewPatch(); // newPatch reads true for the one tick right after this - see lib/patch-flag.js
+    connectionMap.update(graph, jumpToNode); // a new/changed node set - the map's own signature check still applies, just not on a per-tick timer anymore
     return true;
   } catch (e) {
     loadError = `project failed to load: ${e.message}`;
@@ -632,8 +643,7 @@ document.getElementById('storage-link').addEventListener('click', () => openStor
   clock.onTick((t, tickCount) => {
     graph.tick(t, tickCount); // newPatch reads true for exactly this one tick, if a send just succeeded
     clearNewPatch();
-    showErrors();
-    connectionMap.update(graph, jumpToNode); // always on - see connection-map.js
+    showErrors(); // also refreshes the connection map, but only when the error set actually changed - see there
     updatePreviews();
     updateControls();
     updateTps();
