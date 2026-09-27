@@ -75,10 +75,36 @@ export function createConnectionMap({ parent }) {
     return (id) => depth(id, new Set());
   }
 
-  // update(graph, onNodeClick) - called every tick (main.js does); cheap
-  // enough (a handful of DOM nodes for any patch this project's actually
-  // used with) to just always rebuild rather than trying to diff.
+  // update(graph, onNodeClick) - called every tick (main.js does), but
+  // the actual rebuild below is gated behind `signature` - rebuilding
+  // unconditionally used to tear down and recreate every box/edge 60
+  // times a second, and then immediately read layout back OFF that
+  // just-mutated DOM (offsetTop/offsetHeight/scrollHeight, both here and
+  // in the edge-drawing pass below) - forcing a full synchronous reflow
+  // every single tick regardless of whether the graph had changed at
+  // all (classic "layout thrashing"), which was enough to visibly cap
+  // the whole app's frame rate. `signature` covers everything the
+  // diagram actually depends on (which nodes exist, their wiring, and
+  // their error/bypassed status for box coloring) - NOT lastOutputs/
+  // state, which change every tick but don't affect this diagram at
+  // all - so the expensive part below only runs on an actual structural
+  // change (a Send, a bypass toggle, a node erroring/recovering), the
+  // same "skip if nothing relevant changed" idiom main.js's own
+  // showErrors() already uses (lastErrorsKey).
+  let signature = null;
+  function computeSignature(graph) {
+    let s = '';
+    for (const [id, node] of graph.nodes) {
+      s += `${id}|${JSON.stringify(node.inputs)}|${node.error ? 1 : 0}|${node.bypassed ? 1 : 0};`;
+    }
+    return s;
+  }
+
   function update(graph, onNodeClick) {
+    const nextSignature = computeSignature(graph);
+    if (nextSignature === signature) return;
+    signature = nextSignature;
+
     dom.querySelectorAll('.cm-box, .cm-edge').forEach((el) => el.remove());
     while (svg.lastChild !== defs) svg.removeChild(svg.lastChild);
 

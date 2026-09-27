@@ -298,40 +298,6 @@
       #hide-ui-toggle:hover { background: #2c2c2c; }
       #hide-ui-toggle.active { border-color: #4a90d9; color: #4a90d9; }
 
-      /* Pairs a button with a small number input (resolution multiplier) -
-         same fixed right column as mode-toggle/fullscreen-btn/
-         hide-ui-toggle above. */
-      .export-controls {
-        position: fixed;
-        right: 10px;
-        z-index: 100;
-        display: flex;
-        gap: 4px;
-      }
-      #screenshot-controls { top: 202px; }
-      .export-controls button {
-        background: #222;
-        color: #eee;
-        border: 1px solid #444;
-        padding: 10px 14px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 14px;
-      }
-      .export-controls button:hover { background: #2c2c2c; }
-      .export-controls button:disabled { opacity: 0.5; cursor: default; }
-      .export-controls input {
-        width: 44px;
-        background: #1a1a1a;
-        color: #eee;
-        border: 1px solid #444;
-        border-radius: 4px;
-        font-family: inherit;
-        font-size: 14px;
-        text-align: center;
-      }
-
       /* Small, deliberately unobtrusive - docs are one click away but
          shouldn't compete with the actual controls above for attention. */
       #docs-link {
@@ -789,10 +755,6 @@
     <button id="reset-patch-btn" type="button" title="Reset to the default patch (drops any shared/saved patch in the URL)">⌂</button>
     <button id="block-mode-toggle" type="button">Block mode</button>
     <button id="hide-ui-toggle" type="button" title="Hide the code editor and every floating control over it">Hide Code</button>
-    <div id="screenshot-controls" class="export-controls">
-      <button id="screenshot-btn" type="button" title="Save a single frame at a higher resolution than the current display - briefly resets all node state to rebuild everything at that resolution">⬇ PNG</button>
-      <input id="screenshot-scale" type="number" min="1" max="16" step="1" value="4" title="Resolution multiplier (e.g. 4 = 4x the render pane's current size)" />
-    </div>
     <div id="tps-counter"></div>
     <div id="t-counter"></div>
     <button id="fullscreen-btn" type="button">⛶ Fullscreen</button>

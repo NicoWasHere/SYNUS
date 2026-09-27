@@ -1,6 +1,6 @@
 import defaultSource from './default-project.js?raw';
 import { createGLContext } from './gl/gl-context.js';
-import { setViewportSize, viewportSize } from './core/lib/context.js';
+import { setViewportSize } from './core/lib/context.js';
 import { DataBus } from './core/bus.js';
 import { Clock } from './core/clock.js';
 import { Graph } from './core/graph.js';
@@ -625,130 +625,6 @@ hideUiToggle.addEventListener('click', () => {
 });
 
 document.getElementById('storage-link').addEventListener('click', () => openStoragePortal());
-
-// downloadBlob(blob, filename) - shared by both export features below.
-// A plain <a download> click is the ordinary way to save a Blob without
-// a server round-trip; the element never needs to be attached to the
-// document for .click() to work.
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// pixelsToPngBlob(pixels, width, height) - `pixels` is a raw RGBA
-// Uint8Array straight from gl.readPixels(), which reads bottom-up (row 0
-// = the BOTTOM of the image) - opposite of Canvas2D/PNG's own top-down
-// row order, same flip readTextureToImageData() (lib/texture-preview.js)
-// already has to do for the same reason. Draws the flipped result onto a
-// throwaway <canvas> just to reuse its built-in PNG encoder
-// (toBlob) rather than writing one by hand.
-function pixelsToPngBlob(pixels, width, height) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  const imageData = ctx.createImageData(width, height);
-  const rowBytes = width * 4;
-  for (let y = 0; y < height; y++) {
-    const srcStart = (height - 1 - y) * rowBytes;
-    imageData.data.set(pixels.subarray(srcStart, srcStart + rowBytes), y * rowBytes);
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-}
-
-// exportHighResPNG(multiplier) - a node's own Canvas2D/GLSL/etc buffer is
-// only ever sized ONCE, at construction (see context.js's screenSize()
-// comment) - just resizing the output canvas and re-ticking would merely
-// stretch whatever's already there across more pixels, not add real
-// detail. So this disposes every node's current state (same calls
-// ui/node-toolbar.js's own per-node ↺ reset button already makes, just
-// for the whole graph at once), bumps the canvas to the target
-// resolution, ticks ONCE (letting every node's useInstances() rebuild
-// fresh at the new size), reads that frame back, then disposes and
-// rebuilds AGAIN at the original resolution. This causes one visible
-// reset "flash" on the live output, both entering and leaving the high-
-// res frame (feedback trails/particle state momentarily clear) - an
-// accepted, inherent trade-off of actually getting more detail rather
-// than a blurrier upscale of the existing frame.
-function resetAllNodes() {
-  for (const node of graph.nodes.values()) {
-    disposeState(node.state);
-    disposeParticlesForNode(node.id);
-    disposeAsciiForNode(node.id);
-    node.state = {};
-  }
-}
-
-// Comfortably under the ~8192-16384 MAX_TEXTURE_SIZE most real GPUs
-// report, and keeps every node's own high-res buffer (each one this
-// size, RGBA8 - a handful of nodes at 8000-square would already be
-// several hundred MB of VRAM apiece) from ballooning out of control on
-// a large monitor with a high multiplier.
-const MAX_EXPORT_SIZE = 4096;
-
-async function exportHighResPNG(multiplier) {
-  const wasRunning = clock.running;
-  clock.stop();
-
-  const rect = renderPane.getBoundingClientRect();
-  const size = Math.min(MAX_EXPORT_SIZE, Math.max(1, Math.round(Math.max(rect.width, rect.height) * multiplier)));
-  const prevW = glCanvas.width;
-  const prevH = glCanvas.height;
-  const prevViewport = viewportSize();
-  let pixels;
-
-  try {
-    resetAllNodes();
-    glCanvas.width = size;
-    glCanvas.height = size;
-    const scale = size / Math.max(rect.width, rect.height);
-    setViewportSize(rect.width * scale, rect.height * scale); // same aspect ratio as the live viewport, just scaled up
-
-    graph.tick(performance.now() / 1000, clock.frame);
-
-    pixels = new Uint8Array(size * size * 4);
-    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels); // safe: synchronous, same turn as the tick() that just rendered
-  } finally {
-    // Restored immediately after reading the pixels back - NOT after
-    // encoding them to a PNG below, which is asynchronous (canvas.
-    // toBlob()) and can take a real, visible amount of time for a large
-    // image. `pixels` is a plain CPU-side copy at this point, completely
-    // independent of the GL context/canvas - encoding it can happen at
-    // leisure in the background with the live view already back to
-    // normal, instead of leaving the page visibly frozen (clock stopped,
-    // canvas stuck at the huge reset-state frame) for however long
-    // encoding takes.
-    resetAllNodes();
-    glCanvas.width = prevW;
-    glCanvas.height = prevH;
-    setViewportSize(prevViewport.width, prevViewport.height);
-    if (wasRunning) clock.start();
-  }
-
-  const blob = await pixelsToPngBlob(pixels, size, size);
-  downloadBlob(blob, `synus-${Date.now()}.png`);
-}
-
-const screenshotBtn = document.getElementById('screenshot-btn');
-const screenshotScaleInput = document.getElementById('screenshot-scale');
-screenshotBtn.addEventListener('click', async () => {
-  const multiplier = Math.max(1, Number(screenshotScaleInput.value) || 4);
-  screenshotBtn.disabled = true;
-  screenshotBtn.textContent = 'Rendering…';
-  try {
-    await exportHighResPNG(multiplier);
-  } catch (e) {
-    console.error('high-res export failed', e);
-  } finally {
-    screenshotBtn.disabled = false;
-    screenshotBtn.textContent = '⬇ PNG';
-  }
-});
 
 (async () => {
   await restoreAssets(); // so a patch referencing get('name') has it on its very first tick
